@@ -30,6 +30,8 @@ export const config = {
   hubspotStageBooked: getEnv("HUBSPOT_STAGE_BOOKED") || "booked",
   hubspotStagePaid: getEnv("HUBSPOT_STAGE_PAID") || "paid",
   hubspotStageCancelled: getEnv("HUBSPOT_STAGE_CANCELLED") || "cancelled",
+  hubspotMagicLinkEmailId: getEnv("HUBSPOT_MAGIC_LINK_EMAIL_ID") || "",
+  hubspotWebhookSecret: getEnv("HUBSPOT_WEBHOOK_SECRET") || "",
 
   // Environment
   nodeEnv: getEnv("NODE_ENV") || "development",

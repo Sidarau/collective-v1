@@ -72,6 +72,15 @@ export async function createHubSpotDeal(contactId: string, dealName: string, amo
   return dealData.id as string;
 }
 
+export async function updateContactMagicLink(contactId: string, magicLink: string) {
+  await hubspotFetch(`/crm/v3/objects/contacts/${contactId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      properties: { magic_link: magicLink },
+    }),
+  });
+}
+
 export async function updateDealStage(dealId: string, stage: string) {
   await hubspotFetch(`/crm/v3/objects/deals/${dealId}`, {
     method: "PATCH",

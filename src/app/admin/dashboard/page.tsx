@@ -58,6 +58,12 @@ export default function AdminDashboardPage() {
             >
               Requests
             </Link>
+            <Link
+              href="/admin/invite"
+              className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100"
+            >
+              Invite
+            </Link>
           </nav>
         </div>
       </header>
@@ -114,13 +120,19 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* Quick action */}
-        <div className="mt-8">
+        {/* Quick actions */}
+        <div className="mt-8 flex flex-wrap gap-3">
           <Link
             href="/admin/requests"
             className="inline-flex items-center px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition"
           >
             Review pending requests →
+          </Link>
+          <Link
+            href="/admin/invite"
+            className="inline-flex items-center px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-white transition"
+          >
+            Invite user
           </Link>
         </div>
       </main>

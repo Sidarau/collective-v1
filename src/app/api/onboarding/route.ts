@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "../../../lib/supabase";
-import { createHubSpotContact, createHubSpotDeal } from "../../../lib/hubspot";
+import { createHubSpotContact, createHubSpotDeal, updateContactMagicLink } from "../../../lib/hubspot";
+import { sendMagicLinkEmail } from "../../../lib/email";
 import { config } from "../../../lib/config";
 import * as crypto from "crypto";
 
@@ -93,18 +94,31 @@ export async function POST(req: NextRequest) {
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     });
 
-    // 6. Build portal login link
+    // 6. Build portal login link and send email
     const portalLink = `${config.baseUrl}/login?email=${encodeURIComponent(
       email
     )}&token=${magicToken}`;
+
+    try {
+      await updateContactMagicLink(hubspotContactId, portalLink);
+    } catch (hubspotError: unknown) {
+      console.error("Failed to update HubSpot contact with magic link:", hubspotError);
+    }
+
+    try {
+      await sendMagicLinkEmail({ to: email, firstName, magicLink: portalLink });
+    } catch (emailError: unknown) {
+      console.error("Failed to send magic link email:", emailError);
+      // Non-blocking: still return the link so Don can share it manually if needed
+    }
 
     return NextResponse.json({
       success: true,
       leadId: lead.id,
       userId: user.id,
-      portalLink,
+      portalLink: config.nodeEnv === "production" ? undefined : portalLink,
       message:
-        "Account created. Don has been notified via HubSpot. You can now log in to the portal.",
+        "Account created. Check your email for the magic link, or Don will share it with you directly.",
     });
   } catch (error: unknown) {
     console.error("Onboarding error:", error);

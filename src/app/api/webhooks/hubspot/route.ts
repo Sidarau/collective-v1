@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import * as crypto from "crypto";
 import { getSupabaseAdmin } from "../../../../lib/supabase";
 import { config } from "../../../../lib/config";
 
@@ -11,15 +12,44 @@ interface HubSpotWebhookEvent {
   dealId?: number;
 }
 
+function verifyHubSpotSignature(
+  signature: string,
+  body: string,
+  secret: string
+): boolean {
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(body, "utf8")
+    .digest("base64");
+  return crypto.timingSafeEqual(
+    Buffer.from(signature, "base64"),
+    Buffer.from(expected, "base64")
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
-    // In production, validate HubSpot signature here
     const signature = req.headers.get("x-hubspot-signature-v3");
-    if (!signature && config.nodeEnv === "production") {
-      return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+    const body = await req.text();
+
+    if (config.nodeEnv === "production") {
+      if (!signature) {
+        return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+      }
+      const secret = process.env.HUBSPOT_WEBHOOK_SECRET;
+      if (!secret) {
+        console.error("HUBSPOT_WEBHOOK_SECRET is not configured");
+        return NextResponse.json(
+          { error: "Webhook verification not configured" },
+          { status: 500 }
+        );
+      }
+      if (!verifyHubSpotSignature(signature, body, secret)) {
+        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+      }
     }
 
-    const events = (await req.json()) as HubSpotWebhookEvent[];
+    const events = JSON.parse(body || "[]") as HubSpotWebhookEvent[];
     const supabaseAdmin = getSupabaseAdmin();
 
     for (const event of Array.isArray(events) ? events : [events]) {
@@ -28,7 +58,6 @@ export async function POST(req: NextRequest) {
 
       const dealIdStr = dealId.toString();
 
-      // Map deal stage changes to booking status
       if (
         event.subscriptionType === "deal.propertyChange" &&
         event.propertyName === "dealstage"
