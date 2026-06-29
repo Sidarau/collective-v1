@@ -1,18 +1,22 @@
 import { createClient } from "@supabase/supabase-js";
 import { createBrowserClient as createSupabaseBrowserClient } from "@supabase/ssr";
 
+// Hardcoded for Vercel build-time compatibility
+// These are public/non-sensitive values
+const DEFAULT_SUPABASE_URL = "https://evviegqieqdmlxixwwxt.supabase.co";
+
 // Use process.env directly for Next.js runtime compatibility
 function getEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-const supabaseUrl = getEnv("NEXT_PUBLIC_SUPABASE_URL") || getEnv("SUPABASE_URL") || "";
+const supabaseUrl = getEnv("NEXT_PUBLIC_SUPABASE_URL") || getEnv("SUPABASE_URL") || DEFAULT_SUPABASE_URL;
 const supabaseServiceKey = getEnv("SUPABASE_SERVICE_ROLE_KEY") || getEnv("SUPABASE_SECRET_KEY") || "";
 const supabaseAnonKey = getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY") || "";
 
 // Server-side Supabase client (service role for admin operations)
 export const supabaseAdmin = createClient(
-  supabaseUrl || "https://placeholder.supabase.co",
+  supabaseUrl,
   supabaseServiceKey,
   {
     auth: {
@@ -25,7 +29,7 @@ export const supabaseAdmin = createClient(
 // Browser-side Supabase client
 export function createBrowserClient() {
   return createSupabaseBrowserClient(
-    supabaseUrl || "https://placeholder.supabase.co",
+    supabaseUrl,
     supabaseAnonKey
   );
 }
