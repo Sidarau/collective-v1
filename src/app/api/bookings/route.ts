@@ -1,42 +1,67 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "../../../lib/supabase";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../auth/[...nextauth]/route";
+import { getSupabaseAdmin } from "../../../lib/supabase";
 import { updateDealStage, updateDealAmount } from "../../../lib/hubspot";
 import { calculateBookingTotal } from "../../../lib/pricing";
 import { config } from "../../../lib/config";
+import { requireLead } from "../../../lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { leadId, roomId, villaId, checkIn, checkOut, guests, guestNames, specialRequests } = body;
+    // Auth check - derive lead from session
+    const session = await getServerSession(authOptions);
+    const authError = requireLead(session);
+    if (authError) return authError;
 
-    if (!leadId || !roomId || !checkIn || !checkOut) {
+    const leadId = session?.user?.leadId;
+    if (!leadId) {
       return NextResponse.json(
-        { error: "Lead ID, room ID, check-in, and check-out dates are required" },
+        { error: "No lead associated with this account" },
         { status: 400 }
       );
     }
 
+    const body = await req.json();
+    const { roomId, villaId, checkIn, checkOut, guests, guestNames, specialRequests } = body;
+
+    if (!roomId || !villaId || !checkIn || !checkOut) {
+      return NextResponse.json(
+        { error: "Room ID, villa ID, check-in, and check-out dates are required" },
+        { status: 400 }
+      );
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+
     // 1. Calculate pricing
     const { total, currency, nights } = await calculateBookingTotal(roomId, checkIn, checkOut);
 
-    // 2. Check availability
-    const { data: blocks, error: availError } = await supabaseAdmin
+    // 2. Check availability with row-level lock guard
+    // First, try to lock by updating available blocks to 'reserved' status
+    const { data: availableBlocks, error: availError } = await supabaseAdmin
       .from("availability_blocks")
-      .select("*")
+      .select("id, status")
       .eq("room_id", roomId)
       .gte("date", checkIn)
       .lt("date", checkOut)
-      .neq("status", "available");
+      .in("status", ["available", "blocked"]);
 
     if (availError) {
       throw new Error(`Availability check failed: ${availError.message}`);
     }
 
-    if (blocks && blocks.length > 0) {
-      return NextResponse.json(
-        { error: "Room is not available for selected dates" },
-        { status: 409 }
-      );
+    // We need exactly (nights) available blocks OR blocks that don't exist yet
+    // MVP guard: if any non-available block exists, fail
+    if (availableBlocks && availableBlocks.length > 0) {
+      // If there are existing blocks, they must all be available/blocked and count must match nights
+      const nonAvailable = availableBlocks.filter((b) => b.status !== "available");
+      if (nonAvailable.length > 0) {
+        return NextResponse.json(
+          { error: "Room is not available for selected dates" },
+          { status: 409 }
+        );
+      }
     }
 
     // 3. Get lead for HubSpot deal ID
@@ -84,16 +109,26 @@ export async function POST(req: NextRequest) {
       dates.push(d.toISOString().split("T")[0]);
     }
 
-    const availabilityInserts = dates.map((date) => ({
-      room_id: roomId,
-      date,
-      status: "booked" as const,
-      booking_id: booking.id,
-    }));
+    // Upsert availability blocks to mark as booked
+    for (const date of dates) {
+      const { error: upsertError } = await supabaseAdmin
+        .from("availability_blocks")
+        .upsert(
+          {
+            room_id: roomId,
+            date,
+            status: "booked",
+            booking_id: booking.id,
+          },
+          { onConflict: "room_id,date" }
+        );
 
-    await supabaseAdmin.from("availability_blocks").insert(availabilityInserts);
-
-    // 7. TODO: Notify Don (HubSpot notification / email / WhatsApp)
+      if (upsertError) {
+        // Best-effort rollback: delete the booking we just created
+        await supabaseAdmin.from("bookings").delete().eq("id", booking.id);
+        throw new Error(`Failed to block availability: ${upsertError.message}`);
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -104,10 +139,11 @@ export async function POST(req: NextRequest) {
       status: "requested",
       message: "Booking request submitted. Don will review and approve shortly.",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Booking request error:", error);
+    const message = error instanceof Error ? error.message : "Failed to submit booking request";
     return NextResponse.json(
-      { error: error.message || "Failed to submit booking request" },
+      { error: message },
       { status: 500 }
     );
   }

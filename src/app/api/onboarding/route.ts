@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "../../../lib/supabase";
+import { getSupabaseAdmin } from "../../../lib/supabase";
 import { createHubSpotContact, createHubSpotDeal } from "../../../lib/hubspot";
 import { config } from "../../../lib/config";
 import * as crypto from "crypto";
@@ -14,9 +14,6 @@ export async function POST(req: NextRequest) {
       phone,
       whatsapp,
       dietaryRestrictions,
-      preferredDates,
-      roomPreference,
-      guests,
       source = "whatsapp",
     } = body;
 
@@ -26,6 +23,8 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const supabaseAdmin = getSupabaseAdmin();
 
     // 1. Create HubSpot contact
     const hubspotContactId = await createHubSpotContact({
@@ -63,6 +62,10 @@ export async function POST(req: NextRequest) {
       throw new Error(`Failed to create lead: ${leadError.message}`);
     }
 
+    if (!lead) {
+      throw new Error("Lead creation returned no data");
+    }
+
     // 4. Create user account
     const magicToken = crypto.randomBytes(32).toString("hex");
     const { data: user, error: userError } = await supabaseAdmin
@@ -79,7 +82,11 @@ export async function POST(req: NextRequest) {
       throw new Error(`Failed to create user: ${userError.message}`);
     }
 
-    // 5. Store magic token (simple implementation — in production use signed JWT or Supabase auth)
+    if (!user) {
+      throw new Error("User creation returned no data");
+    }
+
+    // 5. Store magic token
     await supabaseAdmin.from("magic_tokens").insert({
       user_id: user.id,
       token: magicToken,
@@ -91,9 +98,6 @@ export async function POST(req: NextRequest) {
       email
     )}&token=${magicToken}`;
 
-    // 7. TODO: Send notification to Don via HubSpot / email / WhatsApp
-    // For now, we rely on HubSpot deal creation to trigger notifications
-
     return NextResponse.json({
       success: true,
       leadId: lead.id,
@@ -102,10 +106,11 @@ export async function POST(req: NextRequest) {
       message:
         "Account created. Don has been notified via HubSpot. You can now log in to the portal.",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Onboarding error:", error);
+    const message = error instanceof Error ? error.message : "Failed to create account";
     return NextResponse.json(
-      { error: error.message || "Failed to create account" },
+      { error: message },
       { status: 500 }
     );
   }

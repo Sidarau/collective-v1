@@ -1,147 +1,203 @@
--- Enable UUID extension
+-- Collective V1 Supabase Schema
+-- Run this in the Supabase Dashboard SQL Editor
+
+-- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Villas table
-CREATE TABLE IF NOT EXISTS villas (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name TEXT NOT NULL,
-    slug TEXT UNIQUE NOT NULL,
-    location TEXT NOT NULL,
-    description TEXT,
-    max_guests INTEGER NOT NULL DEFAULT 1,
-    images TEXT[] DEFAULT '{}',
-    amenities TEXT[] DEFAULT '{}',
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+-- Villas
+CREATE TABLE IF NOT EXISTS public.villas (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
+  location TEXT NOT NULL,
+  description TEXT,
+  max_guests INTEGER DEFAULT 8,
+  images TEXT[] DEFAULT '{}',
+  amenities TEXT[] DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Rooms table
-CREATE TABLE IF NOT EXISTS rooms (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    villa_id UUID NOT NULL REFERENCES villas(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    slug TEXT NOT NULL,
-    description TEXT,
-    room_type TEXT NOT NULL CHECK (room_type IN ('single', 'double', 'suite', 'master')),
-    max_guests INTEGER NOT NULL DEFAULT 1,
-    bed_type TEXT,
-    images TEXT[] DEFAULT '{}',
-    amenities TEXT[] DEFAULT '{}',
-    base_price_per_night INTEGER NOT NULL DEFAULT 0, -- in cents
-    currency TEXT NOT NULL DEFAULT 'EUR',
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(villa_id, slug)
+-- Rooms
+CREATE TABLE IF NOT EXISTS public.rooms (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  villa_id UUID NOT NULL REFERENCES public.villas(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  description TEXT,
+  room_type TEXT NOT NULL CHECK (room_type IN ('single', 'double', 'suite', 'master')),
+  max_guests INTEGER DEFAULT 2,
+  bed_type TEXT,
+  images TEXT[] DEFAULT '{}',
+  amenities TEXT[] DEFAULT '{}',
+  base_price_per_night INTEGER NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'EUR',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(villa_id, slug)
 );
 
--- Seasonal pricing table
-CREATE TABLE IF NOT EXISTS seasonal_pricing (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    price_per_night INTEGER NOT NULL, -- in cents
-    currency TEXT NOT NULL DEFAULT 'EUR',
-    min_nights INTEGER NOT NULL DEFAULT 1,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    CHECK (end_date >= start_date)
+-- Seasonal pricing
+CREATE TABLE IF NOT EXISTS public.seasonal_pricing (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  room_id UUID NOT NULL REFERENCES public.rooms(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  price_per_night INTEGER NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'EUR',
+  min_nights INTEGER DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Leads table
-CREATE TABLE IF NOT EXISTS leads (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    email TEXT NOT NULL UNIQUE,
-    phone TEXT,
-    whatsapp TEXT,
-    first_name TEXT NOT NULL,
-    last_name TEXT NOT NULL,
-    hubspot_contact_id TEXT,
-    hubspot_deal_id TEXT,
-    dietary_restrictions TEXT,
-    notes TEXT,
-    source TEXT NOT NULL DEFAULT 'website',
-    status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'active', 'inactive', 'blacklisted')),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+-- Leads
+CREATE TABLE IF NOT EXISTS public.leads (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email TEXT UNIQUE NOT NULL,
+  phone TEXT,
+  whatsapp TEXT,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  hubspot_contact_id TEXT,
+  hubspot_deal_id TEXT,
+  dietary_restrictions TEXT,
+  notes TEXT,
+  source TEXT DEFAULT 'website',
+  status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'active', 'inactive', 'blacklisted')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Users table (for auth)
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    email TEXT NOT NULL UNIQUE,
-    role TEXT NOT NULL DEFAULT 'lead' CHECK (role IN ('lead', 'member', 'admin', 'operator')),
-    lead_id UUID REFERENCES leads(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+-- Users (linked to leads for portal access)
+CREATE TABLE IF NOT EXISTS public.users (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email TEXT UNIQUE NOT NULL,
+  role TEXT NOT NULL DEFAULT 'lead' CHECK (role IN ('lead', 'member', 'admin', 'operator')),
+  lead_id UUID REFERENCES public.leads(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Bookings table
-CREATE TABLE IF NOT EXISTS bookings (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    lead_id UUID NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
-    room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
-    villa_id UUID NOT NULL REFERENCES villas(id) ON DELETE CASCADE,
-    check_in DATE NOT NULL,
-    check_out DATE NOT NULL,
-    guests INTEGER NOT NULL DEFAULT 1,
-    guest_names TEXT[] DEFAULT '{}',
-    status TEXT NOT NULL DEFAULT 'inquiry' CHECK (status IN ('inquiry', 'requested', 'approved', 'deposit_paid', 'paid', 'confirmed', 'cancelled', 'completed')),
-    total_price INTEGER NOT NULL DEFAULT 0, -- in cents
-    currency TEXT NOT NULL DEFAULT 'EUR',
-    special_requests TEXT,
-    hubspot_deal_id TEXT,
-    stripe_payment_intent_id TEXT,
-    invoice_url TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    CHECK (check_out > check_in)
+-- Magic tokens for passwordless login
+CREATE TABLE IF NOT EXISTS public.magic_tokens (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  token TEXT NOT NULL,
+  used BOOLEAN NOT NULL DEFAULT FALSE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_magic_tokens_token ON public.magic_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_magic_tokens_user_id ON public.magic_tokens(user_id);
 
--- Availability blocks table
-CREATE TABLE IF NOT EXISTS availability_blocks (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
-    date DATE NOT NULL,
-    status TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'booked', 'blocked', 'maintenance')),
-    booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
-    price_override INTEGER, -- in cents, nullable
-    notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(room_id, date)
+-- Bookings
+CREATE TABLE IF NOT EXISTS public.bookings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  lead_id UUID NOT NULL REFERENCES public.leads(id) ON DELETE CASCADE,
+  room_id UUID NOT NULL REFERENCES public.rooms(id) ON DELETE CASCADE,
+  villa_id UUID NOT NULL REFERENCES public.villas(id) ON DELETE CASCADE,
+  check_in DATE NOT NULL,
+  check_out DATE NOT NULL,
+  guests INTEGER DEFAULT 1,
+  guest_names TEXT[] DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'requested' CHECK (status IN ('inquiry', 'requested', 'approved', 'deposit_paid', 'paid', 'confirmed', 'cancelled', 'completed')),
+  total_price INTEGER NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'EUR',
+  special_requests TEXT,
+  operator_notes TEXT,
+  hubspot_deal_id TEXT,
+  stripe_payment_intent_id TEXT,
+  invoice_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_bookings_lead_id ON public.bookings(lead_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_room_id ON public.bookings(room_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_status ON public.bookings(status);
+CREATE INDEX IF NOT EXISTS idx_bookings_hubspot_deal_id ON public.bookings(hubspot_deal_id);
 
--- Create indexes for performance
-CREATE INDEX IF NOT EXISTS idx_bookings_lead ON bookings(lead_id);
-CREATE INDEX IF NOT EXISTS idx_bookings_room ON bookings(room_id);
-CREATE INDEX IF NOT EXISTS idx_bookings_dates ON bookings(check_in, check_out);
-CREATE INDEX IF NOT EXISTS idx_availability_room_date ON availability_blocks(room_id, date);
-CREATE INDEX IF NOT EXISTS idx_leads_email ON leads(email);
-CREATE INDEX IF NOT EXISTS idx_leads_hubspot ON leads(hubspot_contact_id);
+-- Availability blocks
+CREATE TABLE IF NOT EXISTS public.availability_blocks (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  room_id UUID NOT NULL REFERENCES public.rooms(id) ON DELETE CASCADE,
+  date DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'booked', 'blocked', 'maintenance')),
+  booking_id UUID REFERENCES public.bookings(id) ON DELETE SET NULL,
+  price_override INTEGER,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(room_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_availability_blocks_room_date ON public.availability_blocks(room_id, date);
+CREATE INDEX IF NOT EXISTS idx_availability_blocks_booking_id ON public.availability_blocks(booking_id);
 
--- Enable RLS (Row Level Security)
-ALTER TABLE villas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE rooms ENABLE ROW LEVEL SECURITY;
-ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE availability_blocks ENABLE ROW LEVEL SECURITY;
+-- RLS: Enable
+ALTER TABLE public.villas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.rooms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.seasonal_pricing ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.magic_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.availability_blocks ENABLE ROW LEVEL SECURITY;
 
--- RLS policies: leads can read their own data
-CREATE POLICY IF NOT EXISTS leads_read_own ON leads
-    FOR SELECT USING (auth.uid() IN (SELECT id FROM users WHERE lead_id = leads.id));
+-- RLS: Service role bypass (used by server-side API routes)
+CREATE POLICY IF NOT EXISTS service_all ON public.villas FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS service_all ON public.rooms FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS service_all ON public.seasonal_pricing FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS service_all ON public.leads FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS service_all ON public.users FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS service_all ON public.magic_tokens FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS service_all ON public.bookings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS service_all ON public.availability_blocks FOR ALL USING (true) WITH CHECK (true);
 
--- RLS policies: everyone can read villas and rooms
-CREATE POLICY IF NOT EXISTS villas_read_all ON villas FOR SELECT USING (true);
-CREATE POLICY IF NOT EXISTS rooms_read_all ON rooms FOR SELECT USING (true);
+-- Seed Roca Llisa villa and rooms
+INSERT INTO public.villas (name, slug, location, description, max_guests, amenities)
+VALUES (
+  'Roca Llisa',
+  'roca-llisa',
+  'Ibiza, Spain',
+  'A private Mediterranean villa curated for intimate group stays.',
+  8,
+  ARRAY['Pool', 'Sea views', 'Chef kitchen', 'WiFi', 'Air conditioning']
+)
+ON CONFLICT (slug) DO NOTHING;
 
--- RLS policies: leads can read their own bookings
-CREATE POLICY IF NOT EXISTS bookings_read_own ON bookings
-    FOR SELECT USING (auth.uid() IN (SELECT id FROM users WHERE lead_id = bookings.lead_id));
+DO $$
+DECLARE
+  villa_id UUID;
+BEGIN
+  SELECT id INTO villa_id FROM public.villas WHERE slug = 'roca-llisa' LIMIT 1;
 
--- RLS policies: admin/operator can read all
-CREATE POLICY IF NOT EXISTS bookings_read_admin ON bookings
-    FOR SELECT USING (auth.uid() IN (SELECT id FROM users WHERE role IN ('admin', 'operator')));
-CREATE POLICY IF NOT EXISTS leads_read_admin ON leads
-    FOR SELECT USING (auth.uid() IN (SELECT id FROM users WHERE role IN ('admin', 'operator')));
+  IF villa_id IS NOT NULL THEN
+    INSERT INTO public.rooms (villa_id, name, slug, description, room_type, max_guests, bed_type, base_price_per_night, currency, amenities)
+    VALUES
+      (villa_id, 'Master Suite', 'master-suite', 'Spacious master with ensuite and terrace.', 'master', 2, 'King', 45000, 'EUR', ARRAY['Ensuite', 'Terrace', 'Sea view']),
+      (villa_id, 'Double Room', 'double-room', 'Bright double room with garden view.', 'double', 2, 'Queen', 32000, 'EUR', ARRAY['Garden view']),
+      (villa_id, 'Twin Room', 'twin-room', 'Flexible twin setup, ideal for friends.', 'single', 2, 'Twin', 28000, 'EUR', ARRAY['Pool view'])
+    ON CONFLICT (villa_id, slug) DO NOTHING;
+  END IF;
+END $$;
+
+-- Updated_at trigger helper
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER IF NOT EXISTS villas_updated_at BEFORE UPDATE ON public.villas
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE TRIGGER IF NOT EXISTS rooms_updated_at BEFORE UPDATE ON public.rooms
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE TRIGGER IF NOT EXISTS leads_updated_at BEFORE UPDATE ON public.leads
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE TRIGGER IF NOT EXISTS users_updated_at BEFORE UPDATE ON public.users
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE TRIGGER IF NOT EXISTS bookings_updated_at BEFORE UPDATE ON public.bookings
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE TRIGGER IF NOT EXISTS availability_blocks_updated_at BEFORE UPDATE ON public.availability_blocks
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();

@@ -5,9 +5,25 @@ import Link from "next/link";
 import { createBrowserClient } from "../../../lib/supabase";
 import { config } from "../../../lib/config";
 
+interface Villa {
+  id: string;
+  name: string;
+  location: string;
+  description: string | null;
+}
+
+interface Room {
+  id: string;
+  name: string;
+  room_type: string;
+  max_guests: number;
+  description: string | null;
+  base_price_per_night: number;
+}
+
 export default function VillaPage() {
-  const [villa, setVilla] = useState<any>(null);
-  const [rooms, setRooms] = useState<any[]>([]);
+  const [villa, setVilla] = useState<Villa | null>(null);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,7 +38,7 @@ export default function VillaPage() {
         .from("rooms")
         .select("*")
         .eq("villa_id", villaData?.id);
-      setVilla(villaData);
+      setVilla(villaData || null);
       setRooms(roomsData || []);
       setLoading(false);
     }
@@ -36,7 +52,7 @@ export default function VillaPage() {
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-stone-800">{config.brandName}</h1>
         <nav className="space-x-4 text-sm">
-          <Link href="/portal/villa" className="text-stone-600 hover:text-stone-900">Villa</Link>
+          <Link href="/portal/villa" className="text-stone-900 font-medium">Villa</Link>
           <Link href="/portal/rooms" className="text-stone-600 hover:text-stone-900">Rooms</Link>
         </nav>
       </header>

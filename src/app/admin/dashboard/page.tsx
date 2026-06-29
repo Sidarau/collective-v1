@@ -21,8 +21,8 @@ export default function AdminDashboardPage() {
         if (!res.ok) throw new Error("Failed to fetch stats");
         const data = await res.json();
         setStats(data);
-      } catch (err: any) {
-        setError(err.message || "Error loading stats");
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Error loading stats");
       } finally {
         setLoading(false);
       }

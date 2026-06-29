@@ -6,22 +6,44 @@ import { useSearchParams } from "next/navigation";
 import { createBrowserClient } from "../../../lib/supabase";
 import { config } from "../../../lib/config";
 
+interface Villa {
+  id: string;
+  name: string;
+}
+
+interface Room {
+  id: string;
+  name: string;
+  room_type: string;
+  max_guests: number;
+  description: string | null;
+  base_price_per_night: number;
+  villas: Villa | null;
+}
+
+interface AvailabilityBlock {
+  id: string;
+  date: string;
+  status: "available" | "booked" | "blocked" | "maintenance";
+}
+
 function RoomsContent() {
   const searchParams = useSearchParams();
   const selectedRoomId = searchParams.get("room");
-  const [rooms, setRooms] = useState<any[]>([]);
-  const [selectedRoom, setSelectedRoom] = useState<any>(null);
-  const [availability, setAvailability] = useState<any[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [availability, setAvailability] = useState<AvailabilityBlock[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const supabase = createBrowserClient();
     async function load() {
       const { data: roomsData } = await supabase.from("rooms").select("*, villas(*)");
-      setRooms(roomsData || []);
+      const typedRooms = (roomsData || []) as Room[];
+      setRooms(typedRooms);
       if (selectedRoomId) {
-        const room = roomsData?.find((r) => r.id === selectedRoomId);
-        setSelectedRoom(room);
+        const room = typedRooms.find((r) => r.id === selectedRoomId);
+        setSelectedRoom(room || null);
         // Load availability for next 30 days
         const today = new Date().toISOString().split("T")[0];
         const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -31,7 +53,7 @@ function RoomsContent() {
           .eq("room_id", selectedRoomId)
           .gte("date", today)
           .lte("date", endDate);
-        setAvailability(avail || []);
+        setAvailability((avail || []) as AvailabilityBlock[]);
       }
       setLoading(false);
     }

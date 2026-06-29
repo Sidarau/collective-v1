@@ -28,23 +28,35 @@ export default function AdminRequestsPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
 
-  async function fetchBookings() {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/admin/bookings?status=requested");
-      if (!res.ok) throw new Error("Failed to fetch bookings");
-      const data = await res.json();
-      setBookings(data.bookings || []);
-      setError(null);
-    } catch (err: any) {
-      setError(err.message || "Error loading bookings");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
+    let cancelled = false;
+
+    async function fetchBookings() {
+      try {
+        setLoading(true);
+        const res = await fetch("/api/admin/bookings?status=requested");
+        if (!res.ok) throw new Error("Failed to fetch bookings");
+        const data = await res.json();
+        if (!cancelled) {
+          setBookings(data.bookings || []);
+          setError(null);
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Error loading bookings");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
     fetchBookings();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function handleAction(id: string, action: "approve" | "reject") {
@@ -60,9 +72,13 @@ export default function AdminRequestsPage() {
         throw new Error(data.error || `Failed to ${action} booking`);
       }
       // Refresh list after action
-      await fetchBookings();
-    } catch (err: any) {
-      setError(err.message || `Error during ${action}`);
+      const refreshRes = await fetch("/api/admin/bookings?status=requested");
+      if (refreshRes.ok) {
+        const refreshData = await refreshRes.json();
+        setBookings(refreshData.bookings || []);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : `Error during ${action}`);
     } finally {
       setActionId(null);
     }

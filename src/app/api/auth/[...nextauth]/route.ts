@@ -1,9 +1,41 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import type { AuthOptions, User as NextAuthUser } from "next-auth";
 import { config } from "@/lib/config";
-import { createBrowserClient } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase";
+import type { UserRole } from "@/lib/auth";
+import type { Database } from "@/lib/database.types";
 
-export const authOptions = {
+type DbUser = Database["public"]["Tables"]["users"]["Row"];
+type DbMagicToken = Database["public"]["Tables"]["magic_tokens"]["Row"];
+
+interface AppUser extends NextAuthUser {
+  id: string;
+  email: string;
+  role: UserRole;
+  leadId: string | null;
+}
+
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string;
+      email: string;
+      name?: string | null;
+      role: UserRole;
+      leadId: string | null;
+    };
+  }
+  interface JWT {
+    id?: string;
+    email?: string;
+    name?: string | null;
+    role?: UserRole;
+    leadId?: string | null;
+  }
+}
+
+export const authOptions: AuthOptions = {
   secret: config.nextAuthSecret,
   providers: [
     CredentialsProvider({
@@ -12,46 +44,61 @@ export const authOptions = {
         email: { label: "Email", type: "email" },
         token: { label: "Token", type: "text" },
       },
-      async authorize(credentials) {
-        if (!credentials?.email) return null;
+      async authorize(credentials): Promise<AppUser | null> {
+        if (!credentials?.email || !credentials?.token) return null;
 
-        const supabase = createBrowserClient();
-        
-        // For MVP v1: simple email + token login
-        // Token is generated during onboarding and sent via email
-        // In production, this would be a proper magic link flow
-        const { data: user } = await supabase
-          .from("users")
-          .select("*, leads(*)")
-          .eq("email", credentials.email)
+        const email = credentials.email.toLowerCase().trim();
+        const token = credentials.token.trim();
+
+        const { data: magicToken, error: tokenError } = await supabaseAdmin
+          .from("magic_tokens")
+          .select<string, DbMagicToken & { users: DbUser }>("*, users(*)")
+          .eq("token", token)
+          .eq("used", false)
+          .gte("expires_at", new Date().toISOString())
           .single();
 
-        if (!user) return null;
+        if (tokenError || !magicToken) {
+          return null;
+        }
+
+        const user = magicToken.users;
+        if (!user || user.email !== email) {
+          return null;
+        }
+
+        await supabaseAdmin
+          .from("magic_tokens")
+          .update({ used: true } as DbMagicToken)
+          .eq("id", magicToken.id);
 
         return {
           id: user.id,
           email: user.email,
-          name: user.leads?.first_name + " " + user.leads?.last_name,
-          role: user.role,
+          name: email.split("@")[0],
+          role: user.role as UserRole,
           leadId: user.lead_id,
         };
       },
     }),
   ],
   callbacks: {
-    async session({ session, token }: { session: any; token: any }) {
-      if (token) {
-        session.user.id = token.id;
-        session.user.role = token.role;
-        session.user.leadId = token.leadId;
+    async session({ session, token }) {
+      if (token && session.user) {
+        session.user.id = token.id as string;
+        session.user.role = token.role as UserRole;
+        session.user.leadId = token.leadId as string | null;
       }
       return session;
     },
-    async jwt({ token, user }: { token: any; user: any }) {
+    async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
-        token.role = user.role;
-        token.leadId = user.leadId;
+        const appUser = user as AppUser;
+        token.id = appUser.id;
+        token.email = appUser.email;
+        token.name = appUser.name;
+        token.role = appUser.role;
+        token.leadId = appUser.leadId;
       }
       return token;
     },

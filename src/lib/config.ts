@@ -28,6 +28,11 @@ export const config = {
   hubspotStageRequested: getEnv("HUBSPOT_STAGE_REQUESTED") || "requested",
   hubspotStageApproved: getEnv("HUBSPOT_STAGE_APPROVED") || "approved",
   hubspotStageBooked: getEnv("HUBSPOT_STAGE_BOOKED") || "booked",
+  hubspotStagePaid: getEnv("HUBSPOT_STAGE_PAID") || "paid",
+  hubspotStageCancelled: getEnv("HUBSPOT_STAGE_CANCELLED") || "cancelled",
+
+  // Environment
+  nodeEnv: getEnv("NODE_ENV") || "development",
   
   // Supabase
   supabaseUrl: getEnv("NEXT_PUBLIC_SUPABASE_URL") || getEnv("SUPABASE_URL") || "https://placeholder.supabase.co",

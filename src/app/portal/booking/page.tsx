@@ -6,51 +6,55 @@ import { useSearchParams } from "next/navigation";
 import { createBrowserClient } from "../../../lib/supabase";
 import { config } from "../../../lib/config";
 
+interface Room {
+  id: string;
+  name: string;
+  villa_id: string;
+  max_guests: number;
+}
+
+interface BookingResult {
+  success?: boolean;
+  error?: string;
+  total?: number;
+  nights?: number;
+  message?: string;
+}
+
 function BookingContent() {
   const searchParams = useSearchParams();
   const roomId = searchParams.get("room");
-  const [room, setRoom] = useState<any>(null);
+  const [room, setRoom] = useState<Room | null>(null);
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [guests, setGuests] = useState(1);
   const [specialRequests, setSpecialRequests] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<BookingResult | null>(null);
 
   useEffect(() => {
     const supabase = createBrowserClient();
     async function load() {
       if (roomId) {
         const { data } = await supabase.from("rooms").select("*").eq("id", roomId).single();
-        setRoom(data);
+        setRoom(data as Room | null);
       }
       setLoading(false);
     }
-    load();
+    void load();
   }, [roomId]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!roomId || !checkIn || !checkOut) return;
+    if (!roomId || !checkIn || !checkOut || !room) return;
 
     setSubmitting(true);
     try {
-      // Get current user/lead from session
-      const res = await fetch("/api/auth/session");
-      const session = await res.json();
-      const leadId = session?.user?.leadId;
-
-      if (!leadId) {
-        setResult({ error: "Please log in first" });
-        return;
-      }
-
       const response = await fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          leadId,
           roomId,
           villaId: room.villa_id,
           checkIn,
@@ -60,10 +64,10 @@ function BookingContent() {
         }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as BookingResult;
       setResult(data);
-    } catch (err: any) {
-      setResult({ error: err.message });
+    } catch (err: unknown) {
+      setResult({ error: err instanceof Error ? err.message : "Request failed" });
     } finally {
       setSubmitting(false);
     }
@@ -90,7 +94,7 @@ function BookingContent() {
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 text-emerald-800">
             <h3 className="font-medium mb-2">Request submitted!</h3>
             <p className="text-sm">{result.message}</p>
-            <p className="text-sm mt-2">Total: €{result.total.toFixed(2)} for {result.nights} nights</p>
+            <p className="text-sm mt-2">Total: €{result.total?.toFixed(2)} for {result.nights} nights</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border p-6 space-y-5">

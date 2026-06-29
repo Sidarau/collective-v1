@@ -1,46 +1,52 @@
-import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "../../../../lib/supabase";
+import { NextResponse } from "next/server";
+import { getSupabaseAdmin } from "../../../../lib/supabase";
 
-export async function GET(_req: NextRequest) {
+interface RevenueRow {
+  total_price: number | null;
+}
+
+export async function GET() {
   try {
     // Pending requests count
-    const { count: pendingCount, error: pendingError } = await supabaseAdmin
+    const { count: pendingRequests, error: pendingError } = await getSupabaseAdmin()
       .from("bookings")
       .select("*", { count: "exact", head: true })
       .eq("status", "requested");
 
     if (pendingError) throw new Error(pendingError.message);
 
-    // Total bookings count (all non-cancelled)
-    const { count: totalCount, error: totalError } = await supabaseAdmin
+    // Total approved/completed bookings
+    const { count: totalBookings, error: totalError } = await getSupabaseAdmin()
       .from("bookings")
       .select("*", { count: "exact", head: true })
-      .neq("status", "cancelled");
+      .in("status", ["approved", "paid", "confirmed", "completed"]);
 
     if (totalError) throw new Error(totalError.message);
 
-    // Revenue from approved/paid/confirmed bookings
-    const { data: revenueData, error: revenueError } = await supabaseAdmin
+    // Revenue from approved/completed bookings (stored in cents)
+    const { data: revenueData, error: revenueError } = await getSupabaseAdmin()
       .from("bookings")
       .select("total_price")
-      .in("status", ["approved", "deposit_paid", "paid", "confirmed", "completed"]);
+      .in("status", ["approved", "paid", "confirmed", "completed"])
+      .returns<RevenueRow[]>();
 
     if (revenueError) throw new Error(revenueError.message);
 
     const revenue = (revenueData || []).reduce(
-      (sum, b) => sum + (b.total_price || 0),
+      (sum, row) => sum + (row.total_price || 0),
       0
     );
 
     return NextResponse.json({
-      pendingRequests: pendingCount || 0,
-      totalBookings: totalCount || 0,
+      pendingRequests: pendingRequests || 0,
+      totalBookings: totalBookings || 0,
       revenue,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Admin stats error:", error);
+    const message = error instanceof Error ? error.message : "Failed to fetch stats";
     return NextResponse.json(
-      { error: error.message || "Failed to fetch stats" },
+      { error: message },
       { status: 500 }
     );
   }

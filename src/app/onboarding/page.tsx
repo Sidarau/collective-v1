@@ -2,14 +2,35 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { config } from "../../../lib/config";
+import Link from "next/link";
+import { config } from "@/lib/config";
+
+interface OnboardingForm {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  whatsapp: string;
+  dietaryRestrictions: string;
+  preferredDates: string;
+  roomPreference: string;
+  guests: string;
+}
+
+interface OnboardingResult {
+  success?: boolean;
+  error?: string;
+  message?: string;
+  portalLink?: string;
+}
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [form, setForm] = useState({
+  const [result, setResult] = useState<OnboardingResult | null>(null);
+  const [form, setForm] = useState<OnboardingForm>({
     firstName: "",
     lastName: "",
     email: "",
@@ -41,12 +62,13 @@ export default function OnboardingPage() {
         body: JSON.stringify(form),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as OnboardingResult;
 
       if (!res.ok) {
         throw new Error(data.error || "Something went wrong");
       }
 
+      setResult(data);
       setSuccess(data.message || "Application submitted successfully!");
       setForm({
         firstName: "",
@@ -60,12 +82,12 @@ export default function OnboardingPage() {
         guests: "1",
       });
 
-      // Redirect to login after a short delay
       setTimeout(() => {
         router.push("/login");
-      }, 2000);
-    } catch (err: any) {
-      setError(err.message || "Failed to submit. Please try again.");
+      }, 3000);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to submit. Please try again.";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -84,16 +106,12 @@ export default function OnboardingPage() {
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-900">
             {config.brandName}
           </h1>
-          <p className="mt-2 text-sm text-zinc-500">
-            {config.brandTagline}
-          </p>
+          <p className="mt-2 text-sm text-zinc-500">{config.brandTagline}</p>
         </div>
 
         {/* Card */}
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm sm:p-8">
-          <h2 className="mb-1 text-xl font-semibold text-zinc-900">
-            Apply to stay
-          </h2>
+          <h2 className="mb-1 text-xl font-semibold text-zinc-900">Apply to stay</h2>
           <p className="mb-6 text-sm text-zinc-500">
             Tell us a little about yourself and your trip.
           </p>
@@ -106,7 +124,12 @@ export default function OnboardingPage() {
 
           {success && (
             <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-              {success}
+              <p>{success}</p>
+              {result?.portalLink && (
+                <p className="mt-2 break-all text-xs">
+                  Dev/test login link: {result.portalLink}
+                </p>
+              )}
             </div>
           )}
 
@@ -278,11 +301,12 @@ export default function OnboardingPage() {
 
         {/* Footer */}
         <p className="mt-6 text-center text-xs text-zinc-400">
-          Questions? Reach us at{" "}
-          <a
-            href={`mailto:${config.supportEmail}`}
-            className="underline hover:text-zinc-600"
-          >
+          Already have an account?{" "}
+          <Link href="/login" className="underline hover:text-zinc-600">
+            Log in
+          </Link>
+          {" · "}Questions? Reach us at{" "}
+          <a href={`mailto:${config.supportEmail}`} className="underline hover:text-zinc-600">
             {config.supportEmail}
           </a>
         </p>

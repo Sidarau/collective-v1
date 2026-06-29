@@ -1,33 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
-import { config } from "../../../lib/config";
+import { useSearchParams } from "next/navigation";
+import { config } from "@/lib/config";
 
-export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [token, setToken] = useState("");
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState(searchParams.get("email") || "");
+  const [token, setToken] = useState(searchParams.get("token") || "");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<{ success?: boolean; error?: string } | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     try {
+      // Fetch CSRF token first
+      const csrfRes = await fetch("/api/auth/csrf");
+      const csrfData = (await csrfRes.json()) as { csrfToken?: string };
+
       const res = await fetch("/api/auth/callback/credentials", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, token, csrfToken: "token" }),
+        body: JSON.stringify({
+          email,
+          token,
+          csrfToken: csrfData.csrfToken,
+          callbackUrl: "/portal/villa",
+          json: true,
+        }),
       });
-      if (res.ok) {
+
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (res.ok && data.url) {
         setResult({ success: true });
-        window.location.href = "/portal/villa";
+        window.location.href = data.url;
       } else {
-        const data = await res.json();
         setResult({ error: data.error || "Login failed" });
       }
-    } catch (err: any) {
-      setResult({ error: err.message });
+    } catch (err: unknown) {
+      setResult({ error: err instanceof Error ? err.message : "Login failed" });
     } finally {
       setLoading(false);
     }
@@ -81,11 +94,19 @@ export default function LoginPage() {
 
         <p className="text-center text-sm text-stone-500 mt-6">
           Don&apos;t have an account?{" "}
-          <Link href="/public/onboarding" className="text-stone-900 font-medium">
+          <Link href="/onboarding" className="text-stone-900 font-medium">
             Request an invitation
           </Link>
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-stone-50 flex items-center justify-center">Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -1,4 +1,14 @@
-import { supabaseAdmin } from "./supabase";
+import { getSupabaseAdmin } from "./supabase";
+
+interface SeasonalPrice {
+  price_per_night: number;
+  currency: string;
+}
+
+interface RoomPrice {
+  base_price_per_night: number;
+  currency: string;
+}
 
 export async function getRoomPriceForDate(
   roomId: string,
@@ -7,7 +17,7 @@ export async function getRoomPriceForDate(
   const dateStr = date.toISOString().split("T")[0];
 
   // Check seasonal pricing first
-  const { data: seasonal } = await supabaseAdmin
+  const { data: seasonal } = await getSupabaseAdmin()
     .from("seasonal_pricing")
     .select("price_per_night, currency")
     .eq("room_id", roomId)
@@ -18,19 +28,21 @@ export async function getRoomPriceForDate(
     .single();
 
   if (seasonal) {
-    return { price: seasonal.price_per_night, currency: seasonal.currency };
+    const s = seasonal as SeasonalPrice;
+    return { price: s.price_per_night, currency: s.currency };
   }
 
   // Fallback to room base price
-  const { data: room } = await supabaseAdmin
+  const { data: room } = await getSupabaseAdmin()
     .from("rooms")
     .select("base_price_per_night, currency")
     .eq("id", roomId)
     .single();
 
+  const r = room as RoomPrice | null;
   return {
-    price: room?.base_price_per_night || 0,
-    currency: room?.currency || "EUR",
+    price: r?.base_price_per_night || 0,
+    currency: r?.currency || "EUR",
   };
 }
 
