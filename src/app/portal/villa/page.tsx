@@ -29,18 +29,27 @@ export default function VillaPage() {
   useEffect(() => {
     const supabase = createBrowserClient();
     async function load() {
-      const { data: villaData } = await supabase
-        .from("villas")
-        .select("*")
-        .eq("slug", "roca-llisa")
-        .single();
-      const { data: roomsData } = await supabase
-        .from("rooms")
-        .select("*")
-        .eq("villa_id", villaData?.id);
-      setVilla(villaData || null);
-      setRooms(roomsData || []);
-      setLoading(false);
+      try {
+        const { data: villaData, error: villaError } = await supabase
+          .from("villas")
+          .select("*")
+          .eq("slug", "roca-llisa")
+          .single();
+        if (villaError) console.error("[villa] villas query failed:", villaError.message);
+
+        const { data: roomsData, error: roomsError } = await supabase
+          .from("rooms")
+          .select("*")
+          .eq("villa_id", villaData?.id);
+        if (roomsError) console.error("[villa] rooms query failed:", roomsError.message);
+
+        setVilla(villaData || null);
+        setRooms(roomsData || []);
+      } catch (err) {
+        console.error("[villa] page load error:", err instanceof Error ? err.message : err);
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, []);

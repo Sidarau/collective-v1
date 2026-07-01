@@ -33,13 +33,33 @@ export function getSupabaseAdmin(): SupabaseClient {
   return _supabaseAdmin;
 }
 
-// Backward-compatible export for existing code
-export const supabaseAdmin = getSupabaseAdmin();
+// Backward-compatible export for existing (server-side) code.
+//
+// IMPORTANT: this must NOT eagerly call getSupabaseAdmin() at module load.
+// The portal client components import `createBrowserClient` from this same
+// module, so the whole module is evaluated in the browser bundle. An eager
+// `createClient(url, SUPABASE_SERVICE_ROLE_KEY)` there throws "supabaseKey is
+// required" (the service-role key is server-only), which crashes hydration and
+// shows Safari/Chrome "This page couldn't load". A lazy Proxy defers client
+// creation until a property is actually accessed — which only happens in
+// server code — so importing this module in the browser is now side-effect free.
+export const supabaseAdmin: SupabaseClient = new Proxy({} as SupabaseClient, {
+  get(_target, prop, receiver) {
+    const client = getSupabaseAdmin();
+    const value = Reflect.get(client as object, prop, receiver);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});
 
-// Browser-side Supabase client
+// Browser-side Supabase client.
+//
+// These MUST reference process.env.NEXT_PUBLIC_* DIRECTLY (not via the getEnv()
+// helper). Next.js/Turbopack only statically inlines direct `process.env.NEXT_PUBLIC_FOO`
+// references into the client bundle; a dynamic `process.env[key]` lookup is left
+// as-is and resolves to `undefined` in the browser, so the anon key would be empty
+// and @supabase/ssr throws "Your project's URL and API key are required".
 export function createBrowserClient(): SupabaseClient {
-  return createSupabaseBrowserClient(
-    supabaseUrl || DEFAULT_SUPABASE_URL,
-    supabaseAnonKey
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+  return createSupabaseBrowserClient(url, anonKey);
 }
