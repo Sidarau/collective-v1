@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Nested apps (admin/) generate their own build output + env shim.
+    "**/.next/**",
+    "**/out/**",
+    "admin/next-env.d.ts",
   ]),
 ]);
 

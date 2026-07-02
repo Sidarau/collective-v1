@@ -1,31 +1,88 @@
 "use client";
 
-import { useState, Suspense, useEffect } from "react";
+import { useState, Suspense, useEffect, useCallback } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { config } from "@/lib/config";
+
+const BG =
+  "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=2400&auto=format&fit=crop";
+
+const ERROR_COPY: Record<string, string> = {
+  link_invalid: "That entrance link has expired or was already used. Request a fresh one below.",
+  missing_params: "That link was incomplete. Request a fresh one below.",
+  server_error: "Something went wrong on our side. Try again in a moment.",
+};
 
 function LoginForm() {
   const searchParams = useSearchParams();
+  const urlError = searchParams.get("error");
   const [email, setEmail] = useState(searchParams.get("email") || "");
-  const [token, setToken] = useState(searchParams.get("token") || "");
+  const [token] = useState(searchParams.get("token") || "");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"magic" | "password">("magic");
   const [loading, setLoading] = useState(false);
   const [autoLoggingIn, setAutoLoggingIn] = useState(false);
-  const [result, setResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(null);
+  const [result, setResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(
+    urlError ? { error: ERROR_COPY[urlError] || ERROR_COPY.server_error } : null
+  );
 
-  const hasToken = Boolean(token);
+  const credentialsLogin = useCallback(
+    async (loginEmail: string, creds: { token?: string; password?: string }) => {
+      setLoading(true);
+      setResult(null);
+      try {
+        const csrfRes = await fetch("/api/auth/csrf");
+        const csrfData = (await csrfRes.json()) as { csrfToken?: string };
 
-  // Auto-login if token is present in URL
+        const body: Record<string, string> = {
+          email: loginEmail,
+          csrfToken: csrfData.csrfToken || "",
+          callbackUrl: "/enter",
+          json: "true",
+          ...creds,
+        };
+
+        const res = await fetch("/api/auth/callback/credentials", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams(body).toString(),
+        });
+
+        const data = (await res.json()) as { url?: string; error?: string };
+        if (res.ok && data.url && !data.url.includes("error=")) {
+          window.location.href = data.url;
+        } else {
+          setResult({
+            error:
+              mode === "password"
+                ? "That email and password don't match."
+                : "We couldn't verify that link. Request a fresh one below.",
+          });
+          setAutoLoggingIn(false);
+        }
+      } catch {
+        setResult({ error: "Connection issue — try again." });
+        setAutoLoggingIn(false);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [mode]
+  );
+
+  // Old-format links (/login?email&token) still auto-enter.
   useEffect(() => {
-    if (hasToken && email) {
+    if (!token || !email) return;
+    const timer = window.setTimeout(() => {
       setAutoLoggingIn(true);
-      handleLoginInternal(email, { token });
-    }
-  }, [hasToken, email]);
+      void credentialsLogin(email, { token });
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  async function handleMagicLink(e: React.FormEvent) {
+  async function requestLink(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setResult(null);
@@ -35,193 +92,138 @@ function LoginForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      const data = (await res.json()) as { success?: boolean; message?: string; error?: string };
+      const data = (await res.json()) as { message?: string; error?: string };
       if (res.ok) {
-        setResult({ success: true, message: data.message || "Check your email for the magic link." });
+        setResult({ success: true, message: data.message });
       } else {
-        setResult({ error: data.error || "Failed to send magic link" });
+        setResult({ error: data.error || "Could not send the link." });
       }
-    } catch (err: unknown) {
-      setResult({ error: err instanceof Error ? err.message : "Failed to send magic link" });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleLogin(e?: React.FormEvent, override?: { token?: string; password?: string }) {
-    if (e) e.preventDefault();
-    await handleLoginInternal(email, override);
-  }
-
-  async function handleLoginInternal(loginEmail: string, override?: { token?: string; password?: string }) {
-    setLoading(true);
-    setResult(null);
-    try {
-      const csrfRes = await fetch("/api/auth/csrf");
-      const csrfData = (await csrfRes.json()) as { csrfToken?: string };
-
-      const body: Record<string, string> = {
-        email: loginEmail,
-        csrfToken: csrfData.csrfToken || "",
-        callbackUrl: "/portal/villa",
-        json: "true",
-      };
-
-      if (mode === "magic" || override?.token) {
-        body.token = override?.token || token;
-      }
-      if (mode === "password" || override?.password) {
-        body.password = override?.password || password;
-      }
-
-      const res = await fetch("/api/auth/callback/credentials", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams(body).toString(),
-      });
-
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (res.ok && data.url) {
-        window.location.href = data.url;
-      } else {
-        setResult({ error: data.error || "Login failed" });
-        setAutoLoggingIn(false);
-      }
-    } catch (err: unknown) {
-      setResult({ error: err instanceof Error ? err.message : "Login failed" });
-      setAutoLoggingIn(false);
+    } catch {
+      setResult({ error: "Connection issue — try again." });
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center px-6">
-      <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-light text-stone-900 text-center mb-8">{config.brandName}</h1>
+    <main className="relative min-h-dvh overflow-hidden">
+      <Image src={BG} alt="" fill priority sizes="100vw" className="object-cover" />
+      <div className="absolute inset-0 scrim-full" />
 
-        <div className="bg-white rounded-xl shadow-sm border p-6 space-y-5">
-          {result?.error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">{result.error}</div>
-          )}
-          {result?.success && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-green-700 text-sm">{result.message}</div>
-          )}
+      <div className="relative z-10 flex min-h-dvh flex-col items-center justify-center px-5 py-12">
+        <Link href="/" className="wordmark reveal mb-10 text-lg text-ink">
+          Collective
+        </Link>
 
-          {autoLoggingIn && (
-            <div className="bg-stone-50 border border-stone-200 rounded-lg p-3 text-stone-700 text-sm text-center">
-              Logging you in…
-            </div>
-          )}
-
-          <div className="flex rounded-lg border border-stone-200 p-1">
-            <button
-              type="button"
-              onClick={() => setMode("magic")}
-              className={`flex-1 py-1.5 text-sm font-medium rounded-md transition ${
-                mode === "magic" ? "bg-stone-900 text-white" : "text-stone-600 hover:bg-stone-50"
-              }`}
-            >
-              Magic Link
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("password")}
-              className={`flex-1 py-1.5 text-sm font-medium rounded-md transition ${
-                mode === "password" ? "bg-stone-900 text-white" : "text-stone-600 hover:bg-stone-50"
-              }`}
-            >
-              Password
-            </button>
-          </div>
-
-          {mode === "magic" && !hasToken && (
-            <form onSubmit={handleMagicLink} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-stone-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg border-stone-300 px-3 py-2 border"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-stone-900 text-white py-3 rounded-lg font-medium hover:bg-stone-800 transition disabled:opacity-50"
-              >
-                {loading ? "Sending…" : "Send Magic Link"}
-              </button>
-            </form>
-          )}
-
-          {(mode === "password" || hasToken) && !autoLoggingIn && (
-            <form onSubmit={(e) => handleLogin(e)} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-stone-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg border-stone-300 px-3 py-2 border"
-                />
+        <div className="glass-strong reveal w-full max-w-sm p-7" style={{ animationDelay: "0.1s" }}>
+          {autoLoggingIn ? (
+            <p className="muted py-6 text-center text-[15px]">Opening your entrance…</p>
+          ) : (
+            <>
+              <div className="glass-flat mb-6 flex p-1">
+                {(["magic", "password"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      setMode(m);
+                      setResult(null);
+                    }}
+                    className={`pill tap flex-1 py-2.5 text-[13px] font-semibold transition ${
+                      mode === m ? "bg-champagne text-base" : "muted"
+                    }`}
+                  >
+                    {m === "magic" ? "Entrance link" : "Password"}
+                  </button>
+                ))}
               </div>
 
-              {mode === "magic" && (
-                <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-1">Access Token</label>
-                  <input
-                    type="text"
-                    required
-                    value={token}
-                    onChange={(e) => setToken(e.target.value)}
-                    placeholder="From your email"
-                    className="w-full rounded-lg border-stone-300 px-3 py-2 border font-mono text-sm"
-                  />
-                </div>
+              {result?.error && (
+                <p className="chip-red chip mb-4 w-full whitespace-normal py-2 normal-case tracking-normal">
+                  {result.error}
+                </p>
+              )}
+              {result?.success && (
+                <p className="chip-olive chip mb-4 w-full whitespace-normal py-2 normal-case tracking-normal">
+                  {result.message}
+                </p>
               )}
 
-              {mode === "password" && (
-                <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-1">Password</label>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full rounded-lg border-stone-300 px-3 py-2 border"
-                  />
-                </div>
+              {mode === "magic" ? (
+                <form onSubmit={requestLink} className="space-y-4">
+                  <div>
+                    <label className="tag">Email</label>
+                    <input
+                      type="email"
+                      required
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="field"
+                      placeholder="you@example.com"
+                    />
+                  </div>
+                  <button type="submit" disabled={loading} className="btn-champagne tap h-[52px] w-full text-[15px]">
+                    {loading ? "Sending…" : "Send my entrance link"}
+                  </button>
+                  <p className="faint text-center text-[12px] leading-relaxed">
+                    Your link arrives by email and works once.
+                  </p>
+                </form>
+              ) : (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    credentialsLogin(email, { password });
+                  }}
+                  className="space-y-4"
+                >
+                  <div>
+                    <label className="tag">Email</label>
+                    <input
+                      type="email"
+                      required
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="field"
+                      placeholder="you@example.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="tag">Password</label>
+                    <input
+                      type="password"
+                      required
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="field"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                  <button type="submit" disabled={loading} className="btn-champagne tap h-[52px] w-full text-[15px]">
+                    {loading ? "Entering…" : "Enter"}
+                  </button>
+                </form>
               )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-stone-900 text-white py-3 rounded-lg font-medium hover:bg-stone-800 transition disabled:opacity-50"
-              >
-                {loading ? "Logging in…" : "Log In"}
-              </button>
-            </form>
+            </>
           )}
         </div>
 
-        <p className="text-center text-sm text-stone-500 mt-6">
-          Don&apos;t have an account?{" "}
-          <Link href="/onboarding" className="text-stone-900 font-medium">
-            Request an invitation
-          </Link>
+        <p className="faint reveal mt-8 max-w-xs text-center text-[13px] leading-relaxed" style={{ animationDelay: "0.2s" }}>
+          No account? Membership is by referral — ask the member who told you about us.
         </p>
       </div>
-    </div>
+    </main>
   );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-stone-50 flex items-center justify-center">Loading…</div>}>
+    <Suspense
+      fallback={<div className="flex min-h-dvh items-center justify-center bg-base muted">…</div>}
+    >
       <LoginForm />
     </Suspense>
   );

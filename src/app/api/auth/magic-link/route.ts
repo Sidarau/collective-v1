@@ -1,75 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
-import * as crypto from "crypto";
-import { getSupabaseAdmin } from "@/lib/supabase";
-import { sendMagicLinkEmail } from "@/lib/email";
-import { updateContactMagicLink, getHubSpotContactByEmail } from "@/lib/hubspot";
-import { config } from "@/lib/config";
+import { getSupabaseAdmin } from "@core/supabase";
+import { mintMagicLink } from "@core/invites";
+import { sendMagicLinkEmail } from "@core/email";
+import { config } from "@core/config";
 
+export const runtime = "nodejs";
+
+/**
+ * Request a fresh entrance link. Only works for existing accounts —
+ * membership is referral-only. Responds identically whether or not the
+ * account exists (no membership enumeration).
+ */
 export async function POST(req: NextRequest) {
   try {
     const { email } = (await req.json()) as { email?: string };
     if (!email) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
+    const normalized = email.toLowerCase().trim();
 
-    const normalizedEmail = email.toLowerCase().trim();
-    const supabaseAdmin = getSupabaseAdmin();
-
-    const { data: user } = await supabaseAdmin
+    const { data: user } = await getSupabaseAdmin()
       .from("users")
-      .select("id, email, lead_id")
-      .eq("email", normalizedEmail)
-      .single();
+      .select("id, email")
+      .eq("email", normalized)
+      .maybeSingle();
 
-    if (!user) {
-      // Don't reveal whether email exists
-      return NextResponse.json(
-        { success: true, message: "If an account exists, a magic link has been sent." },
-        { status: 200 }
-      );
-    }
-
-    // Generate token
-    const token = crypto.randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-    await supabaseAdmin.from("magic_tokens").insert({
-      user_id: user.id,
-      token,
-      expires_at: expiresAt,
-    });
-
-    // Point at the server-side consumption route (top-level GET navigation that
-    // sets the session cookie + 302s to the portal). This is the Safari/iOS-safe
-    // path; the old /login?... client auto-login flow set the cookie over XHR,
-    // which Safari ITP / iOS Gmail WebView dropped.
-    const magicLink = `${config.baseUrl}/api/auth/magic?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`;
-
-    // Try to update HubSpot contact
-    try {
-      const contactId = await getHubSpotContactByEmail(normalizedEmail);
-      if (contactId) {
-        await updateContactMagicLink(contactId, magicLink);
+    if (user) {
+      const link = await mintMagicLink(user.id, user.email, config.baseUrl);
+      try {
+        await sendMagicLinkEmail({
+          to: user.email,
+          firstName: user.email.split("@")[0],
+          magicLink: link,
+        });
+      } catch (err) {
+        console.error("magic-link email failed:", err);
       }
-    } catch (hubspotError) {
-      console.error("Failed to update HubSpot with magic link:", hubspotError);
-    }
-
-    // Try to send email
-    try {
-      await sendMagicLinkEmail({ to: normalizedEmail, firstName: normalizedEmail.split("@")[0], magicLink });
-    } catch (emailError) {
-      console.error("Failed to send magic link email:", emailError);
     }
 
     return NextResponse.json({
       success: true,
-      message: "If an account exists, a magic link has been sent.",
-      // Only expose link in non-production for testing
-      ...(config.nodeEnv !== "production" ? { magicLink } : {}),
+      message: "If that address belongs to the Circle, a fresh entrance link is on its way.",
     });
   } catch (error) {
-    console.error("Magic link error:", error);
-    return NextResponse.json({ error: "Failed to send magic link" }, { status: 500 });
+    console.error("magic-link error:", error);
+    return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
   }
 }

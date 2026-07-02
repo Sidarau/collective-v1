@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { getSupabaseAdmin } from "@/lib/supabase";
-import { hashPassword } from "@/lib/password";
+import { authOptions } from "@/lib/auth";
+import { getSupabaseAdmin } from "@core/supabase";
+import { hashPassword } from "@core/password";
+
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,25 +15,26 @@ export async function POST(req: NextRequest) {
 
     const { password } = (await req.json()) as { password?: string };
     if (!password || password.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Password must be at least 8 characters" },
+        { status: 400 }
+      );
     }
 
     const hash = await hashPassword(password);
-    const supabaseAdmin = getSupabaseAdmin();
-
-    const { error } = await supabaseAdmin
+    const { error } = await getSupabaseAdmin()
       .from("users")
       .update({ password_hash: hash })
       .eq("email", session.user.email);
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
 
-    return NextResponse.json({ success: true, message: "Password set successfully" });
+    return NextResponse.json({ success: true, message: "Password set" });
   } catch (error) {
     console.error("Set password error:", error);
-    const message = error instanceof Error ? error.message : "Failed to set password";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to set password" },
+      { status: 500 }
+    );
   }
 }
