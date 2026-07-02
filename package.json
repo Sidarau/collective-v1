@@ -13,6 +13,7 @@
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
     "@types/nodemailer": "^8.0.1",
+    "bcrypt": "^6.0.0",
     "date-fns": "^4.4.0",
     "dotenv": "^17.4.2",
     "lucide-react": "^1.22.0",
@@ -21,10 +22,12 @@
     "nodemailer": "^7.0.13",
     "react": "19.2.4",
     "react-day-picker": "^10.0.1",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "resend": "^6.16.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bcrypt": "^6.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

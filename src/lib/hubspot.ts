@@ -29,14 +29,14 @@ export async function createHubSpotContact(lead: {
   whatsapp?: string;
   source?: string;
 }) {
-  const properties = {
+  const properties: Record<string, string> = {
     email: lead.email,
     firstname: lead.firstName,
     lastname: lead.lastName,
-    ...(lead.phone && { phone: lead.phone }),
-    ...(lead.whatsapp && { hs_whatsapp_phone_number: lead.whatsapp }),
-    ...(lead.source && { hs_lead_source: lead.source }),
   };
+  if (lead.phone) properties.phone = lead.phone;
+  if (lead.whatsapp) properties.hs_whatsapp_phone_number = lead.whatsapp;
+  // hs_analytics_source is an enum; skip generic source mapping for now
 
   const data = await hubspotFetch("/crm/v3/objects/contacts", {
     method: "POST",
@@ -79,6 +79,27 @@ export async function updateContactMagicLink(contactId: string, magicLink: strin
       properties: { magic_link: magicLink },
     }),
   });
+}
+
+export async function getHubSpotContactByEmail(email: string): Promise<string | null> {
+  try {
+    const data = (await hubspotFetch(`/crm/v3/objects/contacts/search`, {
+      method: "POST",
+      body: JSON.stringify({
+        filterGroups: [
+          {
+            filters: [{ propertyName: "email", operator: "EQ", value: email }],
+          },
+        ],
+        properties: ["email"],
+        limit: 1,
+      }),
+    })) as { results?: { id: string }[] };
+    return data.results?.[0]?.id || null;
+  } catch (error) {
+    console.error("Failed to find HubSpot contact:", error);
+    return null;
+  }
 }
 
 export async function updateDealStage(dealId: string, stage: string) {

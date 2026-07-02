@@ -27,15 +27,28 @@ export async function POST(req: NextRequest) {
 
     const supabaseAdmin = getSupabaseAdmin();
 
-    // 1. Create HubSpot contact
-    const hubspotContactId = await createHubSpotContact({
-      email,
-      firstName,
-      lastName,
-      phone,
-      whatsapp,
-      source,
-    });
+    // 1. Create or update HubSpot contact
+    let hubspotContactId: string;
+    try {
+      hubspotContactId = await createHubSpotContact({
+        email,
+        firstName,
+        lastName,
+        phone,
+        whatsapp,
+        source,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "";
+      if (message.includes("Contact already exists")) {
+        // Extract existing ID from error message
+        const match = message.match(/Existing ID: (\d+)/);
+        hubspotContactId = match ? match[1] : "";
+        if (!hubspotContactId) throw err;
+      } else {
+        throw err;
+      }
+    }
 
     // 2. Create HubSpot deal
     const dealName = `${config.villaName} - ${firstName} ${lastName}`;

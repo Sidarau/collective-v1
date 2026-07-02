@@ -4,6 +4,7 @@ import * as crypto from "crypto";
 import { authOptions } from "../../auth/[...nextauth]/route";
 import { getSupabaseAdmin } from "../../../../lib/supabase";
 import { sendMagicLinkEmail } from "../../../../lib/email";
+import { updateContactMagicLink, getHubSpotContactByEmail } from "../../../../lib/hubspot";
 import { config } from "../../../../lib/config";
 
 export async function POST(req: NextRequest) {
@@ -34,6 +35,23 @@ export async function POST(req: NextRequest) {
 
     const supabaseAdmin = getSupabaseAdmin();
 
+    // Create lead record for the invitee
+    const { data: lead, error: leadError } = await supabaseAdmin
+      .from("leads")
+      .insert({
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        source: "admin_invite",
+        status: "new",
+      })
+      .select()
+      .single();
+
+    if (leadError || !lead) {
+      throw new Error(leadError?.message || "Failed to create lead");
+    }
+
     // Upsert user (idempotent)
     const { data: existingUser } = await supabaseAdmin
       .from("users")
@@ -44,11 +62,11 @@ export async function POST(req: NextRequest) {
     let userId: string;
     if (existingUser) {
       userId = existingUser.id;
-      await supabaseAdmin.from("users").update({ role }).eq("id", userId);
+      await supabaseAdmin.from("users").update({ role, lead_id: lead.id }).eq("id", userId);
     } else {
       const { data: newUser, error: userError } = await supabaseAdmin
         .from("users")
-        .insert({ email, role })
+        .insert({ email, role, lead_id: lead.id })
         .select()
         .single();
 
@@ -74,6 +92,16 @@ export async function POST(req: NextRequest) {
       await sendMagicLinkEmail({ to: email, firstName, magicLink: inviteLink });
     } catch (emailError: unknown) {
       console.error("Failed to send invite email:", emailError);
+    }
+
+    // Update HubSpot contact if exists
+    try {
+      const contactId = await getHubSpotContactByEmail(email);
+      if (contactId) {
+        await updateContactMagicLink(contactId, inviteLink);
+      }
+    } catch (hubspotError: unknown) {
+      console.error("Failed to update HubSpot contact:", hubspotError);
     }
 
     return NextResponse.json({

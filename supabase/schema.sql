@@ -143,14 +143,31 @@ ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.availability_blocks ENABLE ROW LEVEL SECURITY;
 
 -- RLS: Service role bypass (used by server-side API routes)
-CREATE POLICY IF NOT EXISTS service_all ON public.villas FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS service_all ON public.rooms FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS service_all ON public.seasonal_pricing FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS service_all ON public.leads FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS service_all ON public.users FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS service_all ON public.magic_tokens FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS service_all ON public.bookings FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS service_all ON public.availability_blocks FOR ALL USING (true) WITH CHECK (true);
+-- Note: CREATE POLICY does not support IF NOT EXISTS.
+-- Drop and recreate to make the script idempotent.
+DROP POLICY IF EXISTS service_all ON public.villas;
+CREATE POLICY service_all ON public.villas FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS service_all ON public.rooms;
+CREATE POLICY service_all ON public.rooms FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS service_all ON public.seasonal_pricing;
+CREATE POLICY service_all ON public.seasonal_pricing FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS service_all ON public.leads;
+CREATE POLICY service_all ON public.leads FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS service_all ON public.users;
+CREATE POLICY service_all ON public.users FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS service_all ON public.magic_tokens;
+CREATE POLICY service_all ON public.magic_tokens FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS service_all ON public.bookings;
+CREATE POLICY service_all ON public.bookings FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS service_all ON public.availability_blocks;
+CREATE POLICY service_all ON public.availability_blocks FOR ALL USING (true) WITH CHECK (true);
 
 -- Seed Roca Llisa villa and rooms
 INSERT INTO public.villas (name, slug, location, description, max_guests, amenities)
@@ -166,16 +183,16 @@ ON CONFLICT (slug) DO NOTHING;
 
 DO $$
 DECLARE
-  villa_id UUID;
+  target_villa_id UUID;
 BEGIN
-  SELECT id INTO villa_id FROM public.villas WHERE slug = 'roca-llisa' LIMIT 1;
+  SELECT id INTO target_villa_id FROM public.villas WHERE slug = 'roca-llisa' LIMIT 1;
 
-  IF villa_id IS NOT NULL THEN
+  IF target_villa_id IS NOT NULL THEN
     INSERT INTO public.rooms (villa_id, name, slug, description, room_type, max_guests, bed_type, base_price_per_night, currency, amenities)
     VALUES
-      (villa_id, 'Master Suite', 'master-suite', 'Spacious master with ensuite and terrace.', 'master', 2, 'King', 45000, 'EUR', ARRAY['Ensuite', 'Terrace', 'Sea view']),
-      (villa_id, 'Double Room', 'double-room', 'Bright double room with garden view.', 'double', 2, 'Queen', 32000, 'EUR', ARRAY['Garden view']),
-      (villa_id, 'Twin Room', 'twin-room', 'Flexible twin setup, ideal for friends.', 'single', 2, 'Twin', 28000, 'EUR', ARRAY['Pool view'])
+      (target_villa_id, 'Master Suite', 'master-suite', 'Spacious master with ensuite and terrace.', 'master', 2, 'King', 45000, 'EUR', ARRAY['Ensuite', 'Terrace', 'Sea view']),
+      (target_villa_id, 'Double Room', 'double-room', 'Bright double room with garden view.', 'double', 2, 'Queen', 32000, 'EUR', ARRAY['Garden view']),
+      (target_villa_id, 'Twin Room', 'twin-room', 'Flexible twin setup, ideal for friends.', 'single', 2, 'Twin', 28000, 'EUR', ARRAY['Pool view'])
     ON CONFLICT (villa_id, slug) DO NOTHING;
   END IF;
 END $$;
@@ -189,15 +206,26 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER IF NOT EXISTS villas_updated_at BEFORE UPDATE ON public.villas
+DROP TRIGGER IF EXISTS villas_updated_at ON public.villas;
+CREATE TRIGGER villas_updated_at BEFORE UPDATE ON public.villas
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-CREATE TRIGGER IF NOT EXISTS rooms_updated_at BEFORE UPDATE ON public.rooms
+
+DROP TRIGGER IF EXISTS rooms_updated_at ON public.rooms;
+CREATE TRIGGER rooms_updated_at BEFORE UPDATE ON public.rooms
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-CREATE TRIGGER IF NOT EXISTS leads_updated_at BEFORE UPDATE ON public.leads
+
+DROP TRIGGER IF EXISTS leads_updated_at ON public.leads;
+CREATE TRIGGER leads_updated_at BEFORE UPDATE ON public.leads
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-CREATE TRIGGER IF NOT EXISTS users_updated_at BEFORE UPDATE ON public.users
+
+DROP TRIGGER IF EXISTS users_updated_at ON public.users;
+CREATE TRIGGER users_updated_at BEFORE UPDATE ON public.users
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-CREATE TRIGGER IF NOT EXISTS bookings_updated_at BEFORE UPDATE ON public.bookings
+
+DROP TRIGGER IF EXISTS bookings_updated_at ON public.bookings;
+CREATE TRIGGER bookings_updated_at BEFORE UPDATE ON public.bookings
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-CREATE TRIGGER IF NOT EXISTS availability_blocks_updated_at BEFORE UPDATE ON public.availability_blocks
+
+DROP TRIGGER IF EXISTS availability_blocks_updated_at ON public.availability_blocks;
+CREATE TRIGGER availability_blocks_updated_at BEFORE UPDATE ON public.availability_blocks
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();

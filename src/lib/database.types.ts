@@ -188,6 +188,7 @@ export interface Database {
           email: string;
           role: "lead" | "member" | "admin" | "operator";
           lead_id: string | null;
+          password_hash: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -196,6 +197,7 @@ export interface Database {
           email: string;
           role?: "lead" | "member" | "admin" | "operator";
           lead_id?: string | null;
+          password_hash?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -204,6 +206,7 @@ export interface Database {
           email?: string;
           role?: "lead" | "member" | "admin" | "operator";
           lead_id?: string | null;
+          password_hash?: string | null;
           created_at?: string;
           updated_at?: string;
         };
