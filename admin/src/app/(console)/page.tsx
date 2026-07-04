@@ -3,12 +3,31 @@ import PageHeader from "@/components/PageHeader";
 import StatusChip from "@/components/StatusChip";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { getDashboardData, listOpenFollowUps } from "@/lib/admin-data";
+import { listCalls } from "@/lib/funnel-data";
 import { setFollowUpStatusAction } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
+const callTime = (iso: string, tz: string) =>
+  new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+
 export default async function DashboardPage() {
-  const [data, followUps] = await Promise.all([getDashboardData(), listOpenFollowUps()]);
+  const [data, followUps, calls] = await Promise.all([
+    getDashboardData(),
+    listOpenFollowUps(),
+    listCalls({
+      from: new Date(Date.now() - 60 * 60_000).toISOString(),
+      statuses: ["scheduled"],
+      limit: 5,
+    }),
+  ]);
 
   return (
     <>
@@ -21,6 +40,31 @@ export default async function DashboardPage() {
           </div>
         ))}
       </section>
+
+      {calls.length > 0 && (
+        <section className="panel mt-5 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-line px-4 py-3">
+            <h3 className="text-sm font-semibold text-ink">Next host calls</h3>
+            <Link href="/schedule" className="text-xs text-muted hover:text-ink">
+              Full schedule →
+            </Link>
+          </div>
+          <div className="divide-y divide-line">
+            {calls.map((call) => (
+              <div key={call.id} className="flex items-center gap-4 px-4 py-2.5">
+                <p className="w-44 shrink-0 text-[13px] font-semibold text-gold">
+                  {callTime(call.scheduled_at, call.timezone)}
+                </p>
+                <p className="min-w-0 flex-1 truncate text-[13px] text-ink">
+                  {call.prospect_name}
+                  <span className="text-muted"> · {call.prospect_email}</span>
+                </p>
+                <span className="chip">{call.kind}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="mt-6 grid grid-cols-[1fr_320px] gap-5">
         <section className="panel overflow-hidden">

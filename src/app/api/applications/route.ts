@@ -1,22 +1,20 @@
+import * as crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions, type SessionUser } from "@/lib/auth";
 import { getSupabaseAdmin } from "@core/supabase";
-import {
-  createHubSpotContact,
-  createHubSpotDeal,
-  isCrmExemptEmail,
-} from "@core/hubspot";
 import { sendNotificationEmail } from "@core/email";
+import { writeAudit } from "@core/audit";
+import { isToggleEnabled } from "@core/settings";
 import { config } from "@core/config";
 
 export const runtime = "nodejs";
 
 /**
- * Membership application (person-first). Requires a session — entrance is by
- * referral link only. Writes the application to Supabase, mirrors the person
- * into HubSpot (contact + membership deal) unless the email belongs to an
- * admin/operator account (so the team can test the funnel with real emails).
+ * Membership application for invited leads (the signed-in /join flow — the
+ * public referral form posts to /api/referral/[code] instead). Native CRM
+ * only: Supabase is the system of record. Returns the screening scheduler URL
+ * so the prospect books their host call immediately.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -52,42 +50,27 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabaseAdmin();
     const email = user.email;
 
-    // One live application per person.
+    // One live application per person — returning prospects go to scheduling.
     const { data: existing } = await supabase
       .from("applications")
-      .select("id, status")
+      .select("id, status, screening_token")
       .eq("email", email)
       .not("status", "in", "(rejected)")
       .maybeSingle();
     if (existing) {
-      return NextResponse.json({ success: true, applicationId: existing.id });
-    }
-
-    // 2. HubSpot mirror — skipped entirely for admin/operator emails.
-    let hubspotContactId: string | null = null;
-    let hubspotDealId: string | null = null;
-    const crmExempt = await isCrmExemptEmail(email);
-    if (!crmExempt) {
-      try {
-        hubspotContactId = await createHubSpotContact({
-          email,
-          firstName,
-          lastName,
-          phone,
-          whatsapp,
-          occupation,
-          location,
-        });
-        hubspotDealId = await createHubSpotDeal(
-          hubspotContactId,
-          `Membership — ${firstName} ${lastName}`
-        );
-      } catch (err) {
-        // CRM must never block the person. The row records sync failure.
-        console.error("HubSpot sync failed for application:", err);
+      let token = existing.screening_token as string | null;
+      if (!token) {
+        token = crypto.randomBytes(24).toString("hex");
+        await supabase.from("applications").update({ screening_token: token }).eq("id", existing.id);
       }
+      return NextResponse.json({
+        success: true,
+        applicationId: existing.id,
+        schedulingUrl: `/screening/${token}`,
+      });
     }
 
+    const screeningToken = crypto.randomBytes(24).toString("hex");
     const { data: application, error } = await supabase
       .from("applications")
       .insert({
@@ -105,9 +88,7 @@ export async function POST(req: NextRequest) {
         linkedin,
         preferred_window: preferredWindow,
         status: "submitted",
-        hubspot_contact_id: hubspotContactId,
-        hubspot_deal_id: hubspotDealId,
-        hubspot_synced: !!hubspotContactId,
+        screening_token: screeningToken,
       })
       .select()
       .single();
@@ -125,30 +106,40 @@ export async function POST(req: NextRequest) {
           last_name: lastName,
           phone: phone || null,
           whatsapp: whatsapp || null,
-          hubspot_contact_id: hubspotContactId,
-          hubspot_deal_id: hubspotDealId,
           status: "active",
         })
         .eq("id", user.leadId);
     }
 
-    // Nudge the operators.
-    if (config.adminEmail) {
+    await writeAudit({
+      action: "application.submitted",
+      entityType: "application",
+      entityId: application.id,
+      summary: `${firstName} ${lastName} submitted an introduction (invited flow)`,
+    });
+
+    if (config.adminEmail && (await isToggleEnabled("notify.admin_on_application"))) {
       try {
         await sendNotificationEmail({
           to: config.adminEmail,
           subject: `New introduction: ${firstName} ${lastName}`,
           heading: "A new introduction has arrived",
-          body: `${firstName} ${lastName} (${occupation || "—"}, ${location || "—"}) was referred by ${referredBy || "—"}. Review it in the operator console.`,
+          body: `${firstName} ${lastName} (${occupation || "—"}, ${location || "—"}) was referred by ${referredBy || "—"}. They're being offered a screening slot now.`,
           ctaHref: config.adminUrl || undefined,
           ctaLabel: "Open console",
+          entityType: "application",
+          entityId: application.id,
         });
       } catch (err) {
         console.error("Admin notification failed:", err);
       }
     }
 
-    return NextResponse.json({ success: true, applicationId: application.id });
+    return NextResponse.json({
+      success: true,
+      applicationId: application.id,
+      schedulingUrl: `/screening/${screeningToken}`,
+    });
   } catch (error) {
     console.error("Application error:", error);
     return NextResponse.json(

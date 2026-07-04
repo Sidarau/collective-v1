@@ -6,12 +6,24 @@ import Timeline from "@/components/Timeline";
 import CrmPanel from "@/components/CrmPanel";
 import ErrorBanner from "@/components/ErrorBanner";
 import { getApplicationDetail } from "@/lib/admin-data";
+import { mapLatestCalls } from "@/lib/funnel-data";
+import { sendSchedulingLinkAction, setCallStatusAction } from "@/lib/funnel-actions";
 import { fmtDate } from "@/lib/format";
 import {
   approveApplicationAction,
   setApplicationStatusAction,
   resendOnboardingLinkAction,
 } from "@/lib/actions";
+
+const callTime = (iso: string, tz: string) =>
+  new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +39,7 @@ export default async function ApplicationDetailPage({
   const detail = await getApplicationDetail(id);
   if (!detail) notFound();
   const { application: app, timeline } = detail;
+  const call = (await mapLatestCalls("application_id", [id])).get(id) || null;
   const path = `/applications/${id}`;
 
   const answers: [string, string | null][] = [
@@ -76,6 +89,49 @@ export default async function ApplicationDetailPage({
                 </div>
               )}
             </dl>
+          </section>
+
+          {/* Screening call */}
+          <section className="panel p-5">
+            <p className="label">Host call</p>
+            {call ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm text-ink">{callTime(call.scheduled_at, call.timezone)}</p>
+                  <p className="mt-1 text-[12px] text-faint">
+                    {call.duration_minutes} min · Ibiza clock · <StatusChip value={call.status} />
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {call.status === "scheduled" &&
+                    (["completed", "no_show"] as const).map((status) => (
+                      <form key={status} action={setCallStatusAction}>
+                        <input type="hidden" name="id" value={call.id} />
+                        <input type="hidden" name="status" value={status} />
+                        <input type="hidden" name="path" value={path} />
+                        <button type="submit" className={`btn ${status === "completed" ? "btn-gold" : ""}`}>
+                          {status === "completed" ? "Mark done" : "No-show"}
+                        </button>
+                      </form>
+                    ))}
+                  <Link href="/schedule" className="btn">
+                    Schedule
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-[13px] text-muted">
+                  No call booked yet. They can book from their scheduling link — or send it again.
+                </p>
+                <form action={sendSchedulingLinkAction}>
+                  <input type="hidden" name="id" value={app.id} />
+                  <button type="submit" className="btn">
+                    Email scheduling link
+                  </button>
+                </form>
+              </div>
+            )}
           </section>
 
           {/* Decisions */}

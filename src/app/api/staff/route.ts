@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendNotificationEmail } from "@core/email";
 import { config } from "@core/config";
 import { getSupabaseAdmin } from "@core/supabase";
+import { isToggleEnabled } from "@core/settings";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
         name,
         email,
         phone: clean(body.phone) || null,
+        company: clean(body.company) || null,
         role_applied: roleApplied,
         experience: clean(body.experience) || null,
         links: clean(body.links) ? { raw: clean(body.links) } : {},
@@ -42,7 +44,7 @@ export async function POST(req: NextRequest) {
       throw new Error(error?.message || "Failed to save staff application");
     }
 
-    if (config.adminEmail) {
+    if (config.adminEmail && (await isToggleEnabled("notify.admin_on_vendor_application"))) {
       try {
         await sendNotificationEmail({
           to: config.adminEmail,

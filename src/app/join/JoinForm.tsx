@@ -43,12 +43,13 @@ export default function JoinForm(initial: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as { error?: string; schedulingUrl?: string };
       if (!res.ok) {
         setError(data.error || "Something went wrong — try again.");
         return;
       }
-      router.push("/pending");
+      // Straight to the host-call scheduler; /pending stays the fallback.
+      router.push(data.schedulingUrl || "/pending");
       router.refresh();
     } catch {
       setError("Connection issue — try again.");

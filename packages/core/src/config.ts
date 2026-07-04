@@ -23,18 +23,6 @@ export const config = {
   baseUrl: process.env.NEXT_PUBLIC_BASE_URL || "https://collective-v1-three.vercel.app",
   adminUrl: process.env.NEXT_PUBLIC_ADMIN_URL || "",
 
-  // HubSpot
-  hubspotToken: getEnv("HUBSPOT_SERVICE_KEY") || "",
-  hubspotPortalId: getEnv("HUBSPOT_PORTAL_ID") || "148787733",
-  hubspotPipelineId: getEnv("HUBSPOT_PIPELINE_ID") || "default",
-  hubspotStageInquiry: getEnv("HUBSPOT_STAGE_INQUIRY") || "5612484839",
-  hubspotStageRequested: getEnv("HUBSPOT_STAGE_REQUESTED") || "5612484840",
-  hubspotStageApproved: getEnv("HUBSPOT_STAGE_APPROVED") || "5612484841",
-  hubspotStageBooked: getEnv("HUBSPOT_STAGE_BOOKED") || "5612484842",
-  hubspotStagePaid: getEnv("HUBSPOT_STAGE_PAID") || "5612484842",
-  hubspotStageCancelled: getEnv("HUBSPOT_STAGE_CANCELLED") || "5612484843",
-  hubspotWebhookSecret: getEnv("HUBSPOT_WEBHOOK_SECRET") || "",
-
   // Resend
   resendApiKey: getEnv("RESEND_API_KEY") || "",
   resendFromEmail: getEnv("RESEND_FROM_EMAIL") || "onboarding@resend.dev",
@@ -56,6 +44,9 @@ export const config = {
 
   // Notifications
   adminEmail: getEnv("ADMIN_EMAIL") || "",
+
+  // Agent access (KB REST + MCP). Endpoints refuse to serve when unset.
+  agentApiToken: getEnv("AGENT_API_TOKEN") || "",
 };
 
 export function requireConfig(key: keyof typeof config): string {
