@@ -1,7 +1,9 @@
 import Image from "next/image";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAuthUser } from "@/lib/auth";
-import { fetchLatestApplication } from "@/lib/data";
+import { db, fetchLatestApplication } from "@/lib/data";
+import { fmtCallTime } from "@/lib/screening";
 import SignOutButton from "@/components/SignOutButton";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +40,20 @@ export default async function PendingPage() {
 
   const copy = STATUS_COPY[application.status] || STATUS_COPY.submitted;
 
+  // Host-call state: booked → show when; not booked → offer the scheduler.
+  const { data: call } = await db()
+    .from("screening_calls")
+    .select("scheduled_at, timezone")
+    .eq("application_id", application.id)
+    .eq("status", "scheduled")
+    .order("scheduled_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const canSchedule =
+    !call &&
+    application.screening_token &&
+    ["submitted", "screening"].includes(application.status);
+
   return (
     <main className="relative min-h-dvh overflow-hidden">
       <Image src={BG} alt="" fill priority sizes="100vw" className="object-cover" />
@@ -52,6 +68,19 @@ export default async function PendingPage() {
           </span>
           <h1 className="display mt-5 text-[30px] leading-[1.12] text-ink">{copy.title}</h1>
           <p className="muted mt-4 text-[15px] leading-relaxed">{copy.body}</p>
+          {call && (
+            <p className="chip chip-gold mt-5 w-full justify-center whitespace-normal py-2 normal-case tracking-normal">
+              Host call: {fmtCallTime(call.scheduled_at, call.timezone)}
+            </p>
+          )}
+          {canSchedule && (
+            <Link
+              href={`/screening/${application.screening_token}`}
+              className="btn-champagne tap mt-6 inline-flex h-[48px] items-center px-8 text-[14px]"
+            >
+              Schedule your host call
+            </Link>
+          )}
         </div>
 
         <div className="reveal mt-8" style={{ animationDelay: "0.2s" }}>

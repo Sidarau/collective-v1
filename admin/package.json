@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node ../scripts/sync-vendor-core.mjs || true",
     "dev": "next dev --port 3001",
+    "prebuild": "node ../scripts/sync-vendor-core.mjs || true",
     "build": "next build",
     "start": "next start --port 3001",
     "lint": "eslint .",
@@ -13,11 +15,13 @@
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
     "bcrypt": "^6.0.0",
+    "mcp-handler": "^1.1.0",
     "next": "16.2.9",
     "next-auth": "^4.24.14",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "resend": "^6.16.0"
+    "resend": "^6.16.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

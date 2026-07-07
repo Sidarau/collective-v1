@@ -1,7 +1,6 @@
 import * as crypto from "crypto";
 import { getSupabaseAdmin } from "./supabase";
 import { sendMagicLinkEmail } from "./email";
-import { getHubSpotContactByEmail, updateContactMagicLink } from "./hubspot";
 import type { UserRole } from "./database.types";
 
 const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -39,7 +38,7 @@ export interface CreateInviteResult {
 /**
  * Invite flow shared by admin console and member referrals:
  * upsert lead + user (role lead by default), mint a one-time magic link,
- * optionally email it, and mirror it onto the HubSpot contact if one exists.
+ * and optionally email it.
  */
 export async function createInvite(params: CreateInviteParams): Promise<CreateInviteResult> {
   const supabase = getSupabaseAdmin();
@@ -102,13 +101,6 @@ export async function createInvite(params: CreateInviteParams): Promise<CreateIn
     } catch (err) {
       console.error("Invite email failed (link still valid):", err);
     }
-  }
-
-  try {
-    const contactId = await getHubSpotContactByEmail(email);
-    if (contactId) await updateContactMagicLink(contactId, inviteLink);
-  } catch (err) {
-    console.error("HubSpot magic_link mirror failed:", err);
   }
 
   return { userId, leadId, inviteLink, existing };

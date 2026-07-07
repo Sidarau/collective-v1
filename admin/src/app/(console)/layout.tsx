@@ -2,16 +2,41 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAdminUser } from "@/lib/auth";
 
-const NAV = [
-  ["Dashboard", "/"],
-  ["Applications", "/applications"],
-  ["Stay Requests", "/requests"],
-  ["People", "/people"],
-  ["Gates", "/gates"],
-  ["Events", "/events"],
-  ["Communications", "/communications"],
-  ["Settings", "/settings"],
-] as const;
+const NAV: [string, [string, string][]][] = [
+  ["", [["Dashboard", "/"]]],
+  [
+    "Funnel",
+    [
+      ["Applications", "/applications"],
+      ["Vendors & Staff", "/vendors"],
+      ["Referral Links", "/referrals"],
+      ["Schedule", "/schedule"],
+    ],
+  ],
+  [
+    "Operate",
+    [
+      ["Stay Requests", "/requests"],
+      ["People", "/people"],
+      ["Events", "/events"],
+    ],
+  ],
+  [
+    "House",
+    [
+      ["Gates & Rooms", "/gates"],
+      ["Content", "/content"],
+      ["Knowledge Base", "/kb"],
+    ],
+  ],
+  [
+    "System",
+    [
+      ["Communications", "/communications"],
+      ["Settings", "/settings"],
+    ],
+  ],
+];
 
 export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
   const user = await getAdminUser();
@@ -27,15 +52,26 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
           <h1 className="mt-1 text-lg font-semibold text-ink">Operator OS</h1>
           <p className="mt-1 truncate text-xs text-muted">{user.email}</p>
         </div>
-        <nav className="mt-8 space-y-1">
-          {NAV.map(([label, href]) => (
-            <Link
-              key={href}
-              href={href}
-              className="focus-ring block rounded-md px-3 py-2 text-sm text-muted hover:bg-white/5 hover:text-ink"
-            >
-              {label}
-            </Link>
+        <nav className="mt-6 space-y-4">
+          {NAV.map(([section, items]) => (
+            <div key={section || "root"}>
+              {section && (
+                <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-faint">
+                  {section}
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {items.map(([label, href]) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    className="focus-ring block rounded-md px-3 py-1.5 text-sm text-muted hover:bg-white/5 hover:text-ink"
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
       </aside>

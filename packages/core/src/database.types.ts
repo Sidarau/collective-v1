@@ -41,9 +41,15 @@ export type RsvpStatus = "going" | "interested" | "declined";
 export type StaffApplicationStatus =
   | "submitted"
   | "review"
+  | "interview_scheduled"
+  | "interviewed"
   | "shortlisted"
   | "rejected"
   | "hired";
+export type ReferralLinkKind = "member" | "vendor";
+export type ScreeningCallStatus = "scheduled" | "completed" | "no_show" | "cancelled";
+export type KbVisibility = "internal" | "staff" | "members";
+export type CampaignStatus = "draft" | "sending" | "sent" | "cancelled";
 
 export interface VillaRow {
   id: string;
@@ -204,6 +210,8 @@ export interface ApplicationRow {
   links: Json;
   preferred_window: string | null;
   status: ApplicationStatus;
+  screening_token: string | null;
+  referral_link_id: string | null;
   admin_notes: string | null;
   hubspot_contact_id: string | null;
   hubspot_deal_id: string | null;
@@ -251,8 +259,109 @@ export interface StaffApplicationRow {
   experience: string | null;
   links: Json;
   message: string | null;
+  company: string | null;
   status: StaffApplicationStatus;
   admin_notes: string | null;
+  interview_token: string | null;
+  referral_link_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReferralLinkRow {
+  id: string;
+  code: string;
+  kind: ReferralLinkKind;
+  label: string;
+  note: string | null;
+  active: boolean;
+  max_uses: number | null;
+  use_count: number;
+  expires_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Bookable window: recurring (weekday 0=Sun..6=Sat, JS Date#getDay) or one-off (date). */
+export interface ScreeningWindowRow {
+  id: string;
+  kind: "member" | "vendor" | "both";
+  weekday: number | null;
+  date: string | null;
+  start_minute: number;
+  end_minute: number;
+  timezone: string;
+  slot_minutes: number;
+  active: boolean;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScreeningCallRow {
+  id: string;
+  kind: "member" | "vendor";
+  application_id: string | null;
+  staff_application_id: string | null;
+  prospect_name: string;
+  prospect_email: string;
+  scheduled_at: string;
+  duration_minutes: number;
+  timezone: string;
+  status: ScreeningCallStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KbNodeRow {
+  id: string;
+  parent_id: string | null;
+  kind: "folder" | "doc";
+  title: string;
+  slug: string;
+  body_md: string;
+  visibility: KbVisibility;
+  position: number;
+  archived: boolean;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmailCampaignRow {
+  id: string;
+  name: string;
+  subject: string;
+  heading: string;
+  body_md: string;
+  cta_href: string | null;
+  cta_label: string | null;
+  audience: Json;
+  status: CampaignStatus;
+  total_recipients: number;
+  sent_count: number;
+  created_by: string | null;
+  sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppSettingRow {
+  key: string;
+  value: Json;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export interface ContentBlockRow {
+  id: string;
+  key: string;
+  title: string;
+  body_md: string;
+  media: Json;
+  updated_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -280,7 +389,11 @@ export type CrmEntityType =
   | "event"
   | "intro_request"
   | "staff_application"
-  | "email";
+  | "email"
+  | "campaign"
+  | "screening_call"
+  | "referral_link"
+  | "kb_node";
 
 export type EmailMessageStatus =
   | "logged"
@@ -415,6 +528,13 @@ export interface Database {
       email_suppressions: Tbl<EmailSuppressionRow>;
       referral_credits: Tbl<ReferralCreditRow>;
       payment_records: Tbl<PaymentRecordRow>;
+      referral_links: Tbl<ReferralLinkRow>;
+      screening_windows: Tbl<ScreeningWindowRow>;
+      screening_calls: Tbl<ScreeningCallRow>;
+      kb_nodes: Tbl<KbNodeRow>;
+      email_campaigns: Tbl<EmailCampaignRow>;
+      app_settings: Tbl<AppSettingRow>;
+      content_blocks: Tbl<ContentBlockRow>;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

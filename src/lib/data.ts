@@ -133,6 +133,17 @@ export async function fetchMyRequests(userId: string): Promise<
   return (data as (BookingRow & { rooms: Pick<RoomRow, "name"> | null; villas: Pick<VillaRow, "name" | "slug"> | null })[]) || [];
 }
 
+/** Operator-editable copy (admin console → Content). Null → caller's fallback. */
+export async function fetchContentBlock(key: string): Promise<string | null> {
+  const { data } = await db()
+    .from("content_blocks")
+    .select("body_md")
+    .eq("key", key)
+    .maybeSingle();
+  const body = (data?.body_md as string | undefined)?.trim();
+  return body || null;
+}
+
 export async function fetchLatestApplication(email: string): Promise<ApplicationRow | null> {
   const { data } = await db()
     .from("applications")

@@ -1,14 +1,19 @@
 import Image from "next/image";
 import Link from "next/link";
+import { fetchContentBlock } from "@/lib/data";
+
+export const dynamic = "force-dynamic";
 
 const HERO =
   "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?q=80&w=2400&auto=format&fit=crop";
 
 /**
  * Landing: deliberately silent. One image, the mark, one action.
- * Everything else lives behind the door.
+ * Copy is operator-editable (admin console → Content → landing.hero).
  */
-export default function Landing() {
+export default async function Landing() {
+  const hero = await fetchContentBlock("landing.hero");
+
   return (
     <main className="relative min-h-dvh overflow-hidden">
       <Image src={HERO} alt="" fill priority sizes="100vw" className="object-cover" />
@@ -20,7 +25,7 @@ export default function Landing() {
         <div className="stagger flex flex-col items-center text-center">
           <h1 className="wordmark text-2xl text-ink sm:text-3xl">Collective</h1>
           <p className="muted mt-6 max-w-xs text-[15px] leading-relaxed">
-            A private circle around the world&apos;s quiet places.
+            {hero || "A private circle around the world's quiet places."}
             <br />
             Membership is by referral.
           </p>
