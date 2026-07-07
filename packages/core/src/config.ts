@@ -31,12 +31,18 @@ export const config = {
   nodeEnv: getEnv("NODE_ENV") || "development",
 
   // Supabase (public url/anon key inlined; service key stays server-only)
+  // Fallback = the collective@zeuglab.com project (evviegqieqdmlxixwwxt).
+  // Prod/preview must still set env explicitly; this only guards a missing var.
   supabaseUrl:
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     getEnv("SUPABASE_URL") ||
-    "https://iudicmvyihswhvgmyvcf.supabase.co",
+    "https://evviegqieqdmlxixwwxt.supabase.co",
+  // NOTE: the zeuglab project has legacy JWT keys DISABLED, so the service-role
+  // JWT returns 401. Set SUPABASE_SECRET_KEY (sb_secret_…) — not
+  // SUPABASE_SERVICE_ROLE_KEY — for that project. The order below lets the
+  // secret key win when the JWT var is left unset.
   supabaseServiceKey:
-    getEnv("SUPABASE_SERVICE_ROLE_KEY") || getEnv("SUPABASE_SECRET_KEY") || "",
+    getEnv("SUPABASE_SECRET_KEY") || getEnv("SUPABASE_SERVICE_ROLE_KEY") || "",
   supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
 
   // Auth

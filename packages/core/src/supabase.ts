@@ -3,7 +3,8 @@ import { createBrowserClient as createSupabaseBrowserClient } from "@supabase/ss
 import type { Database } from "./database.types";
 
 // Public/non-sensitive fallback for Vercel build-time compatibility.
-const DEFAULT_SUPABASE_URL = "https://iudicmvyihswhvgmyvcf.supabase.co";
+// = the collective@zeuglab.com project (evviegqieqdmlxixwwxt).
+const DEFAULT_SUPABASE_URL = "https://evviegqieqdmlxixwwxt.supabase.co";
 
 function getEnv(key: string): string | undefined {
   return process.env[key];
@@ -11,8 +12,11 @@ function getEnv(key: string): string | undefined {
 
 const supabaseUrl =
   getEnv("NEXT_PUBLIC_SUPABASE_URL") || getEnv("SUPABASE_URL") || DEFAULT_SUPABASE_URL;
+// SUPABASE_SECRET_KEY (sb_secret_…) first: the zeuglab project has legacy JWT
+// service_role keys disabled, so the JWT var 401s. Leaving SERVICE_ROLE_KEY
+// unset there makes this fall through to the secret key.
 const supabaseServiceKey =
-  getEnv("SUPABASE_SERVICE_ROLE_KEY") || getEnv("SUPABASE_SECRET_KEY") || "";
+  getEnv("SUPABASE_SECRET_KEY") || getEnv("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 export type Db = SupabaseClient<Database>;
 
