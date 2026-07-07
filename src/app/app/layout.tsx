@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUserWithPassword } from "@/lib/auth";
 import { fetchProfileByUserId } from "@/lib/data";
 import TabBar from "@/components/TabBar";
 
@@ -10,8 +10,9 @@ export default async function PortalLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getAuthUser();
+  const user = await getAuthUserWithPassword();
   if (!user) redirect("/login");
+  if (!user.hasPassword) redirect("/setup-password");
   if (user.role === "lead") redirect("/enter");
 
   if (user.role === "member") {

@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUserWithPassword } from "@/lib/auth";
 import { db, fetchLatestApplication } from "@/lib/data";
 import { fmtCallTime } from "@/lib/screening";
 import SignOutButton from "@/components/SignOutButton";
@@ -31,8 +31,9 @@ const STATUS_COPY: Record<string, { title: string; body: string }> = {
 };
 
 export default async function PendingPage() {
-  const user = await getAuthUser();
+  const user = await getAuthUserWithPassword();
   if (!user) redirect("/login");
+  if (!user.hasPassword) redirect("/setup-password");
   if (user.role !== "lead") redirect("/enter");
 
   const application = await fetchLatestApplication(user.email);
