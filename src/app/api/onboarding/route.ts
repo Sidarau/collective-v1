@@ -1,130 +1,69 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseAdmin } from "../../../lib/supabase";
-import { createHubSpotContact, createHubSpotDeal, updateContactMagicLink } from "../../../lib/hubspot";
-import { sendMagicLinkEmail } from "../../../lib/email";
-import { config } from "../../../lib/config";
-import * as crypto from "crypto";
+import { getServerSession } from "next-auth/next";
+import { authOptions, type SessionUser } from "@/lib/auth";
+import { getSupabaseAdmin } from "@core/supabase";
 
+export const runtime = "nodejs";
+
+/**
+ * Completes onboarding for an approved member: upserts their profile
+ * (pre-filled client-side from the application) and marks it complete.
+ */
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const {
-      email,
-      firstName,
-      lastName,
-      phone,
-      whatsapp,
-      dietaryRestrictions,
-      source = "whatsapp",
-    } = body;
-
-    if (!email || !firstName || !lastName) {
-      return NextResponse.json(
-        { error: "Email, first name, and last name are required" },
-        { status: 400 }
-      );
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const user = session.user as SessionUser;
+    if (user.role === "lead") {
+      return NextResponse.json({ error: "Membership pending" }, { status: 403 });
     }
 
-    const supabaseAdmin = getSupabaseAdmin();
-
-    // 1. Create HubSpot contact
-    const hubspotContactId = await createHubSpotContact({
-      email,
-      firstName,
-      lastName,
-      phone,
-      whatsapp,
-      source,
-    });
-
-    // 2. Create HubSpot deal
-    const dealName = `${config.villaName} - ${firstName} ${lastName}`;
-    const hubspotDealId = await createHubSpotDeal(hubspotContactId, dealName);
-
-    // 3. Create lead in Supabase
-    const { data: lead, error: leadError } = await supabaseAdmin
-      .from("leads")
-      .insert({
-        email,
-        first_name: firstName,
-        last_name: lastName,
-        phone,
-        whatsapp,
-        dietary_restrictions: dietaryRestrictions,
-        hubspot_contact_id: hubspotContactId,
-        hubspot_deal_id: hubspotDealId,
-        source,
-        status: "new",
-      })
-      .select()
-      .single();
-
-    if (leadError) {
-      throw new Error(`Failed to create lead: ${leadError.message}`);
+    const body = (await req.json()) as Record<string, string>;
+    if (!body.firstName || !body.lastName) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    if (!lead) {
-      throw new Error("Lead creation returned no data");
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase.from("profiles").upsert(
+      {
+        user_id: user.id,
+        first_name: body.firstName,
+        last_name: body.lastName,
+        headline: body.headline || null,
+        location: body.location || null,
+        bio: body.bio || null,
+        contribution: body.contribution || null,
+        phone: body.phone || null,
+        whatsapp: body.whatsapp || null,
+        allergies: body.allergies || null,
+        dietary: body.dietary || null,
+        onboarding_completed: true,
+      },
+      { onConflict: "user_id" }
+    );
+
+    if (error) throw new Error(error.message);
+
+    // Mirror stay-critical details onto the lead row for operations.
+    if (user.leadId) {
+      await supabase
+        .from("leads")
+        .update({
+          dietary_restrictions:
+            [body.allergies, body.dietary].filter(Boolean).join(" · ") || null,
+          phone: body.phone || null,
+          whatsapp: body.whatsapp || null,
+        })
+        .eq("id", user.leadId);
     }
 
-    // 4. Create user account
-    const magicToken = crypto.randomBytes(32).toString("hex");
-    const { data: user, error: userError } = await supabaseAdmin
-      .from("users")
-      .insert({
-        email,
-        role: "lead",
-        lead_id: lead.id,
-      })
-      .select()
-      .single();
-
-    if (userError) {
-      throw new Error(`Failed to create user: ${userError.message}`);
-    }
-
-    if (!user) {
-      throw new Error("User creation returned no data");
-    }
-
-    // 5. Store magic token
-    await supabaseAdmin.from("magic_tokens").insert({
-      user_id: user.id,
-      token: magicToken,
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    });
-
-    // 6. Build portal login link and send email
-    const portalLink = `${config.baseUrl}/login?email=${encodeURIComponent(
-      email
-    )}&token=${magicToken}`;
-
-    try {
-      await updateContactMagicLink(hubspotContactId, portalLink);
-    } catch (hubspotError: unknown) {
-      console.error("Failed to update HubSpot contact with magic link:", hubspotError);
-    }
-
-    try {
-      await sendMagicLinkEmail({ to: email, firstName, magicLink: portalLink });
-    } catch (emailError: unknown) {
-      console.error("Failed to send magic link email:", emailError);
-      // Non-blocking: still return the link so Don can share it manually if needed
-    }
-
-    return NextResponse.json({
-      success: true,
-      leadId: lead.id,
-      userId: user.id,
-      portalLink: config.nodeEnv === "production" ? undefined : portalLink,
-      message:
-        "Account created. Check your email for the magic link, or Don will share it with you directly.",
-    });
-  } catch (error: unknown) {
+    return NextResponse.json({ success: true });
+  } catch (error) {
     console.error("Onboarding error:", error);
-    const message = error instanceof Error ? error.message : "Failed to create account";
     return NextResponse.json(
-      { error: message },
+      { error: error instanceof Error ? error.message : "Failed to save" },
       { status: 500 }
     );
   }

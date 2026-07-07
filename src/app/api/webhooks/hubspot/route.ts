@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as crypto from "crypto";
-import { getSupabaseAdmin } from "../../../../lib/supabase";
-import { config } from "../../../../lib/config";
+import { config } from "@core/config";
+import type { BookingStatus } from "@core/database.types";
+import { getSupabaseAdmin } from "@core/supabase";
 
 interface HubSpotWebhookEvent {
   eventId?: number;
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
         event.propertyName === "dealstage"
       ) {
         const stage = event.propertyValue;
-        let status: string | null = null;
+        let status: BookingStatus | null = null;
 
         if (stage === config.hubspotStageApproved) status = "approved";
         else if (stage === config.hubspotStagePaid) status = "paid";

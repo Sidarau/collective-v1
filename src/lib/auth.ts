@@ -1,46 +1,33 @@
 import { getServerSession } from "next-auth/next";
 import { NextResponse } from "next/server";
 import type { Session } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { buildAuthOptions, type SessionUser, type UserRole } from "@core/auth-options";
 
-export type UserRole = "lead" | "member" | "admin" | "operator";
+export type { SessionUser, UserRole };
 
-export interface SessionUser {
-  id: string;
-  email: string;
-  name?: string | null;
-  role: UserRole;
-  leadId?: string | null;
-}
-
-function sessionToUser(session: Session): SessionUser {
-  return session.user as SessionUser;
-}
-
-export function requireLead(session: Session | null): NextResponse | null {
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const user = sessionToUser(session);
-  if (!["lead", "member", "admin", "operator"].includes(user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-  return null;
-}
-
-export function requireAdminOrOperator(session: Session | null): NextResponse | null {
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const user = sessionToUser(session);
-  if (!["admin", "operator"].includes(user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-  return null;
-}
+// Single AuthOptions instance shared by the route handler and helpers.
+export const authOptions = buildAuthOptions();
 
 export async function getAuthUser(): Promise<SessionUser | null> {
   const session = await getServerSession(authOptions);
   if (!session?.user) return null;
-  return sessionToUser(session);
+  return session.user as SessionUser;
+}
+
+export function requireMemberTier(session: Session | null): NextResponse | null {
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const role = (session.user as SessionUser).role;
+  if (!["member", "admin", "operator"].includes(role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  return null;
+}
+
+export function requireAnyUser(session: Session | null): NextResponse | null {
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return null;
 }
