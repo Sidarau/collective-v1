@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 const ERROR_COPY: Record<string, string> = {
@@ -12,15 +12,16 @@ const ERROR_COPY: Record<string, string> = {
 function LoginForm() {
   const searchParams = useSearchParams();
   const urlError = searchParams.get("error");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(searchParams.get("email") || "");
+  const [token] = useState(searchParams.get("token") || "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [autoLoggingIn, setAutoLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(
     urlError ? ERROR_COPY[urlError] || "Sign-in failed." : null
   );
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  const credentialsLogin = useCallback(async (loginEmail: string, creds: { token?: string; password?: string }) => {
     setLoading(true);
     setError(null);
     try {
@@ -30,24 +31,40 @@ function LoginForm() {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
-          email,
-          password,
+          email: loginEmail,
           csrfToken: csrfToken || "",
           callbackUrl: "/",
           json: "true",
+          ...creds,
         }).toString(),
       });
       const data = (await res.json()) as { url?: string };
       if (res.ok && data.url && !data.url.includes("error=")) {
         window.location.href = "/";
       } else {
-        setError("That email and password don't match an operator account.");
+        setError(creds.token ? "We couldn't verify that entrance link." : "That email and password don't match an operator account.");
+        setAutoLoggingIn(false);
       }
     } catch {
       setError("Connection issue — try again.");
+      setAutoLoggingIn(false);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    if (!token || !email) return;
+    const timer = window.setTimeout(() => {
+      setAutoLoggingIn(true);
+      void credentialsLogin(email, { token });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [credentialsLogin, email, token]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    await credentialsLogin(email, { password });
   }
 
   return (
@@ -59,6 +76,9 @@ function LoginForm() {
         <h1 className="mt-1 text-center text-xl font-semibold text-ink">Operator console</h1>
 
         <form onSubmit={submit} className="panel mt-8 p-6">
+          {autoLoggingIn && (
+            <p className="mb-4 text-center text-sm text-faint">Opening your operator entrance...</p>
+          )}
           {error && (
             <p className="chip chip-red mb-4 w-full whitespace-normal py-2 normal-case">{error}</p>
           )}
