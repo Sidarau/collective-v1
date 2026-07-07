@@ -14,7 +14,7 @@ export async function mintMagicLink(userId: string, email: string, baseUrl: stri
     expires_at: new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
   });
   if (error) throw new Error(`Failed to mint magic token: ${error.message}`);
-  return `${baseUrl}/api/auth/magic?email=${encodeURIComponent(email)}&token=${token}`;
+  return `${baseUrl}/login?email=${encodeURIComponent(email)}&token=${token}`;
 }
 
 export interface CreateInviteParams {
