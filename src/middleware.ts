@@ -30,6 +30,7 @@ export const config = {
   matcher: [
     "/app/:path*",
     "/enter",
+    "/setup-password",
     "/onboarding",
     "/join",
     "/pending",

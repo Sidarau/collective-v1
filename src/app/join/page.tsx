@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUserWithPassword } from "@/lib/auth";
 import { fetchLatestApplication, db } from "@/lib/data";
 import JoinForm from "./JoinForm";
 
@@ -14,8 +14,9 @@ const BG =
  * not a booking — who they are, what they build, why the Circle.
  */
 export default async function JoinPage() {
-  const user = await getAuthUser();
+  const user = await getAuthUserWithPassword();
   if (!user) redirect("/login");
+  if (!user.hasPassword) redirect("/setup-password");
   if (user.role !== "lead") redirect("/enter");
 
   const existing = await fetchLatestApplication(user.email);
