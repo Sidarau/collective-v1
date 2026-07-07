@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getAdminUser } from "@/lib/auth";
+import { getAdminUserWithPassword } from "@/lib/auth";
 
 const NAV: [string, [string, string][]][] = [
   ["", [["Dashboard", "/"]]],
@@ -39,8 +39,9 @@ const NAV: [string, [string, string][]][] = [
 ];
 
 export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
-  const user = await getAdminUser();
+  const user = await getAdminUserWithPassword();
   if (!user) redirect("/login");
+  if (!user.hasPassword) redirect("/setup-password");
 
   return (
     <div className="grid min-h-dvh grid-cols-[240px_1fr]">
