@@ -35,6 +35,8 @@ const callTime = (iso: string, tz: string) =>
     minute: "2-digit",
   }).format(new Date(iso));
 
+const oneHourAgoIso = () => new Date(new Date().getTime() - 60 * 60_000).toISOString();
+
 export default async function SchedulePage({
   searchParams,
 }: {
@@ -43,7 +45,7 @@ export default async function SchedulePage({
   const { error } = await searchParams;
   const [windows, upcoming, past] = await Promise.all([
     listScreeningWindows(),
-    listCalls({ from: new Date(Date.now() - 60 * 60_000).toISOString(), statuses: ["scheduled"] }),
+    listCalls({ from: oneHourAgoIso(), statuses: ["scheduled"] }),
     listCalls({ statuses: ["completed", "no_show", "cancelled"], limit: 15 }).then((rows) =>
       rows.reverse()
     ),

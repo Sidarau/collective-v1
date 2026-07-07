@@ -18,12 +18,14 @@ const callTime = (iso: string, tz: string) =>
     minute: "2-digit",
   }).format(new Date(iso));
 
+const oneHourAgoIso = () => new Date(new Date().getTime() - 60 * 60_000).toISOString();
+
 export default async function DashboardPage() {
   const [data, followUps, calls] = await Promise.all([
     getDashboardData(),
     listOpenFollowUps(),
     listCalls({
-      from: new Date(Date.now() - 60 * 60_000).toISOString(),
+      from: oneHourAgoIso(),
       statuses: ["scheduled"],
       limit: 5,
     }),
