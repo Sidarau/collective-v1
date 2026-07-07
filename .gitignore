@@ -45,8 +45,7 @@ next-env.d.ts
 **/.next/
 admin/.next/
 
-# Deploy-time vendored snapshot of packages/core (admin/ needs a self-
-# contained upload since Vercel CLI deploys ignore Root Directory settings
-# without real GitHub-integration git linking). Re-copy before redeploying
-# if packages/core changes: cp -R packages/core/src/* admin/vendor-core/
-admin/vendor-core/
+# Deploy-time vendored snapshot of packages/core. The admin app resolves
+# @core/* from admin/vendor-core during Vercel builds where the project root is
+# admin/, so this snapshot is intentionally committed. Refresh it with:
+# node scripts/sync-vendor-core.mjs
