@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
         .from("users")
         .update({ phone: invite.phone, phone_verified: !!invite.phone, role, lead_id: existing.lead_id || lead.id })
         .eq("id", existing.id)
-        .select("id, email, role, lead_id")
+        .select("id, email, role, lead_id, phone")
         .single();
       user = updated || existing;
     } else {
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
           phone: invite.phone,
           phone_verified: !!invite.phone,
         })
-        .select("id, email, role, lead_id")
+        .select("id, email, role, lead_id, phone")
         .single();
       if (userError || !created) throw new Error(userError?.message || "Account creation failed");
       user = created;
