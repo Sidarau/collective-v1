@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import DateRangeCalendar, { type DayMark } from "@/components/DateRangeCalendar";
+import { GATE_TZ, fmtGateDayNum, fmtGateMonth, fmtGateTime } from "@/lib/datetime";
 
 export interface CalendarEvent {
   id: string;
@@ -42,15 +43,17 @@ interface Props {
 
 const fmtLong = (iso: string) =>
   new Intl.DateTimeFormat("en-GB", {
+    timeZone: GATE_TZ,
     weekday: "long",
     month: "long",
     day: "numeric",
-    hour: "numeric",
+    hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   }).format(new Date(iso));
 
 const fmtShort = (iso: string) =>
-  new Intl.DateTimeFormat("en-GB", { month: "short", day: "numeric" }).format(
+  new Intl.DateTimeFormat("en-GB", { timeZone: GATE_TZ, month: "short", day: "numeric" }).format(
     new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso)
   );
 
@@ -217,15 +220,15 @@ export default function CalendarView({
                   className="tap flex w-full items-stretch gap-4 p-3 text-left"
                 >
                   <div className="glass-flat flex w-14 shrink-0 flex-col items-center justify-center py-2">
-                    <span className="eyebrow">{new Date(ev.startAt).toLocaleString("en-GB", { month: "short" })}</span>
+                    <span className="eyebrow">{fmtGateMonth(ev.startAt)}</span>
                     <span className="display text-[22px] leading-none text-ink">
-                      {new Date(ev.startAt).getDate()}
+                      {fmtGateDayNum(ev.startAt)}
                     </span>
                   </div>
                   <div className="flex flex-1 flex-col justify-center">
                     <p className="text-[15px] font-semibold text-ink">{ev.title}</p>
                     <p className="muted mt-0.5 text-[12px]">
-                      {ev.gateName} · {new Date(ev.startAt).toLocaleString("en-GB", { hour: "numeric", minute: "2-digit" })}
+                      {ev.gateName} · {fmtGateTime(ev.startAt)}
                     </p>
                   </div>
                   <div className="flex flex-col items-end justify-center gap-1 pr-1">

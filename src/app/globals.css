@@ -228,19 +228,19 @@ label.tag {
   color: var(--muted);
 }
 .notice-red {
-  color: #eda092;
-  border-color: rgba(224, 122, 106, 0.4);
-  background: rgba(224, 122, 106, 0.12);
+  color: #f2b1a5;
+  border-color: rgba(224, 122, 106, 0.45);
+  background: rgba(90, 34, 26, 0.55);
 }
 .notice-olive {
-  color: #8fc4ab;
-  border-color: rgba(117, 169, 146, 0.4);
-  background: rgba(117, 169, 146, 0.12);
+  color: #a7d8bf;
+  border-color: rgba(117, 169, 146, 0.45);
+  background: rgba(23, 58, 44, 0.55);
 }
 .notice-gold {
-  color: #e4be6d;
-  border-color: rgba(228, 190, 109, 0.35);
-  background: rgba(228, 190, 109, 0.1);
+  color: #ecd08b;
+  border-color: rgba(228, 190, 109, 0.4);
+  background: rgba(74, 58, 22, 0.55);
 }
 
 /* ---------- Scrims over photography ---------- */
@@ -259,6 +259,18 @@ label.tag {
     rgba(7, 16, 14, 0.35) 38%,
     rgba(7, 16, 14, 0.78) 78%,
     #07100e 100%
+  );
+}
+
+/* Lighter scrim for photo cards: keep the image alive, darken only the
+   caption band. (scrim-b buries dark night photography entirely.) */
+.scrim-card {
+  background: linear-gradient(
+    180deg,
+    rgba(7, 16, 14, 0.05) 0%,
+    rgba(7, 16, 14, 0.12) 45%,
+    rgba(7, 16, 14, 0.62) 78%,
+    rgba(7, 16, 14, 0.88) 100%
   );
 }
 

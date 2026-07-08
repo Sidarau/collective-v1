@@ -7,21 +7,25 @@ import {
   fetchProfileByUserId,
   fetchUpcomingEvents,
 } from "@/lib/data";
+import { GATE_TZ, fmtGateDayTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
 function greeting(): string {
-  const h = new Date().getHours();
+  // The greeting follows the Gate's clock, matching the photography and copy.
+  const h = parseInt(
+    new Intl.DateTimeFormat("en-GB", { timeZone: GATE_TZ, hour: "2-digit", hour12: false }).format(new Date()),
+    10
+  );
   if (h < 5) return "Good night";
   if (h < 12) return "Good morning";
   if (h < 18) return "Good afternoon";
   return "Good evening";
 }
 
-const DATE_FMT = new Intl.DateTimeFormat("en-GB", { month: "short", day: "numeric" });
+const DATE_FMT = new Intl.DateTimeFormat("en-GB", { timeZone: GATE_TZ, month: "short", day: "numeric" });
 const fmtDay = (iso: string) => DATE_FMT.format(new Date(`${iso}T12:00:00Z`));
-const fmtEvent = (iso: string) =>
-  new Intl.DateTimeFormat("en-GB", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
+const fmtEvent = (iso: string) => fmtGateDayTime(iso);
 
 const REQUEST_CHIP: Record<string, { label: string; cls: string }> = {
   requested: { label: "In review", cls: "chip-gold" },
@@ -134,7 +138,7 @@ export default async function HomePage() {
                     {ev.image && (
                       <>
                         <Image src={ev.image} alt="" fill sizes="240px" className="object-cover" />
-                        <div className="absolute inset-0 scrim-b" />
+                        <div className="absolute inset-0 scrim-card" />
                       </>
                     )}
                     <div className="absolute inset-x-0 bottom-0 p-4">

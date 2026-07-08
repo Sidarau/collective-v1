@@ -2,11 +2,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchGateBySlug, fetchPresence, fetchUpcomingEvents, fetchProfileByUserId } from "@/lib/data";
+import { GATE_TZ, fmtGateWeekday } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
 const fmtDay = (iso: string) =>
-  new Intl.DateTimeFormat("en-GB", { month: "short", day: "numeric" }).format(new Date(`${iso}T12:00:00Z`));
+  new Intl.DateTimeFormat("en-GB", { timeZone: GATE_TZ, month: "short", day: "numeric" }).format(new Date(`${iso}T12:00:00Z`));
 
 export default async function GateDetailPage({
   params,
@@ -151,7 +152,7 @@ export default async function GateDetailPage({
                   <div>
                     <p className="text-[14px] font-semibold text-ink">{ev.title}</p>
                     <p className="muted mt-0.5 text-[12px]">
-                      {new Intl.DateTimeFormat("en-GB", { weekday: "short", month: "short", day: "numeric" }).format(new Date(ev.start_at))}
+                      {fmtGateWeekday(ev.start_at)}
                     </p>
                   </div>
                   <span className="chip chip-gold">{ev.event_rsvps.filter((r) => r.status === "going").length} going</span>
