@@ -70,7 +70,7 @@ export default async function PendingPage() {
           <h1 className="display mt-5 text-[30px] leading-[1.12] text-ink">{copy.title}</h1>
           <p className="muted mt-4 text-[15px] leading-relaxed">{copy.body}</p>
           {call && (
-            <p className="chip chip-gold mt-5 w-full justify-center whitespace-normal py-2 normal-case tracking-normal">
+            <p className="notice notice-gold mt-5 w-full justify-center py-2">
               Host call: {fmtCallTime(call.scheduled_at, call.timezone)}
             </p>
           )}

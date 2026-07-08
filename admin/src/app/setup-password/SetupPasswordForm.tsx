@@ -52,7 +52,7 @@ export default function SetupPasswordForm({ email }: { email: string }) {
       </p>
 
       {error && (
-        <p className="chip chip-red mb-4 w-full whitespace-normal py-2 normal-case">{error}</p>
+        <p className="notice notice-red mb-4 w-full py-2">{error}</p>
       )}
 
       <label className="label" htmlFor="password">

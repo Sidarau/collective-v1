@@ -92,6 +92,39 @@ textarea {
   outline-offset: 2px;
 }
 
+/* ---------- Notices (multi-line feedback — .chip is nowrap/uppercase and
+   its unlayered rules beat Tailwind utility overrides; use these instead) ---------- */
+.notice {
+  display: block;
+  width: 100%;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.55;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: normal;
+  padding: 10px 13px;
+  border-radius: 8px;
+  border: 1px solid #334039;
+  background: #16211d;
+  color: #a9b3aa;
+}
+.notice-red {
+  color: #ef9a8b;
+  border-color: rgba(221, 124, 108, 0.5);
+  background: rgba(221, 124, 108, 0.1);
+}
+.notice-green {
+  color: #8fc4ab;
+  border-color: rgba(117, 169, 146, 0.45);
+  background: rgba(117, 169, 146, 0.1);
+}
+.notice-gold {
+  color: #e0bd73;
+  border-color: rgba(224, 189, 115, 0.4);
+  background: rgba(224, 189, 115, 0.1);
+}
+
 /* ---------- Controls (action forms) ---------- */
 .btn {
   display: inline-flex;

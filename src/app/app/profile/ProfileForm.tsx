@@ -133,7 +133,7 @@ export default function ProfileForm({
         </div>
 
         {error && (
-          <p className="chip chip-red mt-4 w-full whitespace-normal py-2 normal-case tracking-normal">{error}</p>
+          <p className="notice notice-red mt-4 w-full py-2">{error}</p>
         )}
         <button type="submit" disabled={saving} className="btn-champagne tap mt-5 h-12 w-full text-[14px]">
           {saving ? "Saving…" : saved ? "Saved" : "Save profile"}
@@ -174,7 +174,7 @@ export default function ProfileForm({
                 onChange={(e) => setInvite((i) => ({ ...i, email: e.target.value }))}
               />
               {inviteState.error && (
-                <p className="chip chip-red w-full whitespace-normal py-2 normal-case tracking-normal">
+                <p className="notice notice-red w-full py-2">
                   {inviteState.error}
                 </p>
               )}
@@ -183,7 +183,7 @@ export default function ProfileForm({
               </button>
             </form>
           ) : inviteState.message ? (
-            <p className="chip chip-olive mt-4 w-full whitespace-normal py-2 normal-case tracking-normal">
+            <p className="notice notice-olive mt-4 w-full py-2">
               {inviteState.message}
             </p>
           ) : (

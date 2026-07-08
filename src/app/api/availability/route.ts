@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { getSupabaseAdmin } from "@core/supabase";
 import {
   BLOCKING_STATUSES,
+  fetchVillaClosures,
   filterAvailableRooms,
   nightsBetween,
 } from "@core/availability";
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest) {
   const rooms = (roomRows as RoomRow[]) || [];
   const roomIds = rooms.map((r) => r.id);
 
-  const [{ data: bookings }, { data: blocks }] = await Promise.all([
+  const [{ data: bookings }, { data: blocks }, closures] = await Promise.all([
     supabase
       .from("bookings")
       .select("room_id, check_in, check_out, status")
@@ -69,10 +70,11 @@ export async function GET(req: NextRequest) {
       .neq("status", "available")
       .gte("date", from)
       .lt("date", to),
+    fetchVillaClosures(supabase, (gate as Pick<VillaRow, "id">).id, from, to),
   ]);
 
   const nights = nightsBetween(from, to);
-  const available = filterAvailableRooms(rooms, from, to, bookings || [], blocks || []).map(
+  const available = filterAvailableRooms(rooms, from, to, bookings || [], blocks || [], closures).map(
     (room) => ({
       id: room.id,
       slug: room.slug,

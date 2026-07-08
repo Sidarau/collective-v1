@@ -153,7 +153,7 @@ export default function JoinForm(initial: Props) {
       </div>
 
       {error && (
-        <p className="chip chip-red mt-5 w-full whitespace-normal py-2 normal-case tracking-normal">{error}</p>
+        <p className="notice notice-red mt-5 w-full py-2">{error}</p>
       )}
 
       <button type="submit" disabled={loading} className="btn-champagne tap mt-6 h-[52px] w-full text-[15px]">

@@ -1,4 +1,5 @@
 import type { BookingRow, AvailabilityBlockRow, RoomRow, BookingStatus } from "./database.types";
+import type { Db } from "./supabase";
 
 /**
  * Availability rules (single source of truth for member request flow,
@@ -7,7 +8,52 @@ import type { BookingRow, AvailabilityBlockRow, RoomRow, BookingStatus } from ".
  *   accepted it (approved and beyond). Pending "requested" holds do NOT block —
  *   operators arbitrate overlaps at approval time.
  * - availability_blocks rows with status !== 'available' block their date.
+ * - closure_periods close a whole villa (room_id NULL) or one room for
+ *   [starts_on .. ends_on] inclusive; ends_on NULL = closed indefinitely.
  */
+
+export interface ClosureLike {
+  room_id: string | null;
+  starts_on: string;
+  ends_on: string | null;
+}
+
+/** Does any closure cover a night of [checkIn, checkOut) for this room? */
+export function isClosedFor(
+  roomId: string,
+  checkIn: string,
+  checkOut: string,
+  closures: ClosureLike[]
+): boolean {
+  return closures.some(
+    (c) =>
+      (c.room_id === null || c.room_id === roomId) &&
+      c.starts_on < checkOut &&
+      (c.ends_on === null || c.ends_on >= checkIn)
+  );
+}
+
+/**
+ * Closures relevant to a villa within [from, to). Pass to=null for
+ * "everything from `from` onward" (calendar horizons, admin views).
+ * Room-level closures carry villa_id too (the admin action sets both),
+ * so one villa-scoped query covers everything.
+ */
+export async function fetchVillaClosures(
+  db: Db,
+  villaId: string,
+  from: string,
+  to: string | null
+): Promise<ClosureLike[]> {
+  let query = db
+    .from("closure_periods")
+    .select("room_id, starts_on, ends_on")
+    .eq("villa_id", villaId)
+    .or(`ends_on.is.null,ends_on.gte.${from}`);
+  if (to) query = query.lt("starts_on", to);
+  const { data } = await query;
+  return (data as ClosureLike[]) || [];
+}
 export const BLOCKING_STATUSES: BookingStatus[] = [
   "approved",
   "deposit_paid",
@@ -42,8 +88,11 @@ export function isRoomAvailable(
   checkIn: string,
   checkOut: string,
   bookings: Pick<BookingRow, "room_id" | "check_in" | "check_out" | "status">[],
-  blocks: Pick<AvailabilityBlockRow, "room_id" | "date" | "status">[]
+  blocks: Pick<AvailabilityBlockRow, "room_id" | "date" | "status">[],
+  closures: ClosureLike[] = []
 ): boolean {
+  if (isClosedFor(roomId, checkIn, checkOut, closures)) return false;
+
   const bookingConflict = bookings.some(
     (b) =>
       b.room_id === roomId &&
@@ -66,9 +115,10 @@ export function filterAvailableRooms(
   checkIn: string,
   checkOut: string,
   bookings: Pick<BookingRow, "room_id" | "check_in" | "check_out" | "status">[],
-  blocks: Pick<AvailabilityBlockRow, "room_id" | "date" | "status">[]
+  blocks: Pick<AvailabilityBlockRow, "room_id" | "date" | "status">[],
+  closures: ClosureLike[] = []
 ): RoomRow[] {
-  return rooms.filter((r) => isRoomAvailable(r.id, checkIn, checkOut, bookings, blocks));
+  return rooms.filter((r) => isRoomAvailable(r.id, checkIn, checkOut, bookings, blocks, closures));
 }
 
 /**
@@ -80,7 +130,8 @@ export function buildDailyAvailability(
   from: string,
   to: string,
   bookings: Pick<BookingRow, "room_id" | "check_in" | "check_out" | "status">[],
-  blocks: Pick<AvailabilityBlockRow, "room_id" | "date" | "status">[]
+  blocks: Pick<AvailabilityBlockRow, "room_id" | "date" | "status">[],
+  closures: ClosureLike[] = []
 ): Record<string, number> {
   const days = eachDate(from, to);
   const out: Record<string, number> = {};
@@ -89,7 +140,7 @@ export function buildDailyAvailability(
     nextDay.setUTCDate(nextDay.getUTCDate() + 1);
     const dayEnd = nextDay.toISOString().slice(0, 10);
     out[day] = rooms.filter((r) =>
-      isRoomAvailable(r.id, day, dayEnd, bookings, blocks)
+      isRoomAvailable(r.id, day, dayEnd, bookings, blocks, closures)
     ).length;
   }
   return out;

@@ -7,7 +7,7 @@ import { writeAudit } from "@core/audit";
 import { sendTrackedEmail, sendMagicLinkEmail } from "@core/email";
 import { mintMagicLink } from "@core/invites";
 import { config } from "@core/config";
-import { BLOCKING_STATUSES, isRoomAvailable } from "@core/availability";
+import { BLOCKING_STATUSES, fetchVillaClosures, isClosedFor, isRoomAvailable } from "@core/availability";
 import type {
   ApplicationRow,
   BookingRow,
@@ -296,7 +296,7 @@ export async function requestTransitionAction(formData: FormData) {
 
     // Approving claims the room — re-check the window against everyone else.
     if (op === "approve") {
-      const [{ data: others }, { data: blocks }] = await Promise.all([
+      const [{ data: others }, { data: blocks }, closures] = await Promise.all([
         supabase
           .from("bookings")
           .select("id, room_id, check_in, check_out, status")
@@ -312,8 +312,12 @@ export async function requestTransitionAction(formData: FormData) {
           .neq("status", "available")
           .gte("date", booking.check_in)
           .lt("date", booking.check_out),
+        fetchVillaClosures(supabase, booking.villa_id, booking.check_in, booking.check_out),
       ]);
-      if (!isRoomAvailable(booking.room_id, booking.check_in, booking.check_out, others || [], blocks || [])) {
+      if (isClosedFor(booking.room_id, booking.check_in, booking.check_out, closures)) {
+        backTo(path, "The house is closed for part of this window — approve is blocked");
+      }
+      if (!isRoomAvailable(booking.room_id, booking.check_in, booking.check_out, others || [], blocks || [], closures)) {
         backTo(path, "Conflict: that room is already committed for part of this window");
       }
     }

@@ -125,10 +125,10 @@ function LoginForm() {
             ))}
           </div>
           {result?.error && (
-            <p className="chip chip-red mb-4 w-full whitespace-normal py-2 normal-case">{result.error}</p>
+            <p className="notice notice-red mb-4 w-full py-2">{result.error}</p>
           )}
           {result?.success && (
-            <p className="chip chip-green mb-4 w-full whitespace-normal py-2 normal-case">
+            <p className="notice notice-green mb-4 w-full py-2">
               {result.message}
             </p>
           )}

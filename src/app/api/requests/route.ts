@@ -4,6 +4,7 @@ import { authOptions, type SessionUser } from "@/lib/auth";
 import { getSupabaseAdmin } from "@core/supabase";
 import {
   BLOCKING_STATUSES,
+  fetchVillaClosures,
   isRoomAvailable,
   nightsBetween,
 } from "@core/availability";
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Re-check availability at write time (the client list can be stale).
-    const [{ data: bookings }, { data: blocks }] = await Promise.all([
+    const [{ data: bookings }, { data: blocks }, closures] = await Promise.all([
       supabase
         .from("bookings")
         .select("room_id, check_in, check_out, status")
@@ -86,9 +87,10 @@ export async function POST(req: NextRequest) {
         .neq("status", "available")
         .gte("date", from)
         .lt("date", to),
+      fetchVillaClosures(supabase, villa.id, from, to),
     ]);
 
-    if (!isRoomAvailable(roomId, from, to, bookings || [], blocks || [])) {
+    if (!isRoomAvailable(roomId, from, to, bookings || [], blocks || [], closures)) {
       return NextResponse.json(
         { error: "That room was just taken for those dates. Pick another window." },
         { status: 409 }

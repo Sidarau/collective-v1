@@ -106,7 +106,7 @@ export default function StaffForm() {
         <textarea className="field min-h-24" value={form.message} onChange={set("message")} />
       </div>
       {error && (
-        <p className="chip chip-red w-full whitespace-normal py-2 normal-case tracking-normal">
+        <p className="notice notice-red w-full py-2">
           {error}
         </p>
       )}

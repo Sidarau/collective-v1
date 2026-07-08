@@ -151,7 +151,7 @@ export default function SlotPicker({ token, days, existing }: Props) {
       </div>
 
       {error && (
-        <p className="chip chip-red mt-5 w-full whitespace-normal py-2 normal-case tracking-normal">
+        <p className="notice notice-red mt-5 w-full py-2">
           {error}
         </p>
       )}

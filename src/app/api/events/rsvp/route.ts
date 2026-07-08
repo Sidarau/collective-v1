@@ -29,23 +29,26 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabaseAdmin();
     const { data: event } = await supabase
       .from("events")
-      .select("id, status, capacity")
+      .select("id, status, capacity, hard_capacity")
       .eq("id", eventId)
       .maybeSingle();
 
-    const eventRow = event as Pick<EventRow, "id" | "status" | "capacity"> | null;
+    const eventRow = event as Pick<EventRow, "id" | "status" | "capacity" | "hard_capacity"> | null;
     if (!eventRow || eventRow.status !== "published") {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
-    if (status === "going" && eventRow.capacity) {
+    // Members see `capacity`; RSVPs are actually allowed up to the hidden
+    // `hard_capacity` when the operators set one (overbook buffer).
+    const rsvpLimit = eventRow.hard_capacity ?? eventRow.capacity;
+    if (status === "going" && rsvpLimit) {
       const { data: rsvps } = await supabase
         .from("event_rsvps")
         .select("user_id, status")
         .eq("event_id", eventId)
         .eq("status", "going");
       const going = (rsvps || []).filter((r) => r.user_id !== user.id).length;
-      if (going >= eventRow.capacity) {
+      if (going >= rsvpLimit) {
         return NextResponse.json({ error: "This one is full" }, { status: 409 });
       }
     }

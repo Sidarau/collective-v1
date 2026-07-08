@@ -278,7 +278,7 @@ export default function RequestFlow({ gate, initialFrom, initialTo, preferredRoo
         )}
 
         {error && (
-          <p className="chip chip-red w-full whitespace-normal py-2 normal-case tracking-normal">{error}</p>
+          <p className="notice notice-red w-full py-2">{error}</p>
         )}
 
         {selected && (

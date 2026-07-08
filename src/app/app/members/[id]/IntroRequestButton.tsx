@@ -59,7 +59,7 @@ export default function IntroRequestButton({ toUserId, firstName, existingStatus
             placeholder={`What you'd like to explore with ${firstName}`}
           />
           {error && (
-            <p className="chip chip-red mt-3 w-full whitespace-normal py-2 normal-case tracking-normal">{error}</p>
+            <p className="notice notice-red mt-3 w-full py-2">{error}</p>
           )}
         </div>
       )}

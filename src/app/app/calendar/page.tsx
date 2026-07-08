@@ -1,6 +1,6 @@
 import { getAuthUser } from "@/lib/auth";
 import { db, fetchGates, fetchUpcomingEvents, fetchPresence } from "@/lib/data";
-import { buildDailyAvailability, BLOCKING_STATUSES } from "@core/availability";
+import { buildDailyAvailability, fetchVillaClosures, BLOCKING_STATUSES } from "@core/availability";
 import CalendarView, { type CalendarEvent, type PresenceEntry } from "./CalendarView";
 
 export const dynamic = "force-dynamic";
@@ -97,8 +97,11 @@ export default async function CalendarPage({
     withCompanion: !!p.companion_name,
   }));
 
+  const closures = liveGate
+    ? await fetchVillaClosures(db(), liveGate.id, fromISO, horizon)
+    : [];
   const freeRooms = liveGate
-    ? buildDailyAvailability(rooms, fromISO, horizon, bookings, blocks)
+    ? buildDailyAvailability(rooms, fromISO, horizon, bookings, blocks, closures)
     : {};
 
   return (

@@ -122,6 +122,8 @@ export interface UserRow {
   role: UserRole;
   lead_id: string | null;
   password_hash: string | null;
+  phone: string | null;
+  phone_verified: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -232,6 +234,8 @@ export interface EventRow {
   start_at: string;
   end_at: string | null;
   capacity: number | null;
+  /** Hidden operational limit; RSVPs may exceed `capacity` up to this. NULL = capacity is the limit. */
+  hard_capacity: number | null;
   image: string | null;
   location_note: string | null;
   status: EventStatus;
@@ -374,6 +378,48 @@ export interface IntroRequestRow {
   status: "requested" | "accepted" | "declined" | "completed";
   created_at: string;
   updated_at: string;
+}
+
+/** Villa- or room-level closure. ends_on NULL = closed indefinitely. */
+export interface ClosurePeriodRow {
+  id: string;
+  villa_id: string | null;
+  room_id: string | null;
+  starts_on: string;
+  ends_on: string | null;
+  reason: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type InviteKind = "member_returning" | "member_new";
+
+/** WhatsApp/phone invite redeemed at /welcome/[token] on the member app. */
+export interface InviteTokenRow {
+  id: string;
+  token: string;
+  kind: InviteKind;
+  phone: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  note: string | null;
+  created_by: string | null;
+  used_by: string | null;
+  used_at: string | null;
+  expires_at: string;
+  created_at: string;
+}
+
+/** Per-admin bearer token for the Operator OS MCP/REST agent surface. */
+export interface AgentTokenRow {
+  id: string;
+  admin_id: string;
+  label: string;
+  token_hash: string;
+  prefix: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
 }
 
 // ---------- Native CRM (admin console) ----------
@@ -520,6 +566,9 @@ export interface Database {
       event_rsvps: Tbl<EventRsvpRow>;
       staff_applications: Tbl<StaffApplicationRow>;
       intro_requests: Tbl<IntroRequestRow>;
+      closure_periods: Tbl<ClosurePeriodRow>;
+      invite_tokens: Tbl<InviteTokenRow>;
+      agent_tokens: Tbl<AgentTokenRow>;
       audit_logs: Tbl<AuditLogRow>;
       admin_notes: Tbl<AdminNoteRow>;
       follow_ups: Tbl<FollowUpRow>;
