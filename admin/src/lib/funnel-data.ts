@@ -157,3 +157,17 @@ export async function listContentBlocks(): Promise<ContentBlockRow[]> {
   const { data } = await db().from("content_blocks").select("*").order("key");
   return (data as ContentBlockRow[]) || [];
 }
+
+import type { InviteTokenRow } from "@core/database.types";
+
+/** Live (unused, unexpired) phone/WhatsApp invites for the Referrals page. */
+export async function listOpenPhoneInvites(): Promise<InviteTokenRow[]> {
+  const { data } = await getSupabaseAdmin()
+    .from("invite_tokens")
+    .select("*")
+    .is("used_at", null)
+    .gte("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(50);
+  return (data as InviteTokenRow[]) || [];
+}

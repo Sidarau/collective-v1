@@ -489,3 +489,79 @@ export async function inviteVendorToInterviewAction(formData: FormData) {
   revalidatePath("/vendors");
   backTo(path);
 }
+
+// ---------------------------------------------------------------- Phone / WhatsApp invites
+
+const PHONE_RE = /^\+[1-9]\d{6,14}$/;
+
+/**
+ * Invite someone Alex/Don only has a number for. Creates a one-time
+ * /welcome/[token] link on the member app — returning guests become members
+ * instantly there (no application, no screening); prospects flow into /join.
+ * The link is meant to be pasted into WhatsApp (share button on the page).
+ */
+export async function createPhoneInviteAction(formData: FormData) {
+  const admin = await getAdminUser();
+  if (!admin) backTo("/login");
+
+  const rawPhone = (formData.get("phone") as string | null)?.replace(/[\s\-()]/g, "") || "";
+  const kindRaw = (formData.get("kind") as string | null) || "member_returning";
+  const kind = kindRaw === "member_new" ? "member_new" : "member_returning";
+  const firstName = (formData.get("firstName") as string | null)?.trim() || null;
+  const lastName = (formData.get("lastName") as string | null)?.trim() || null;
+  const note = (formData.get("note") as string | null)?.trim() || null;
+
+  if (!PHONE_RE.test(rawPhone)) {
+    backTo("/referrals", "Phone must be international format, e.g. +34600123456");
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { data: taken } = await supabase.from("users").select("id").eq("phone", rawPhone).maybeSingle();
+  if (taken) backTo("/referrals", "That number is already linked to an account — use People → mint entrance link instead");
+
+  const token = crypto.randomBytes(18).toString("base64url");
+  const { error } = await supabase.from("invite_tokens").insert({
+    token,
+    kind,
+    phone: rawPhone,
+    first_name: firstName,
+    last_name: lastName,
+    note,
+    created_by: admin.id,
+    expires_at: new Date(Date.now() + 7 * 24 * 3600_000).toISOString(),
+  });
+  if (error) backTo("/referrals", error.message);
+
+  await writeAudit({
+    actorId: admin.id,
+    actorEmail: admin.email,
+    action: "invite.phone_created",
+    entityType: "lead",
+    entityId: null,
+    summary: `WhatsApp ${kind === "member_returning" ? "returning-member" : "prospect"} invite for ${firstName || "someone"} (${rawPhone})`,
+  });
+
+  revalidatePath("/referrals");
+  backTo("/referrals");
+}
+
+export async function expirePhoneInviteAction(formData: FormData) {
+  const admin = await getAdminUser();
+  if (!admin) backTo("/login");
+  const id = (formData.get("id") as string | null) || "";
+  await getSupabaseAdmin()
+    .from("invite_tokens")
+    .update({ expires_at: new Date(0).toISOString() })
+    .eq("id", id)
+    .is("used_at", null);
+  await writeAudit({
+    actorId: admin.id,
+    actorEmail: admin.email,
+    action: "invite.phone_expired",
+    entityType: "lead",
+    entityId: null,
+    summary: "Expired a WhatsApp invite link",
+  });
+  revalidatePath("/referrals");
+  backTo("/referrals");
+}

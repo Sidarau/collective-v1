@@ -5,11 +5,13 @@ import StatusChip from "@/components/StatusChip";
 import Timeline from "@/components/Timeline";
 import CrmPanel from "@/components/CrmPanel";
 import ErrorBanner from "@/components/ErrorBanner";
+import StripQuery from "@/components/StripQuery";
 import { getPersonDetail } from "@/lib/admin-data";
 import { fmtDate } from "@/lib/format";
 import {
   setPersonRoleAction,
   reinvitePersonAction,
+  mintWhatsAppEntranceAction,
   toggleSuppressionAction,
   setFollowUpStatusAction,
 } from "@/lib/actions";
@@ -23,10 +25,10 @@ export default async function PersonDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; walink?: string }>;
 }) {
   const { id } = await params;
-  const { error } = await searchParams;
+  const { error, walink } = await searchParams;
   const detail = await getPersonDetail(id);
   if (!detail) notFound();
   const {
@@ -63,6 +65,23 @@ export default async function PersonDetailPage({
         </div>
       </PageHeader>
       <ErrorBanner error={error} />
+      {walink && (
+        <section className="panel mb-5 border-gold/40 p-4">
+          <StripQuery />
+          <p className="label">Entrance link ready</p>
+          <p className="text-[13px] text-muted">
+            One tap opens WhatsApp with the link prefilled — shown once.
+          </p>
+          <a
+            href={walink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-gold mt-3"
+          >
+            Open in WhatsApp
+          </a>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_320px]">
         <div className="space-y-5">
@@ -126,6 +145,14 @@ export default async function PersonDetailPage({
                   Mint entrance link
                 </button>
               </form>
+              {user.phone && (
+                <form action={mintWhatsAppEntranceAction}>
+                  <input type="hidden" name="userId" value={user.id} />
+                  <button type="submit" className="btn">
+                    Share entrance via WhatsApp
+                  </button>
+                </form>
+              )}
               <form action={toggleSuppressionAction}>
                 <input type="hidden" name="email" value={user.email} />
                 <input type="hidden" name="path" value={path} />

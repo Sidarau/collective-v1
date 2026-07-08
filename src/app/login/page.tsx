@@ -4,6 +4,9 @@ import { useState, Suspense, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import type { ConfirmationResult } from "firebase/auth";
+
+const PHONE_LOGIN = process.env.NEXT_PUBLIC_PHONE_LOGIN === "1";
 
 const BG =
   "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=2400&auto=format&fit=crop";
@@ -20,8 +23,11 @@ function LoginForm() {
   const [email, setEmail] = useState(searchParams.get("email") || "");
   const [token] = useState(searchParams.get("token") || "");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"magic" | "password">("magic");
+  const [mode, setMode] = useState<"magic" | "password" | "phone">("magic");
   const [loading, setLoading] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [smsCode, setSmsCode] = useState("");
+  const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
   const [autoLoggingIn, setAutoLoggingIn] = useState(false);
   const [result, setResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(
     urlError ? { error: ERROR_COPY[urlError] || ERROR_COPY.server_error } : null
@@ -81,6 +87,56 @@ function LoginForm() {
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function sendCode(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setResult(null);
+    try {
+      const { sendPhoneCode } = await import("@/lib/firebase-client");
+      const conf = await sendPhoneCode(phone.replace(/[\s\-()]/g, ""), "recaptcha-anchor");
+      setConfirmation(conf);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      setResult({
+        error: /invalid-phone/.test(msg)
+          ? "Use the international format, e.g. +34 600 123 456."
+          : "Couldn't send the code — try again in a moment.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!confirmation) return;
+    setLoading(true);
+    setResult(null);
+    try {
+      const { confirmPhoneCode } = await import("@/lib/firebase-client");
+      const idToken = await confirmPhoneCode(confirmation, smsCode.trim());
+      const res = await fetch("/api/auth/phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      });
+      const data = (await res.json()) as { destination?: string; error?: string };
+      if (res.ok && data.destination) {
+        window.location.href = data.destination;
+        return;
+      }
+      setResult({ error: data.error || "We couldn't match that number." });
+      setConfirmation(null);
+      setSmsCode("");
+    } catch {
+      setResult({ error: "That code didn't verify — request a fresh one." });
+      setConfirmation(null);
+      setSmsCode("");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function requestLink(e: React.FormEvent) {
     e.preventDefault();
@@ -148,19 +204,21 @@ function LoginForm() {
           ) : (
             <>
               <div className="glass-flat mb-6 flex p-1">
-                {(["magic", "password"] as const).map((m) => (
+                {([...(PHONE_LOGIN ? (["magic", "password", "phone"] as const) : (["magic", "password"] as const))]).map((m) => (
                   <button
                     key={m}
                     type="button"
                     onClick={() => {
                       setMode(m);
                       setResult(null);
+                      setConfirmation(null);
+                      setSmsCode("");
                     }}
                     className={`pill tap flex-1 py-2.5 text-[13px] font-semibold transition ${
                       mode === m ? "bg-champagne text-base" : "muted"
                     }`}
                   >
-                    {m === "magic" ? "Entrance link" : "Password"}
+                    {m === "magic" ? "Email link" : m === "password" ? "Password" : "Phone"}
                   </button>
                 ))}
               </div>
@@ -176,7 +234,56 @@ function LoginForm() {
                 </p>
               )}
 
-              {mode === "magic" ? (
+              {mode === "phone" ? (
+                confirmation ? (
+                  <form onSubmit={verifyCode} className="space-y-4">
+                    <div>
+                      <label className="tag">Code from SMS</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        required
+                        maxLength={6}
+                        value={smsCode}
+                        onChange={(e) => setSmsCode(e.target.value)}
+                        className="field text-center tracking-[0.4em]"
+                        placeholder="••••••"
+                      />
+                    </div>
+                    <button type="submit" disabled={loading || smsCode.length < 6} className="btn-champagne tap h-[52px] w-full text-[15px]">
+                      {loading ? "Verifying…" : "Enter"}
+                    </button>
+                    <p className="faint text-center text-[12px]">
+                      Sent to {phone}.{" "}
+                      <button type="button" onClick={() => setConfirmation(null)} className="underline underline-offset-4">
+                        Change number
+                      </button>
+                    </p>
+                  </form>
+                ) : (
+                  <form onSubmit={sendCode} className="space-y-4">
+                    <div>
+                      <label className="tag">Phone</label>
+                      <input
+                        type="tel"
+                        required
+                        autoComplete="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="field"
+                        placeholder="+34 600 123 456"
+                      />
+                    </div>
+                    <button type="submit" disabled={loading} className="btn-champagne tap h-[52px] w-full text-[15px]">
+                      {loading ? "Sending…" : "Text me a code"}
+                    </button>
+                    <p className="faint text-center text-[12px] leading-relaxed">
+                      Works once your number is linked — or arrives with a WhatsApp invitation.
+                    </p>
+                  </form>
+                )
+              ) : mode === "magic" ? (
                 <form onSubmit={requestLink} className="space-y-4">
                   <div>
                     <label className="tag">Email</label>
@@ -249,6 +356,8 @@ function LoginForm() {
         <p className="faint reveal mt-8 max-w-xs text-center text-[13px] leading-relaxed" style={{ animationDelay: "0.2s" }}>
           No account? Membership is by referral — ask the member who told you about us.
         </p>
+        {/* Invisible reCAPTCHA anchor for phone sign-in (must stay mounted). */}
+        <div id="recaptcha-anchor" />
       </div>
     </main>
   );

@@ -1,6 +1,6 @@
 import PageHeader from "@/components/PageHeader";
 import ErrorBanner from "@/components/ErrorBanner";
-import StripQuery from "./StripQuery";
+import StripQuery from "@/components/StripQuery";
 import { getAdminUser } from "@/lib/auth";
 import { getSupabaseAdmin } from "@core/supabase";
 import { config } from "@core/config";

@@ -1,10 +1,12 @@
 import PageHeader from "@/components/PageHeader";
 import ErrorBanner from "@/components/ErrorBanner";
 import CopyButton from "@/components/CopyButton";
-import { listReferralLinks } from "@/lib/funnel-data";
+import { listOpenPhoneInvites, listReferralLinks } from "@/lib/funnel-data";
 import {
+  createPhoneInviteAction,
   createReferralLinkAction,
   createReturningMemberInviteAction,
+  expirePhoneInviteAction,
   toggleReferralLinkAction,
 } from "@/lib/funnel-actions";
 import { fmtDate } from "@/lib/format";
@@ -12,20 +14,99 @@ import { config } from "@core/config";
 
 export const dynamic = "force-dynamic";
 
+const WA_COPY: Record<string, string> = {
+  member_returning:
+    "Your entrance to the Collective is ready — no forms, no call. Claim it here:",
+  member_new: "You've been vouched for at the Collective. Introduce yourself here:",
+};
+
 export default async function ReferralsPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
-  const links = await listReferralLinks();
+  const [links, phoneInvites] = await Promise.all([listReferralLinks(), listOpenPhoneInvites()]);
   const base = config.baseUrl.replace(/\/$/, "");
   const urlFor = (kind: string, code: string) => `${base}/${kind === "member" ? "r" : "v"}/${code}`;
+  const welcomeUrl = (token: string) => `${base}/welcome/${token}`;
+  const waHref = (invite: { phone: string | null; kind: string; token: string }) =>
+    `https://wa.me/${(invite.phone || "").replace(/\D/g, "")}?text=${encodeURIComponent(
+      `${WA_COPY[invite.kind] || WA_COPY.member_new} ${welcomeUrl(invite.token)}`
+    )}`;
 
   return (
     <>
       <PageHeader title="Referral links" eyebrow="Doors" />
       <ErrorBanner error={error} />
+
+      {/* WhatsApp invites — for people we only have a number for */}
+      <section className="panel mb-5 p-5">
+        <p className="label">Invite by WhatsApp — no email yet</p>
+        <p className="mt-1 text-[12px] text-muted">
+          Creates a one-time entrance link to paste into WhatsApp. Past guests skip the
+          application and Dominik&apos;s call — they leave an email, pick a password, done.
+          Prospects go into the normal introduction.
+        </p>
+        <form action={createPhoneInviteAction} className="mt-4 grid grid-cols-1 items-end gap-3 md:grid-cols-[1.2fr_1fr_1fr_1.4fr_auto]">
+          <div>
+            <label className="label">Phone (international)</label>
+            <input name="phone" type="tel" required className="input" placeholder="+34600123456" />
+          </div>
+          <div>
+            <label className="label">First name</label>
+            <input name="firstName" className="input" />
+          </div>
+          <div>
+            <label className="label">Last name</label>
+            <input name="lastName" className="input" />
+          </div>
+          <div>
+            <label className="label">Type</label>
+            <select name="kind" className="input" defaultValue="member_returning">
+              <option value="member_returning">Past guest — instant member</option>
+              <option value="member_new">Prospect — application flow</option>
+            </select>
+          </div>
+          <button type="submit" className="btn btn-gold">
+            Create link
+          </button>
+        </form>
+
+        {phoneInvites.length > 0 && (
+          <div className="mt-5 space-y-2">
+            {phoneInvites.map((inv) => (
+              <div
+                key={inv.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-line bg-white/[0.03] px-3.5 py-2.5"
+              >
+                <div className="min-w-0">
+                  <p className="text-[13px] font-medium text-ink">
+                    {[inv.first_name, inv.last_name].filter(Boolean).join(" ") || "Unnamed"}{" "}
+                    <span className="text-muted">· {inv.phone}</span>
+                  </p>
+                  <p className="text-[11px] text-faint">
+                    {inv.kind === "member_returning" ? "instant member" : "prospect"} · expires{" "}
+                    {fmtDate(inv.expires_at)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a href={waHref(inv)} target="_blank" rel="noopener noreferrer" className="btn btn-gold">
+                    Open in WhatsApp
+                  </a>
+                  <CopyButton value={welcomeUrl(inv.token)} label="Copy link" />
+                  <form action={expirePhoneInviteAction}>
+                    <input type="hidden" name="id" value={inv.id} />
+                    <button type="submit" className="btn btn-red">
+                      Expire
+                    </button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="panel p-5">
         <p className="label">Fast-track a past guest</p>

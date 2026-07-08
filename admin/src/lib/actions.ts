@@ -613,3 +613,54 @@ export async function toggleSuppressionAction(formData: FormData) {
   revalidatePath(path);
   backTo(path);
 }
+
+/**
+ * Mint an entrance link for an existing person and hand back a WhatsApp
+ * share URL (?walink=…, shown once — the page strips it from history).
+ */
+export async function mintWhatsAppEntranceAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const userId = str(formData, "userId");
+  const path = `/people/${userId}`;
+
+  const { data: person } = await db()
+    .from("users")
+    .select("id, email, phone")
+    .eq("id", userId)
+    .maybeSingle();
+  if (!person) backTo("/people", "Person not found");
+  if (!person.phone) {
+    backTo(path, "No phone on file — link one via a WhatsApp invite or the member's profile first");
+  }
+
+  try {
+    const link = await mintMagicLink(person.id, person.email, config.baseUrl);
+    // Log the mint in the outbox (not sent — WhatsApp is the delivery channel).
+    await sendMagicLinkEmail({
+      to: person.email,
+      firstName: person.email.split("@")[0],
+      magicLink: link,
+      template: "whatsapp_entrance",
+      entityType: "user",
+      entityId: userId,
+      actorId: admin.id,
+    });
+    await writeAudit({
+      actorId: admin.id,
+      actorEmail: admin.email,
+      action: "user.whatsapp_entrance",
+      entityType: "user",
+      entityId: userId,
+      summary: `Entrance link minted for WhatsApp delivery to ${person.email}`,
+    });
+    const wa = `https://wa.me/${person.phone.replace(/\D/g, "")}?text=${encodeURIComponent(
+      `Your private entrance to the Collective — works once: ${link}`
+    )}`;
+    revalidatePath(path);
+    redirect(`${path}?walink=${encodeURIComponent(wa)}`);
+  } catch (err) {
+    // redirect() throws NEXT_REDIRECT — let it through.
+    if (err && typeof err === "object" && "digest" in err) throw err;
+    backTo(path, err instanceof Error ? err.message : "Could not mint the link");
+  }
+}
