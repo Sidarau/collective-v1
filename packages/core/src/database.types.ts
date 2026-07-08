@@ -37,7 +37,9 @@ export type ApplicationStatus =
   | "waitlist";
 export type EventStatus = "draft" | "published" | "cancelled";
 export type EventType = "dinner" | "experience" | "session" | "gathering" | "wellness";
+export type EventAudience = "member" | "public";
 export type RsvpStatus = "going" | "interested" | "declined";
+export type GuestRsvpStatus = "going" | "waitlist" | "cancelled";
 export type StaffApplicationStatus =
   | "submitted"
   | "review"
@@ -231,6 +233,7 @@ export interface EventRow {
   slug: string;
   description: string | null;
   event_type: EventType;
+  audience: EventAudience;
   start_at: string;
   end_at: string | null;
   capacity: number | null;
@@ -250,6 +253,23 @@ export interface EventRsvpRow {
   user_id: string;
   status: RsvpStatus;
   guests: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EventGuestRsvpRow {
+  id: string;
+  event_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  instagram: string | null;
+  note: string | null;
+  consent_terms: boolean;
+  status: GuestRsvpStatus;
+  invited_user_id: string | null;
+  invited_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -564,6 +584,7 @@ export interface Database {
       applications: Tbl<ApplicationRow>;
       events: Tbl<EventRow>;
       event_rsvps: Tbl<EventRsvpRow>;
+      event_guest_rsvps: Tbl<EventGuestRsvpRow>;
       staff_applications: Tbl<StaffApplicationRow>;
       intro_requests: Tbl<IntroRequestRow>;
       closure_periods: Tbl<ClosurePeriodRow>;

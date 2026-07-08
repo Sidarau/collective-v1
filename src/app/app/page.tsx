@@ -147,6 +147,9 @@ export default async function HomePage() {
                       <p className="muted mt-1 text-[12px]">
                         {ev.villas?.name} · {going} going
                       </p>
+                      {ev.audience === "public" && (
+                        <span className="chip chip-gold mt-2">Public guest</span>
+                      )}
                     </div>
                   </Link>
                 );

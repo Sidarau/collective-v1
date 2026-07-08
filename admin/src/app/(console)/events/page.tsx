@@ -28,6 +28,7 @@ export default async function EventsPage({
           <thead>
             <tr>
               <th>Event</th>
+              <th>Tier</th>
               <th>Type</th>
               <th>Status</th>
               <th>Starts</th>
@@ -43,6 +44,11 @@ export default async function EventsPage({
                   </Link>
                   {event.location_note && <p className="text-xs text-muted">{event.location_note}</p>}
                 </td>
+                <td>
+                  <span className={`chip ${event.audience === "public" ? "chip-gold" : ""}`}>
+                    {event.audience === "public" ? "Public guest" : "Member"}
+                  </span>
+                </td>
                 <td>{event.event_type}</td>
                 <td>
                   <StatusChip value={event.status} />
@@ -53,7 +59,7 @@ export default async function EventsPage({
             ))}
             {events.length === 0 && (
               <tr>
-                <td colSpan={5} className="text-muted">
+                <td colSpan={6} className="text-muted">
                   Nothing on the calendar — create the first event.
                 </td>
               </tr>

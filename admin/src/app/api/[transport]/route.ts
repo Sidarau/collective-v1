@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { buildKbTree, getKbNode, listKbNodes, searchKb, upsertKbNode } from "@core/kb";
 import { writeAudit } from "@core/audit";
+import { getSupabaseAdmin } from "@core/supabase";
 import { agentContext, resolveAgent } from "@/lib/agent-auth";
 
 export const runtime = "nodejs";
@@ -114,6 +115,163 @@ const handler = createMcpHandler(
         return {
           content: [{ type: "text", text: `Saved "${node.title}" (id: ${node.id})` }],
         };
+      }
+    );
+
+    server.registerTool(
+      "leads_search",
+      {
+        title: "Search leads",
+        description:
+          "Search Collective leads by name/email/phone/source/status. Returns private operator CRM context; do not expose it to members.",
+        inputSchema: {
+          query: z.string().optional(),
+          status: z.enum(["new", "active", "inactive", "blacklisted"]).optional(),
+          limit: z.number().int().min(1).max(50).optional(),
+        },
+      },
+      async ({ query, status, limit }) => {
+        const supabase = getSupabaseAdmin();
+        let request = supabase
+          .from("leads")
+          .select("id, email, first_name, last_name, phone, whatsapp, source, status, notes, created_at, updated_at")
+          .order("updated_at", { ascending: false })
+          .limit(limit || 20);
+
+        if (status) request = request.eq("status", status);
+        const q = query?.trim();
+        if (q) {
+          const like = `%${q.replace(/[%,]/g, "")}%`;
+          request = request.or(
+            `email.ilike.${like},first_name.ilike.${like},last_name.ilike.${like},phone.ilike.${like},whatsapp.ilike.${like},source.ilike.${like}`
+          );
+        }
+
+        const { data, error } = await request;
+        if (error) return { content: [{ type: "text", text: error.message }], isError: true };
+        const rows = (data || []) as {
+          id: string;
+          email: string;
+          first_name: string;
+          last_name: string;
+          phone: string | null;
+          whatsapp: string | null;
+          source: string;
+          status: string;
+          notes: string | null;
+          updated_at: string;
+        }[];
+        return {
+          content: [
+            {
+              type: "text",
+              text: rows.length
+                ? rows
+                    .map(
+                      (l) =>
+                        `- ${l.first_name} ${l.last_name} <${l.email}> — ${l.status}, ${l.source}, phone: ${l.phone || l.whatsapp || "n/a"}, updated: ${l.updated_at.slice(0, 10)}${l.notes ? `\n  note: ${l.notes.slice(0, 180)}` : ""}`
+                    )
+                    .join("\n")
+                : "No leads matched.",
+            },
+          ],
+        };
+      }
+    );
+
+    server.registerTool(
+      "operations_report",
+      {
+        title: "Operations status report",
+        description:
+          "High-level status report across applications, reservations, events, public guest RSVPs, and open follow-ups.",
+        inputSchema: {
+          daysAhead: z.number().int().min(1).max(180).optional(),
+        },
+      },
+      async ({ daysAhead }) => {
+        const supabase = getSupabaseAdmin();
+        const now = new Date();
+        const today = now.toISOString().slice(0, 10);
+        const until = new Date(now.getTime() + (daysAhead || 30) * 86400_000).toISOString();
+
+        const [
+          newLeads,
+          activeLeads,
+          submittedApps,
+          screeningApps,
+          pendingRequests,
+          confirmedStays,
+          upcomingEvents,
+          publicEvents,
+          guestGoing,
+          guestWaitlist,
+          openFollowUps,
+          upcomingRequests,
+        ] = await Promise.all([
+          supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "new"),
+          supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "active"),
+          supabase.from("applications").select("id", { count: "exact", head: true }).eq("status", "submitted"),
+          supabase.from("applications").select("id", { count: "exact", head: true }).eq("status", "screening"),
+          supabase.from("bookings").select("id", { count: "exact", head: true }).eq("status", "requested"),
+          supabase
+            .from("bookings")
+            .select("id", { count: "exact", head: true })
+            .in("status", ["approved", "deposit_paid", "paid", "confirmed"])
+            .gte("check_out", today),
+          supabase
+            .from("events")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "published")
+            .gte("start_at", now.toISOString())
+            .lte("start_at", until),
+          supabase
+            .from("events")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "published")
+            .eq("audience", "public")
+            .gte("start_at", now.toISOString())
+            .lte("start_at", until),
+          supabase.from("event_guest_rsvps").select("id", { count: "exact", head: true }).eq("status", "going"),
+          supabase.from("event_guest_rsvps").select("id", { count: "exact", head: true }).eq("status", "waitlist"),
+          supabase.from("follow_ups").select("id", { count: "exact", head: true }).eq("status", "open"),
+          supabase
+            .from("bookings")
+            .select("id, check_in, check_out, status, guest_names, companion_name")
+            .gte("check_out", today)
+            .order("check_in", { ascending: true })
+            .limit(5),
+        ]);
+
+        const report = [
+          `# Collective Operations Report`,
+          ``,
+          `Window: next ${daysAhead || 30} days`,
+          ``,
+          `## Funnel`,
+          `- Leads: ${newLeads.count || 0} new, ${activeLeads.count || 0} active`,
+          `- Applications: ${submittedApps.count || 0} submitted, ${screeningApps.count || 0} in screening`,
+          `- Open follow-ups: ${openFollowUps.count || 0}`,
+          ``,
+          `## Reservations`,
+          `- Pending stay requests: ${pendingRequests.count || 0}`,
+          `- Upcoming approved/confirmed stays: ${confirmedStays.count || 0}`,
+          ...(((upcomingRequests.data as { id: string; check_in: string; check_out: string; status: string }[]) || []).length
+            ? [
+                `- Next stays:`,
+                ...((upcomingRequests.data as { id: string; check_in: string; check_out: string; status: string }[]) || []).map(
+                  (b) => `  - ${b.check_in} -> ${b.check_out}: ${b.status} (${b.id})`
+                ),
+              ]
+            : []),
+          ``,
+          `## Events`,
+          `- Upcoming published events: ${upcomingEvents.count || 0}`,
+          `- Public guest events: ${publicEvents.count || 0}`,
+          `- Public guest RSVPs: ${guestGoing.count || 0} going, ${guestWaitlist.count || 0} waitlisted`,
+        ].join("\n");
+
+        return { content: [{ type: "text", text: report }] };
       }
     );
   },

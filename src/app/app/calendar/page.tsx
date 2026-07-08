@@ -73,6 +73,7 @@ export default async function CalendarPage({
     title: ev.title,
     description: ev.description,
     type: ev.event_type,
+    audience: ev.audience,
     startAt: ev.start_at,
     endAt: ev.end_at,
     image: ev.image,

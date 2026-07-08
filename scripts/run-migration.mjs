@@ -62,7 +62,7 @@ try {
   const { rows } = await client.query(
     `select table_name from information_schema.tables
      where table_schema='public' and table_name in
-     ('closure_periods','invite_tokens','agent_tokens') order by 1`
+     ('closure_periods','invite_tokens','agent_tokens','event_guest_rsvps') order by 1`
   );
   console.log("verified tables:", rows.map((r) => r.table_name).join(", "));
 } finally {

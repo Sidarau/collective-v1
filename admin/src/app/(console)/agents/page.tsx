@@ -206,7 +206,8 @@ export default async function AgentsPage({
             </code>
             <p className="mt-3 text-[12px] leading-relaxed text-muted">
               Tools: <code>kb_tree</code>, <code>kb_get</code>, <code>kb_search</code>,{" "}
-              <code>kb_upsert</code>. Reads are free; writes are audited under your token.
+              <code>kb_upsert</code>, <code>leads_search</code>, and{" "}
+              <code>operations_report</code>. Reads are free; writes are audited under your token.
             </p>
           </section>
 

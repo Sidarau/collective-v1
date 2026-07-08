@@ -13,6 +13,7 @@ export interface CalendarEvent {
   title: string;
   description: string | null;
   type: string;
+  audience: "member" | "public";
   startAt: string;
   endAt: string | null;
   image: string | null;
@@ -232,6 +233,7 @@ export default function CalendarView({
                     </p>
                   </div>
                   <div className="flex flex-col items-end justify-center gap-1 pr-1">
+                    {ev.audience === "public" && <span className="chip chip-gold">Public</span>}
                     <span className={`chip ${myStatus === "going" ? "chip-olive" : "chip-gold"}`}>
                       {myStatus === "going" ? "Going" : `${going || ev.attendees.length} going`}
                     </span>
@@ -248,6 +250,11 @@ export default function CalendarView({
                     <p className="muted text-[13px]">{fmtLong(ev.startAt)}</p>
                     {ev.description && (
                       <p className="mt-2 text-[14px] leading-relaxed text-ink/85">{ev.description}</p>
+                    )}
+                    {ev.audience === "public" && (
+                      <p className="notice notice-gold mt-3">
+                        This is a guest-list event. Members can RSVP here; public guests use the shared event link.
+                      </p>
                     )}
                     {ev.attendees.length > 0 && (
                       <div className="mt-4">

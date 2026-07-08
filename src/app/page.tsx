@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { fetchContentBlock } from "@/lib/data";
+import { fetchContentBlock, fetchPublicEvents } from "@/lib/data";
+import { fmtGateDayTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,10 @@ const HERO =
  * Copy is operator-editable (admin console → Content → landing.hero).
  */
 export default async function Landing() {
-  const hero = await fetchContentBlock("landing.hero");
+  const [hero, publicEvents] = await Promise.all([
+    fetchContentBlock("landing.hero"),
+    fetchPublicEvents(3),
+  ]);
 
   return (
     <main className="relative min-h-dvh overflow-hidden">
@@ -35,14 +39,41 @@ export default async function Landing() {
           >
             Enter
           </Link>
+          {publicEvents.length > 0 && (
+            <section className="mt-7 w-full max-w-sm">
+              <p className="eyebrow mb-3">Public events</p>
+              <div className="space-y-2">
+                {publicEvents.map((event) => (
+                  <Link key={event.id} href={`/events/${event.slug}`} className="glass-flat tap block p-4 text-left">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[14px] font-semibold text-ink">{event.title}</p>
+                        <p className="muted mt-1 text-[12px]">
+                          {fmtGateDayTime(event.start_at)}
+                          {event.villas?.name ? ` · ${event.villas.name}` : ""}
+                        </p>
+                      </div>
+                      <span className="chip chip-gold">RSVP</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
 
-        <p
-          className="faint text-[11px] uppercase tracking-[0.18em]"
+        <div
+          className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[11px] uppercase tracking-[0.18em]"
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
-          Ibiza · Est. 2026
-        </p>
+          <span className="faint">Ibiza · Est. 2026</span>
+          <Link href="/terms" className="faint hover:text-ink">
+            Terms
+          </Link>
+          <Link href="/privacy" className="faint hover:text-ink">
+            Privacy
+          </Link>
+        </div>
       </div>
     </main>
   );

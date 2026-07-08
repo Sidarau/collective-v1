@@ -4,8 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@core/supabase";
 import { writeAudit } from "@core/audit";
+import { sendMagicLinkEmail } from "@core/email";
+import { mintMagicLink } from "@core/invites";
+import { config } from "@core/config";
 import { zonedToUtc, DEFAULT_TIMEZONE } from "@core/scheduling";
-import type { EventStatus, EventType, GateStatus, RoomRow } from "@core/database.types";
+import type { EventAudience, EventStatus, EventType, GateStatus, RoomRow } from "@core/database.types";
 import { getAdminUser } from "./auth";
 
 const db = getSupabaseAdmin;
@@ -354,6 +357,8 @@ export async function saveEventAction(formData: FormData) {
   const eventType = (["dinner", "experience", "session", "gathering", "wellness"].includes(typeRaw)
     ? typeRaw
     : "gathering") as EventType;
+  const audienceRaw = str(formData, "audience");
+  const audience = (["member", "public"].includes(audienceRaw) ? audienceRaw : "member") as EventAudience;
   const statusRaw = str(formData, "status");
   const status = (["draft", "published", "cancelled"].includes(statusRaw)
     ? statusRaw
@@ -374,6 +379,7 @@ export async function saveEventAction(formData: FormData) {
     title,
     description: str(formData, "description") || null,
     event_type: eventType,
+    audience,
     status,
     start_at: startAt,
     end_at: endAt,
@@ -408,7 +414,7 @@ export async function saveEventAction(formData: FormData) {
       action: isNew ? "event.create" : "event.update",
       entityType: "event",
       entityId: eventId,
-      summary: `Event "${title}" ${isNew ? "created" : "updated"} (${status})`,
+      summary: `Event "${title}" ${isNew ? "created" : "updated"} (${status}, ${audience})`,
     });
   } catch (err) {
     backTo(backPath, err instanceof Error ? err.message : "Save failed");
@@ -439,6 +445,141 @@ export async function deleteEventAction(formData: FormData) {
   }
   revalidatePath("/events");
   backTo("/events");
+}
+
+export async function inviteGuestToMemberAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const guestId = str(formData, "guestId");
+  const eventId = str(formData, "eventId");
+  const path = `/events/${eventId}`;
+  if (!guestId || !eventId) backTo("/events", "Guest RSVP not found");
+
+  let userId = "";
+  try {
+    const supabase = db();
+    const { data: guest } = await supabase
+      .from("event_guest_rsvps")
+      .select("*")
+      .eq("id", guestId)
+      .eq("event_id", eventId)
+      .maybeSingle();
+    if (!guest) backTo(path, "Guest RSVP not found");
+
+    const email = String(guest.email).toLowerCase();
+    const firstName = String(guest.first_name || "").trim();
+    const lastName = String(guest.last_name || "").trim();
+    const note = [guest.note, guest.instagram ? `Instagram: ${guest.instagram}` : ""]
+      .filter(Boolean)
+      .join("\n");
+
+    const { data: lead, error: leadError } = await supabase
+      .from("leads")
+      .upsert(
+        {
+          email,
+          first_name: firstName,
+          last_name: lastName,
+          phone: guest.phone,
+          whatsapp: guest.phone,
+          source: "public_event_guest",
+          status: "active",
+          notes: note || null,
+        },
+        { onConflict: "email" }
+      )
+      .select("id")
+      .single();
+    if (leadError || !lead) throw new Error(leadError?.message || "Lead upsert failed");
+
+    const { data: existing } = await supabase
+      .from("users")
+      .select("id, role, lead_id")
+      .eq("email", email)
+      .maybeSingle();
+    if (existing) {
+      userId = existing.id;
+      const nextRole = existing.role === "lead" ? "member" : existing.role;
+      const { error } = await supabase
+        .from("users")
+        .update({
+          role: nextRole,
+          lead_id: existing.lead_id || lead.id,
+          password_hash: null,
+          phone: guest.phone,
+        })
+        .eq("id", userId);
+      if (error) throw new Error(error.message);
+    } else {
+      const { data: created, error } = await supabase
+        .from("users")
+        .insert({
+          email,
+          role: "member",
+          lead_id: lead.id,
+          password_hash: null,
+          phone: guest.phone,
+        })
+        .select("id")
+        .single();
+      if (error || !created) throw new Error(error?.message || "User creation failed");
+      userId = created.id;
+    }
+
+    const profilePayload: Record<string, unknown> = {
+      user_id: userId,
+      first_name: firstName,
+      last_name: lastName,
+      phone: guest.phone,
+      whatsapp: guest.phone,
+      onboarding_completed: false,
+    };
+    if (!existing || existing.role === "lead") {
+      profilePayload.visibility = "hidden";
+    }
+    if (guest.instagram) {
+      const handle = String(guest.instagram).replace(/^@/, "");
+      profilePayload.links = [{ label: "Instagram", url: `https://instagram.com/${handle}` }];
+    }
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert(profilePayload, { onConflict: "user_id" });
+    if (profileError) throw new Error(profileError.message);
+
+    const link = await mintMagicLink(userId, email, config.baseUrl);
+    await sendMagicLinkEmail({
+      to: email,
+      firstName,
+      magicLink: link,
+      intro:
+        "After meeting you at a Collective event, the host has opened a member invitation. Use this private link to choose a password and complete your profile.",
+      cta: "Set password and profile",
+      template: "public_event_member_invite",
+      entityType: "user",
+      entityId: userId,
+      actorId: admin.id,
+    });
+
+    await supabase
+      .from("event_guest_rsvps")
+      .update({ invited_user_id: userId, invited_at: new Date().toISOString() })
+      .eq("id", guestId);
+
+    await writeAudit({
+      actorId: admin.id,
+      actorEmail: admin.email,
+      action: "guest.invite_member",
+      entityType: "event",
+      entityId: eventId,
+      summary: `Invited public event guest ${firstName} ${lastName} to member onboarding`,
+      meta: { guest_rsvp_id: guestId, user_id: userId },
+    });
+  } catch (err) {
+    backTo(path, err instanceof Error ? err.message : "Could not invite guest");
+  }
+
+  revalidatePath(path);
+  revalidatePath("/people");
+  backTo(path);
 }
 
 // ---------------------------------------------------------------- Content blocks

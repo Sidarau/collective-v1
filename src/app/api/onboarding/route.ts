@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
         allergies: body.allergies || null,
         dietary: body.dietary || null,
         onboarding_completed: true,
+        visibility: "members",
       },
       { onConflict: "user_id" }
     );

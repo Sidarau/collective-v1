@@ -77,6 +77,31 @@ export async function fetchUpcomingEvents(limit = 20): Promise<EventWithMeta[]> 
   return (data as EventWithMeta[]) || [];
 }
 
+export async function fetchPublicEvents(limit = 4): Promise<EventWithMeta[]> {
+  const { data, error } = await db()
+    .from("events")
+    .select("*, villas(name, slug, region), event_rsvps(user_id, status)")
+    .eq("status", "published")
+    .eq("audience", "public")
+    .gte("start_at", new Date(Date.now() - 12 * 3600_000).toISOString())
+    .order("start_at", { ascending: true })
+    .limit(limit);
+  if (error) return [];
+  return (data as EventWithMeta[]) || [];
+}
+
+export async function fetchPublicEventBySlug(slug: string): Promise<EventWithMeta | null> {
+  const { data, error } = await db()
+    .from("events")
+    .select("*, villas(name, slug, region), event_rsvps(user_id, status)")
+    .eq("slug", slug)
+    .eq("status", "published")
+    .eq("audience", "public")
+    .maybeSingle();
+  if (error) return null;
+  return (data as EventWithMeta | null) || null;
+}
+
 export type MemberCard = ProfileRow & {
   users: { id: string; email: string; role: UserRole } | null;
 };

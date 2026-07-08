@@ -29,7 +29,7 @@ export default function EventForm({
   return (
     <form action={saveEventAction} className="space-y-4">
       {event && <input type="hidden" name="id" value={event.id} />}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
         <div className="col-span-2">
           <label className="label">Title</label>
           <input name="title" required defaultValue={event?.title || ""} className="input" />
@@ -45,10 +45,17 @@ export default function EventForm({
           </select>
         </div>
         <div>
+          <label className="label">Tier</label>
+          <select name="audience" defaultValue={event?.audience || "member"} className="input">
+            <option value="member">Member-only</option>
+            <option value="public">Public guest</option>
+          </select>
+        </div>
+        <div>
           <label className="label">Status</label>
           <select name="status" defaultValue={event?.status || "draft"} className="input">
             <option value="draft">Draft — hidden</option>
-            <option value="published">Published — members see it</option>
+            <option value="published">Published</option>
             <option value="cancelled">Cancelled</option>
           </select>
         </div>

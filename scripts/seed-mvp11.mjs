@@ -53,6 +53,7 @@ const EVENTS = [
     slug: "cova-santa-laurens-birthday",
     title: "Cova Santa × Lauren's Birthday",
     event_type: "dinner",
+    audience: "member",
     start_at: "2026-07-10T20:00:00+02:00",
     end_at: "2026-07-10T23:59:00+02:00",
     description:
@@ -66,6 +67,7 @@ const EVENTS = [
     slug: "midnight-poolside-alex",
     title: "Midnight Poolside — Alex's Birthday",
     event_type: "gathering",
+    audience: "member",
     start_at: "2026-07-11T00:00:00+02:00",
     end_at: "2026-07-11T04:00:00+02:00",
     description:
@@ -79,6 +81,7 @@ const EVENTS = [
     slug: "alex-birthday-dinner",
     title: "Birthday Dinner at the Villa",
     event_type: "dinner",
+    audience: "member",
     start_at: "2026-07-11T20:30:00+02:00",
     end_at: "2026-07-11T23:30:00+02:00",
     description: "Alex's birthday table under the pines. One long table, no phones.",
@@ -91,6 +94,7 @@ const EVENTS = [
     slug: "pilates-infinity-pool",
     title: "Pilates by the Infinity Pool",
     event_type: "wellness",
+    audience: "member",
     start_at: "2026-07-15T09:30:00+02:00",
     end_at: "2026-07-15T10:30:00+02:00",
     description: "Morning session on the pool deck with the sea below. Mats provided — 15 spots.",
@@ -98,6 +102,20 @@ const EVENTS = [
     location_note: "Infinity pool deck",
     capacity: 15,
     hard_capacity: 20,
+  },
+  {
+    slug: "roca-llisa-sunset-guest-table",
+    title: "Roca Llisa Sunset Guest Table",
+    event_type: "gathering",
+    audience: "public",
+    start_at: "2026-07-18T19:30:00+02:00",
+    end_at: "2026-07-18T22:00:00+02:00",
+    description:
+      "A small guest-list sunset table for friends of the Circle curious about the Collective.",
+    image: U("1507525428034-b723cf961d3e", 1800),
+    location_note: "Upper terrace",
+    capacity: 18,
+    hard_capacity: 24,
   },
 ];
 for (const e of EVENTS) {
@@ -133,7 +151,7 @@ const FIXTURE_USERS = [
   {
     email: "test-admin@collective.test",
     role: "admin",
-    password_hash: "$2b$12$dDNP0cP7Qy1uDZTubr6BvuFWBXcGDxf1ZM9z3AG7uCd6x89q3nN/G",
+    password_hash: "$2b$12$lYFZj203tgB48WPmpvifC.4.HfZDqgSm0gmV4IODzlMQU8ZmuPrku",
     profile: {
       first_name: "Dev",
       last_name: "Operator",
@@ -147,7 +165,7 @@ const FIXTURE_USERS = [
   {
     email: "test-member@collective.test",
     role: "member",
-    password_hash: "$2b$12$UKTYXoJQoi1B3hsrX/gQROofVW1qxJIgEo5F9oCBYxs1KWhKKRiVK",
+    password_hash: "$2b$12$lYFZj203tgB48WPmpvifC.4.HfZDqgSm0gmV4IODzlMQU8ZmuPrku",
     profile: {
       first_name: "Rafael",
       last_name: "Costa",
@@ -162,7 +180,7 @@ const FIXTURE_USERS = [
   {
     email: "test-newmember@collective.test",
     role: "lead",
-    password_hash: "$2b$12$aPAhOiV.PZiBI7h1uivgFeaupYDQwnV7uM0Z86p6NwoBsONV37Hvu",
+    password_hash: "$2b$12$lYFZj203tgB48WPmpvifC.4.HfZDqgSm0gmV4IODzlMQU8ZmuPrku",
     profile: null,
   },
 ];

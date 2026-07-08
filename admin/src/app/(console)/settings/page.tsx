@@ -29,7 +29,7 @@ export default async function SettingsPage({
     ["Supabase service key", yes(config.supabaseServiceKey)],
     ["Resend API key", yes(config.resendApiKey)],
     ["Resend from email", config.resendFromEmail],
-    ["Admin email", config.adminEmail || "Not set"],
+    ["Notification inbox", config.adminEmail || "Not set"],
     [
       "Agent API token",
       config.agentApiToken
