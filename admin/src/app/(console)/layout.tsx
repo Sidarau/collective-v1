@@ -33,6 +33,7 @@ const NAV: [string, [string, string][]][] = [
     "System",
     [
       ["Communications", "/communications"],
+      ["Agents & MCP", "/agents"],
       ["Settings", "/settings"],
     ],
   ],

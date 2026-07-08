@@ -1,7 +1,9 @@
 import { createMcpHandler } from "mcp-handler";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 import { buildKbTree, getKbNode, listKbNodes, searchKb, upsertKbNode } from "@core/kb";
-import { requireAgentOrAdmin } from "@/lib/agent-auth";
+import { writeAudit } from "@core/audit";
+import { agentContext, resolveAgent } from "@/lib/agent-auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -97,6 +99,18 @@ const handler = createMcpHandler(
       },
       async (input) => {
         const node = await upsertKbNode(input);
+        // Attribution: every agent write lands in the audit trail under the
+        // admin whose token performed it (see Agents & MCP in the console).
+        const who = agentContext.getStore();
+        await writeAudit({
+          actorId: who?.adminId || null,
+          actorEmail: who?.adminEmail || "agent",
+          action: "agent.kb_upsert",
+          entityType: "event", // closest CRM bucket for kb entities is not modeled; keep feed-visible
+          entityId: null,
+          summary: `${who?.tokenLabel ? `[${who.tokenLabel}] ` : ""}saved KB doc "${node.title}"`,
+          meta: { kb_node_id: node.id, via: who?.kind || "unknown" },
+        });
         return {
           content: [{ type: "text", text: `Saved "${node.title}" (id: ${node.id})` }],
         };
@@ -111,9 +125,9 @@ const handler = createMcpHandler(
 );
 
 async function authed(req: Request) {
-  const denied = await requireAgentOrAdmin(req);
-  if (denied) return denied;
-  return handler(req);
+  const identity = await resolveAgent(req);
+  if (identity instanceof NextResponse) return identity;
+  return agentContext.run(identity, () => handler(req));
 }
 
 export { authed as GET, authed as POST, authed as DELETE };
