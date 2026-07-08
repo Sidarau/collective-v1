@@ -44,7 +44,7 @@ export default async function CampaignPage({
       </PageHeader>
       <ErrorBanner error={error} />
 
-      <div className="grid grid-cols-[1fr_320px] gap-5">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_320px]">
         <section className="panel p-5">
           <form action={saveCampaignAction} className="space-y-4">
             <input type="hidden" name="id" value={campaign.id} />

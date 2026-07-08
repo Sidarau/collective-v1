@@ -64,7 +64,7 @@ export default async function PersonDetailPage({
       </PageHeader>
       <ErrorBanner error={error} />
 
-      <div className="grid grid-cols-[1fr_320px] gap-5">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_320px]">
         <div className="space-y-5">
           {/* Identity */}
           <section className="panel p-5">

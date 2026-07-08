@@ -15,7 +15,7 @@ export default function PageHeader({
             {eyebrow}
           </p>
         )}
-        <h2 className="mt-1 text-2xl font-semibold tracking-[-0.01em] text-ink">{title}</h2>
+        <h2 className="display-serif mt-1 text-[26px] text-ink">{title}</h2>
       </div>
       {children}
     </header>

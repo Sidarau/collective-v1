@@ -34,7 +34,7 @@ export default async function DashboardPage() {
   return (
     <>
       <PageHeader title="Command center" eyebrow="Today" />
-      <section className="grid grid-cols-6 gap-3">
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         {data.metrics.map((metric) => (
           <div key={metric.label} className="panel p-4">
             <p className="text-xs text-muted">{metric.label}</p>
@@ -68,7 +68,7 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      <div className="mt-6 grid grid-cols-[1fr_320px] gap-5">
+      <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[1fr_320px]">
         <section className="panel overflow-hidden">
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <h3 className="text-sm font-semibold text-ink">Upcoming and open stay requests</h3>
