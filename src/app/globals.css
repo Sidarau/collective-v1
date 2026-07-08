@@ -308,6 +308,77 @@ label.tag {
   scrollbar-width: none;
 }
 
+/* ---------- Member-authored markdown ---------- */
+.md-prose {
+  font-size: 14px;
+  line-height: 1.7;
+  color: rgba(247, 251, 248, 0.85);
+}
+.md-prose p {
+  margin: 0 0 0.7em;
+}
+.md-prose p:last-child {
+  margin-bottom: 0;
+}
+.md-prose strong {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+.md-prose em {
+  font-family: var(--font-display);
+  font-size: 1.06em;
+  letter-spacing: 0.01em;
+}
+.md-prose ul,
+.md-prose ol {
+  margin: 0.4em 0 0.8em;
+  padding-left: 1.1em;
+}
+.md-prose ul {
+  list-style: none;
+}
+.md-prose ul li::before {
+  content: "·";
+  color: var(--color-champagne);
+  display: inline-block;
+  width: 1em;
+  margin-left: -1em;
+  font-weight: 700;
+}
+.md-prose ol {
+  list-style: decimal;
+}
+.md-prose li {
+  margin-bottom: 0.25em;
+}
+.md-prose a {
+  color: var(--color-champagne);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(228, 190, 109, 0.4);
+}
+.md-prose blockquote {
+  margin: 0.6em 0;
+  padding-left: 0.9em;
+  border-left: 2px solid rgba(228, 190, 109, 0.5);
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 1.08em;
+}
+.md-prose code {
+  font-size: 0.9em;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+.md-prose .md-heading {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-champagne);
+  margin: 1em 0 0.4em;
+}
+
 /* Blurred coming-soon gates */
 .veiled {
   filter: blur(14px) saturate(80%) brightness(0.75);

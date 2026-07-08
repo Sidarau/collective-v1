@@ -2,7 +2,11 @@ import PageHeader from "@/components/PageHeader";
 import ErrorBanner from "@/components/ErrorBanner";
 import CopyButton from "@/components/CopyButton";
 import { listReferralLinks } from "@/lib/funnel-data";
-import { createReferralLinkAction, toggleReferralLinkAction } from "@/lib/funnel-actions";
+import {
+  createReferralLinkAction,
+  createReturningMemberInviteAction,
+  toggleReferralLinkAction,
+} from "@/lib/funnel-actions";
 import { fmtDate } from "@/lib/format";
 import { config } from "@core/config";
 
@@ -24,8 +28,53 @@ export default async function ReferralsPage({
       <ErrorBanner error={error} />
 
       <section className="panel p-5">
+        <p className="label">Fast-track a past guest</p>
+        <p className="mt-1 text-[12px] text-muted">
+          Creates a member account, sends password setup, and only asks them to complete
+          their member-visible profile. Email, password, phone, and WhatsApp stay private.
+        </p>
+        <form action={createReturningMemberInviteAction} className="mt-4 space-y-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            <div>
+              <label className="label">First name</label>
+              <input name="firstName" required className="input" />
+            </div>
+            <div>
+              <label className="label">Last name</label>
+              <input name="lastName" required className="input" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="label">Email</label>
+              <input name="email" type="email" required className="input" placeholder="guest@example.com" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-[1fr_1fr_2fr_auto]">
+            <div>
+              <label className="label">Phone</label>
+              <input name="phone" type="tel" className="input" />
+            </div>
+            <div>
+              <label className="label">WhatsApp</label>
+              <input name="whatsapp" type="tel" className="input" />
+            </div>
+            <div>
+              <label className="label">Admin note</label>
+              <input
+                name="note"
+                className="input"
+                placeholder="Who referred them, prior stay context, anything operators should know"
+              />
+            </div>
+            <button type="submit" className="btn btn-gold">
+              Send setup link
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section className="panel mt-5 p-5">
         <p className="label">Open a new door</p>
-        <form action={createReferralLinkAction} className="grid grid-cols-[1fr_150px_150px_120px_auto] items-end gap-3">
+        <form action={createReferralLinkAction} className="grid grid-cols-1 items-end gap-3 md:grid-cols-[1fr_150px_150px_120px_auto]">
           <div>
             <label className="label">Label</label>
             <input name="label" required className="input" placeholder='e.g. "Don — WhatsApp"' />

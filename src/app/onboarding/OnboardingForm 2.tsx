@@ -19,6 +19,7 @@ interface Initial {
 export default function OnboardingForm({ initial }: { initial: Initial }) {
   const router = useRouter();
   const [form, setForm] = useState(initial);
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,8 +28,8 @@ export default function OnboardingForm({ initial }: { initial: Initial }) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.phone.trim() && !form.whatsapp.trim()) {
-      setError("Add a phone number or WhatsApp number. These stay private.");
+    if (password && password.length < 8) {
+      setError("Password needs at least 8 characters.");
       return;
     }
     setLoading(true);
@@ -43,6 +44,13 @@ export default function OnboardingForm({ initial }: { initial: Initial }) {
       if (!res.ok) {
         setError(data.error || "Something went wrong — try again.");
         return;
+      }
+      if (password) {
+        await fetch("/api/auth/set-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password }),
+        });
       }
       router.push("/app");
       router.refresh();
@@ -95,20 +103,29 @@ export default function OnboardingForm({ initial }: { initial: Initial }) {
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div>
           <label className="tag">Phone</label>
-          <input className="field" type="tel" value={form.phone} onChange={set("phone")} autoComplete="tel" />
+          <input className="field" type="tel" value={form.phone} onChange={set("phone")} />
         </div>
         <div>
           <label className="tag">WhatsApp</label>
           <input className="field" type="tel" value={form.whatsapp} onChange={set("whatsapp")} />
         </div>
       </div>
-      <p className="faint mt-2 text-[11.5px] leading-relaxed">
-        Add at least one. Email, password, phone, and WhatsApp stay private; only your
-        profile copy is visible to members.
-      </p>
+
+      <p className="eyebrow mb-4 mt-8">Return access</p>
+      <div>
+        <label className="tag">Set a password (optional)</label>
+        <input
+          className="field"
+          type="password"
+          autoComplete="new-password"
+          placeholder="For your next visits — or keep using email links"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+      </div>
 
       {error && (
-        <p className="notice notice-red mt-5 w-full py-2">{error}</p>
+        <p className="chip chip-red mt-5 w-full whitespace-normal py-2 normal-case tracking-normal">{error}</p>
       )}
 
       <button type="submit" disabled={loading} className="btn-champagne tap mt-6 h-[52px] w-full text-[15px]">

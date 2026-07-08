@@ -5,11 +5,7 @@ import { getSupabaseAdmin } from "@core/supabase";
 
 export const runtime = "nodejs";
 
-/**
- * Completes onboarding for an approved member: upserts their profile
- * (pre-filled client-side from the application) and marks it complete.
- */
-export async function POST(req: NextRequest) {
+export async function PATCH(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -24,15 +20,8 @@ export async function POST(req: NextRequest) {
     if (!body.firstName || !body.lastName) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
-    if (!body.phone && !body.whatsapp) {
-      return NextResponse.json(
-        { error: "Phone or WhatsApp is required and stays private." },
-        { status: 400 }
-      );
-    }
 
-    const supabase = getSupabaseAdmin();
-    const { error } = await supabase.from("profiles").upsert(
+    const { error } = await getSupabaseAdmin().from("profiles").upsert(
       {
         user_id: user.id,
         first_name: body.firstName,
@@ -41,41 +30,18 @@ export async function POST(req: NextRequest) {
         location: body.location || null,
         bio: body.bio || null,
         contribution: body.contribution || null,
-        phone: body.phone || null,
-        whatsapp: body.whatsapp || null,
         allergies: body.allergies || null,
         dietary: body.dietary || null,
-        onboarding_completed: true,
+        phone: body.phone || null,
+        whatsapp: body.whatsapp || null,
       },
       { onConflict: "user_id" }
     );
-
     if (error) throw new Error(error.message);
-
-    await supabase
-      .from("users")
-      .update({ phone: body.phone || body.whatsapp || null })
-      .eq("id", user.id);
-
-    // Mirror stay-critical details onto the lead row for operations.
-    if (user.leadId) {
-      await supabase
-        .from("leads")
-        .update({
-          dietary_restrictions:
-            [body.allergies, body.dietary].filter(Boolean).join(" · ") || null,
-          phone: body.phone || null,
-          whatsapp: body.whatsapp || null,
-        })
-        .eq("id", user.leadId);
-    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Onboarding error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to save" },
-      { status: 500 }
-    );
+    console.error("Profile save error:", error);
+    return NextResponse.json({ error: "Failed to save profile" }, { status: 500 });
   }
 }

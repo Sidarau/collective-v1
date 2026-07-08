@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { fetchMembers } from "@/lib/data";
+import Avatar from "@/components/Avatar";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +24,7 @@ export default async function MembersPage() {
             href={`/app/members/${m.user_id}`}
             className="glass tap flex items-center gap-4 p-4"
           >
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-champagne/20 text-[17px] font-semibold text-champagne">
-              {m.first_name[0]?.toUpperCase()}
-              {m.last_name[0]?.toUpperCase()}
-            </span>
+            <Avatar url={m.avatar_url} first={m.first_name} last={m.last_name} size="md" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-[15px] font-semibold text-ink">
                 {m.first_name} {m.last_name}

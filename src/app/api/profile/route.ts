@@ -39,6 +39,11 @@ export async function PATCH(req: NextRequest) {
     );
     if (error) throw new Error(error.message);
 
+    await getSupabaseAdmin()
+      .from("users")
+      .update({ phone: body.phone || body.whatsapp || null })
+      .eq("id", user.id);
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Profile save error:", error);

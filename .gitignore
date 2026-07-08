@@ -44,6 +44,7 @@ next-env.d.ts
 # Nested app build output
 **/.next/
 admin/.next/
+admin/vendor-core/* 2.ts
 
 # Deploy-time vendored snapshot of packages/core. The admin app resolves
 # @core/* from admin/vendor-core during Vercel builds where the project root is

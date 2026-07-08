@@ -105,6 +105,33 @@ function LoginForm() {
     }
   }
 
+  async function requestPasswordReset() {
+    if (!email.trim()) {
+      setResult({ error: "Enter your email first." });
+      return;
+    }
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = (await res.json()) as { message?: string; error?: string };
+      if (res.ok) {
+        setPassword("");
+        setResult({ success: true, message: data.message });
+      } else {
+        setResult({ error: data.error || "Could not send the setup link." });
+      }
+    } catch {
+      setResult({ error: "Connection issue — try again." });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <main className="relative min-h-dvh overflow-hidden">
       <Image src={BG} alt="" fill priority sizes="100vw" className="object-cover" />
@@ -204,6 +231,14 @@ function LoginForm() {
                   </div>
                   <button type="submit" disabled={loading} className="btn-champagne tap h-[52px] w-full text-[15px]">
                     {loading ? "Entering…" : "Enter"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={requestPasswordReset}
+                    disabled={loading}
+                    className="tap mx-auto block text-[12.5px] text-ink/55 underline-offset-4 hover:text-champagne hover:underline"
+                  >
+                    Forgot password? Send a setup link
                   </button>
                 </form>
               )}

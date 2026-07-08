@@ -29,7 +29,7 @@ export default function EventForm({
   return (
     <form action={saveEventAction} className="space-y-4">
       {event && <input type="hidden" name="id" value={event.id} />}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <div className="col-span-2">
           <label className="label">Title</label>
           <input name="title" required defaultValue={event?.title || ""} className="input" />
@@ -54,7 +54,7 @@ export default function EventForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
         <div>
           <label className="label">Starts (Ibiza clock)</label>
           <input
@@ -77,6 +77,17 @@ export default function EventForm({
         <div>
           <label className="label">Capacity</label>
           <input name="capacity" type="number" min="1" defaultValue={event?.capacity || ""} className="input" placeholder="∞" />
+        </div>
+        <div>
+          <label className="label">Hard cap</label>
+          <input
+            name="hardCapacity"
+            type="number"
+            min="1"
+            defaultValue={event?.hard_capacity || ""}
+            className="input"
+            placeholder="hidden"
+          />
         </div>
         <div>
           <label className="label">Gate</label>

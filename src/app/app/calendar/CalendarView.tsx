@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import DateRangeCalendar, { type DayMark } from "@/components/DateRangeCalendar";
 
@@ -147,12 +148,45 @@ export default function CalendarView({
           </p>
           <p className="muted mt-1 text-[13px]">
             {overlapping.length > 0
-              ? `${overlapping.length} member window${overlapping.length > 1 ? "s" : ""} overlap yours: ${overlapping
-                  .slice(0, 3)
-                  .map((o) => o.name.split(" ")[0])
-                  .join(", ")}${overlapping.length > 3 ? "…" : ""}`
+              ? `${overlapping.length} member window${overlapping.length > 1 ? "s" : ""} overlap your selected dates.`
               : "A quiet window — the house to yourselves."}
           </p>
+          {overlapping.length > 0 && (
+            <div className="mt-4 divide-y divide-white/8 overflow-hidden rounded-[18px] border border-white/10 bg-white/[0.035]">
+              {overlapping.map((p, i) => {
+                const body = (
+                  <>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-olive/25 text-[13px] font-semibold text-olive">
+                      {p.name[0]}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13.5px] font-medium text-ink">
+                        {p.name}
+                        {p.withCompanion ? " +1" : ""}
+                      </span>
+                      <span className="faint block truncate text-[11.5px]">
+                        {fmtShort(p.from)} – {fmtShort(p.to)}
+                      </span>
+                    </span>
+                    {p.userId && <span className="muted text-[16px]">›</span>}
+                  </>
+                );
+                return p.userId ? (
+                  <Link
+                    key={`${p.userId}-${p.from}-${i}`}
+                    href={`/app/members/${p.userId}`}
+                    className="tap flex items-center gap-3 px-3 py-3"
+                  >
+                    {body}
+                  </Link>
+                ) : (
+                  <div key={`${p.name}-${p.from}-${i}`} className="flex items-center gap-3 px-3 py-3">
+                    {body}
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <button
             onClick={() => router.push(`/app/gates/${gateSlug}/request?from=${from}&to=${to}`)}
             className="btn-champagne tap mt-4 h-12 w-full text-[14px]"
@@ -160,33 +194,6 @@ export default function CalendarView({
             Request these dates
           </button>
         </div>
-      )}
-
-      {/* Who's at the gate */}
-      {presence.length > 0 && !rangeChosen && (
-        <section className="reveal mt-6" style={{ animationDelay: "0.12s" }}>
-          <h2 className="eyebrow mb-3 px-1">Member windows</h2>
-          <div className="glass divide-y divide-white/8 p-2">
-            {presence.slice(0, 8).map((p, i) => (
-              <div key={i} className="flex items-center justify-between px-3 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-olive/25 text-[13px] font-semibold text-olive">
-                    {p.name[0]}
-                  </span>
-                  <div>
-                    <p className="text-[14px] font-medium text-ink">
-                      {p.name}
-                      {p.withCompanion ? " +1" : ""}
-                    </p>
-                  </div>
-                </div>
-                <p className="muted text-[12px]">
-                  {fmtShort(p.from)} – {fmtShort(p.to)}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
       )}
 
       {/* Events */}

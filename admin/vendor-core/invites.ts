@@ -1,7 +1,7 @@
 import * as crypto from "crypto";
 import { getSupabaseAdmin } from "./supabase";
 import { sendMagicLinkEmail } from "./email";
-import type { UserRole } from "./database.types";
+import type { UserRole, UserRow } from "./database.types";
 
 const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -104,4 +104,60 @@ export async function createInvite(params: CreateInviteParams): Promise<CreateIn
   }
 
   return { userId, leadId, inviteLink, existing };
+}
+
+export interface PasswordResetLinkParams {
+  email: string;
+  baseUrl: string;
+  roles?: UserRole[];
+  actorId?: string | null;
+  template?: string;
+  intro?: string;
+  cta?: string;
+}
+
+/**
+ * Reset password setup for an existing account: clear the password hash, mint
+ * a magic link, and let /enter route the user into /setup-password.
+ * Returns `sent:false` for unknown/out-of-scope emails so callers can keep
+ * their HTTP response generic and avoid account enumeration.
+ */
+export async function sendPasswordResetLink(
+  params: PasswordResetLinkParams
+): Promise<{ sent: boolean; userId: string | null }> {
+  const supabase = getSupabaseAdmin();
+  const email = params.email.toLowerCase().trim();
+
+  const { data: user } = await supabase
+    .from("users")
+    .select<string, Pick<UserRow, "id" | "email" | "role">>("id, email, role")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (!user || (params.roles && !params.roles.includes(user.role))) {
+    return { sent: false, userId: null };
+  }
+
+  const { error } = await supabase
+    .from("users")
+    .update({ password_hash: null })
+    .eq("id", user.id);
+  if (error) throw new Error(`Failed to reset password state: ${error.message}`);
+
+  const link = await mintMagicLink(user.id, user.email, params.baseUrl);
+  await sendMagicLinkEmail({
+    to: user.email,
+    firstName: user.email.split("@")[0],
+    magicLink: link,
+    intro:
+      params.intro ||
+      "Use this one-time entrance link to choose a new password for your Collective account.",
+    cta: params.cta || "Choose a new password",
+    template: params.template || "password_reset",
+    entityType: "user",
+    entityId: user.id,
+    actorId: params.actorId || null,
+  });
+
+  return { sent: true, userId: user.id };
 }

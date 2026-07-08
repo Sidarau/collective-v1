@@ -95,6 +95,33 @@ function LoginForm() {
     }
   }
 
+  async function requestPasswordReset() {
+    if (!email.trim()) {
+      setResult({ error: "Enter your operator email first." });
+      return;
+    }
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = (await res.json()) as { message?: string; error?: string };
+      if (res.ok) {
+        setPassword("");
+        setResult({ success: true, message: data.message });
+      } else {
+        setResult({ error: data.error || "Could not send the setup link." });
+      }
+    } catch {
+      setResult({ error: "Connection issue — try again." });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <main className="flex min-h-dvh items-center justify-center bg-base px-4">
       <div className="w-full max-w-sm">
@@ -182,6 +209,14 @@ function LoginForm() {
               />
               <button type="submit" disabled={loading} className="btn btn-gold mt-5 w-full py-2.5">
                 {loading ? "Signing in..." : "Sign in"}
+              </button>
+              <button
+                type="button"
+                onClick={requestPasswordReset}
+                disabled={loading}
+                className="mx-auto mt-3 block text-[12px] text-faint underline-offset-4 hover:text-gold hover:underline"
+              >
+                Forgot password? Send a setup link
               </button>
             </form>
           )}

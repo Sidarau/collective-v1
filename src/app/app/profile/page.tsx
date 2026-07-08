@@ -32,6 +32,7 @@ export default async function ProfilePage() {
             phone: profile?.phone || "",
             whatsapp: profile?.whatsapp || "",
           }}
+          initialAvatarUrl={profile?.avatar_url || null}
           canInvite={true}
         />
       </div>

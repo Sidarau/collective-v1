@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@core/supabase";
 import { writeAudit } from "@core/audit";
-import { sendTrackedEmail } from "@core/email";
+import { sendMagicLinkEmail, sendTrackedEmail } from "@core/email";
+import { mintMagicLink } from "@core/invites";
 import { config } from "@core/config";
 import type {
   ReferralLinkKind,
@@ -90,6 +91,139 @@ export async function toggleReferralLinkAction(formData: FormData) {
   });
   revalidatePath("/referrals");
   backTo("/referrals");
+}
+
+export async function createReturningMemberInviteAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const firstName = str(formData, "firstName");
+  const lastName = str(formData, "lastName");
+  const email = str(formData, "email").toLowerCase();
+  const phone = str(formData, "phone");
+  const whatsapp = str(formData, "whatsapp");
+  const note = str(formData, "note");
+
+  if (!firstName || !lastName || !email) {
+    backTo("/referrals", "First name, last name, and email are required");
+  }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    backTo("/referrals", "That email doesn't look right");
+  }
+  if (!phone && !whatsapp) {
+    backTo("/referrals", "Add a phone or WhatsApp number for the private profile");
+  }
+
+  let userId = "";
+  try {
+    const supabase = db();
+    const { data: lead, error: leadError } = await supabase
+      .from("leads")
+      .upsert(
+        {
+          email,
+          first_name: firstName,
+          last_name: lastName,
+          phone: phone || null,
+          whatsapp: whatsapp || null,
+          source: "past_guest_fast_track",
+          status: "active",
+          notes: note || null,
+        },
+        { onConflict: "email" }
+      )
+      .select("id")
+      .single();
+    if (leadError || !lead) throw new Error(leadError?.message || "Failed to save lead");
+
+    const phoneForLogin = phone || whatsapp || null;
+    const { data: existing } = await supabase
+      .from("users")
+      .select("id, lead_id")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (existing) {
+      userId = existing.id;
+      const { error } = await supabase
+        .from("users")
+        .update({
+          role: "member",
+          lead_id: existing.lead_id || lead.id,
+          password_hash: null,
+          phone: phoneForLogin,
+        })
+        .eq("id", userId);
+      if (error) throw new Error(error.message);
+    } else {
+      const { data: created, error } = await supabase
+        .from("users")
+        .insert({
+          email,
+          role: "member",
+          lead_id: lead.id,
+          password_hash: null,
+          phone: phoneForLogin,
+        })
+        .select("id")
+        .single();
+      if (error || !created) throw new Error(error?.message || "Failed to create member");
+      userId = created.id;
+    }
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert(
+        {
+          user_id: userId,
+          first_name: firstName,
+          last_name: lastName,
+          phone: phone || null,
+          whatsapp: whatsapp || null,
+          onboarding_completed: false,
+          visibility: "members",
+        },
+        { onConflict: "user_id" }
+      );
+    if (profileError) throw new Error(profileError.message);
+
+    if (note) {
+      await supabase.from("admin_notes").insert({
+        author_id: admin.id,
+        author_email: admin.email,
+        entity_type: "user",
+        entity_id: userId,
+        body: note,
+      });
+    }
+
+    const link = await mintMagicLink(userId, email, config.baseUrl);
+    await sendMagicLinkEmail({
+      to: email,
+      firstName,
+      magicLink: link,
+      intro:
+        "You have been fast-tracked from a past stay. Use this private link to choose a password and fill the profile other members will see.",
+      cta: "Set password and profile",
+      template: "past_guest_fast_track",
+      entityType: "user",
+      entityId: userId,
+      actorId: admin.id,
+    });
+
+    await writeAudit({
+      actorId: admin.id,
+      actorEmail: admin.email,
+      action: "member.fast_track",
+      entityType: "user",
+      entityId: userId,
+      summary: `Fast-tracked past guest ${firstName} ${lastName} as a member`,
+    });
+  } catch (err) {
+    backTo("/referrals", err instanceof Error ? err.message : "Could not create fast-track invite");
+  }
+
+  revalidatePath("/referrals");
+  revalidatePath("/people");
+  backTo(`/people/${userId}`);
 }
 
 // ---------------------------------------------------------------- Screening windows

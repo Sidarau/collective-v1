@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import Image from "next/image";
 import SignOutButton from "@/components/SignOutButton";
 
 interface ProfileFields {
@@ -18,15 +19,48 @@ interface ProfileFields {
 
 export default function ProfileForm({
   initial,
+  initialAvatarUrl,
   canInvite,
 }: {
   initial: ProfileFields;
+  initialAvatarUrl?: string | null;
   canInvite: boolean;
 }) {
   const [form, setForm] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Avatar
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl || null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+
+  async function uploadAvatar(file: File) {
+    setAvatarBusy(true);
+    setError(null);
+    const preview = URL.createObjectURL(file);
+    const previous = avatarUrl;
+    setAvatarUrl(preview);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch("/api/profile/avatar", { method: "POST", body });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        setAvatarUrl(previous);
+        setError(data.error || "Could not upload the photo.");
+        return;
+      }
+      setAvatarUrl(data.url);
+    } catch {
+      setAvatarUrl(previous);
+      setError("Connection issue — try again.");
+    } finally {
+      URL.revokeObjectURL(preview);
+      setAvatarBusy(false);
+    }
+  }
 
   // Referral block
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -85,6 +119,45 @@ export default function ProfileForm({
   return (
     <div className="space-y-4 pb-4">
       <form onSubmit={save} className="glass p-6">
+        {/* Portrait */}
+        <div className="mb-6 flex items-center gap-5">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="tap group relative h-24 w-24 shrink-0 overflow-hidden rounded-full border border-white/20"
+            aria-label="Change your photo"
+          >
+            {avatarUrl ? (
+              <Image src={avatarUrl} alt="" fill sizes="96px" className="object-cover" unoptimized={avatarUrl.startsWith("blob:")} />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center bg-champagne/20 text-[30px] font-semibold text-champagne">
+                {(form.firstName[0] || "").toUpperCase()}
+                {(form.lastName[0] || "").toUpperCase()}
+              </span>
+            )}
+            <span className="absolute inset-x-0 bottom-0 bg-black/55 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-ink backdrop-blur-sm">
+              {avatarBusy ? "…" : "Edit"}
+            </span>
+          </button>
+          <div>
+            <p className="text-[15px] font-semibold text-ink">Your portrait</p>
+            <p className="muted mt-1 text-[12.5px] leading-relaxed">
+              Shown to the Circle in the directory and at the Gate.
+            </p>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void uploadAvatar(f);
+              e.target.value = "";
+            }}
+          />
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="tag">First name</label>
@@ -105,7 +178,10 @@ export default function ProfileForm({
         </div>
         <div className="mt-4">
           <label className="tag">About you</label>
-          <textarea className="field" value={form.bio} onChange={set("bio")} />
+          <textarea className="field min-h-[130px]" value={form.bio} onChange={set("bio")} />
+          <p className="faint mt-1.5 text-[11.5px]">
+            Markdown welcome — **bold**, *italic*, lists, and line breaks all render.
+          </p>
         </div>
         <div className="mt-4">
           <label className="tag">What you bring</label>

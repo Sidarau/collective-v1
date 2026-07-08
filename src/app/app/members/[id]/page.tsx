@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getAuthUser } from "@/lib/auth";
 import { db, fetchProfileByUserId } from "@/lib/data";
 import { BLOCKING_STATUSES } from "@core/availability";
+import Avatar from "@/components/Avatar";
+import Markdown from "@/components/Markdown";
 import IntroRequestButton from "./IntroRequestButton";
 
 export const dynamic = "force-dynamic";
@@ -66,10 +68,12 @@ export default async function MemberProfilePage({
       </Link>
 
       <header className="reveal mt-6 flex items-center gap-5" style={{ animationDelay: "0.05s" }}>
-        <span className="flex h-20 w-20 items-center justify-center rounded-full bg-champagne/20 text-[26px] font-semibold text-champagne">
-          {profile.first_name[0]?.toUpperCase()}
-          {profile.last_name[0]?.toUpperCase()}
-        </span>
+        <Avatar
+          url={profile.avatar_url}
+          first={profile.first_name}
+          last={profile.last_name}
+          size="lg"
+        />
         <div>
           <h1 className="display text-[28px] leading-tight text-ink">
             {profile.first_name} {profile.last_name}
@@ -83,14 +87,18 @@ export default async function MemberProfilePage({
         {profile.bio && (
           <section className="glass p-5">
             <p className="eyebrow">About</p>
-            <p className="mt-2 text-[14px] leading-relaxed text-ink/85">{profile.bio}</p>
+            <div className="mt-2">
+              <Markdown>{profile.bio}</Markdown>
+            </div>
           </section>
         )}
 
         {profile.contribution && (
           <section className="glass p-5">
             <p className="eyebrow">Brings to the Circle</p>
-            <p className="mt-2 text-[14px] leading-relaxed text-ink/85">{profile.contribution}</p>
+            <div className="mt-2">
+              <Markdown>{profile.contribution}</Markdown>
+            </div>
           </section>
         )}
 

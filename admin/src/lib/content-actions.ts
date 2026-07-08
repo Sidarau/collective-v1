@@ -144,6 +144,80 @@ export async function createGateAction(formData: FormData) {
   backTo(`/gates/${gateId}`);
 }
 
+export async function createVillaClosureAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const gateId = str(formData, "gateId");
+  const path = `/gates/${gateId}`;
+  const startsOn = str(formData, "startsOn");
+  const endsOn = str(formData, "endsOn");
+  const reason = str(formData, "reason");
+
+  if (!gateId) backTo("/gates", "Gate not found");
+  if (!startsOn) backTo(path, "Choose the first unavailable day");
+  if (endsOn && endsOn < startsOn) backTo(path, "The end date can't be before the start");
+  if (!reason) backTo(path, "Add a short note for the other admins");
+
+  try {
+    const { data, error } = await db()
+      .from("closure_periods")
+      .insert({
+        villa_id: gateId,
+        room_id: null,
+        starts_on: startsOn,
+        ends_on: endsOn || null,
+        reason,
+        created_by: admin.id,
+      })
+      .select("id")
+      .single();
+    if (error || !data) throw new Error(error?.message || "Closure failed");
+
+    await writeAudit({
+      actorId: admin.id,
+      actorEmail: admin.email,
+      action: "villa.close",
+      entityType: "villa",
+      entityId: gateId,
+      summary: `Villa unavailable ${startsOn} → ${endsOn || "until further notice"}: ${reason}`,
+    });
+  } catch (err) {
+    backTo(path, err instanceof Error ? err.message : "Closure failed");
+  }
+  revalidatePath(path);
+  revalidatePath("/gates");
+  backTo(path);
+}
+
+export async function deleteVillaClosureAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const gateId = str(formData, "gateId");
+  const id = str(formData, "id");
+  const path = `/gates/${gateId}`;
+
+  try {
+    const { error } = await db()
+      .from("closure_periods")
+      .delete()
+      .eq("id", id)
+      .eq("villa_id", gateId);
+    if (error) throw new Error(error.message);
+
+    await writeAudit({
+      actorId: admin.id,
+      actorEmail: admin.email,
+      action: "villa.reopen_window",
+      entityType: "villa",
+      entityId: gateId,
+      summary: "Villa unavailable window removed",
+    });
+  } catch (err) {
+    backTo(path, err instanceof Error ? err.message : "Could not remove closure");
+  }
+  revalidatePath(path);
+  revalidatePath("/gates");
+  backTo(path);
+}
+
 // ---------------------------------------------------------------- Rooms
 
 export async function saveRoomAction(formData: FormData) {
@@ -285,6 +359,16 @@ export async function saveEventAction(formData: FormData) {
     ? statusRaw
     : "draft") as EventStatus;
   const capacity = parseInt(str(formData, "capacity"), 10);
+  const hardCapacity = parseInt(str(formData, "hardCapacity"), 10);
+  if (
+    Number.isFinite(capacity) &&
+    Number.isFinite(hardCapacity) &&
+    capacity > 0 &&
+    hardCapacity > 0 &&
+    hardCapacity < capacity
+  ) {
+    backTo(backPath, "Hidden hard cap cannot be lower than visible capacity");
+  }
 
   const payload = {
     title,
@@ -294,6 +378,10 @@ export async function saveEventAction(formData: FormData) {
     start_at: startAt,
     end_at: endAt,
     capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : null,
+    hard_capacity:
+      Number.isFinite(hardCapacity) && hardCapacity > 0
+        ? hardCapacity
+        : null,
     villa_id: str(formData, "villaId") || null,
     location_note: str(formData, "locationNote") || null,
     image: str(formData, "image") || null,
