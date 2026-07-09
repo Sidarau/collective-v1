@@ -17,7 +17,7 @@ export const config = {
   brandTagline:
     process.env.NEXT_PUBLIC_BRAND_TAGLINE ||
     "A private circle around the world's quiet places.",
-  supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "membership@collective.club",
+  supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "collective@opencollective.app",
 
   // URLs (public). baseUrl = member app; adminUrl = operator console.
   baseUrl: process.env.NEXT_PUBLIC_BASE_URL || "https://collective-v1-three.vercel.app",
@@ -25,7 +25,7 @@ export const config = {
 
   // Resend
   resendApiKey: getEnv("RESEND_API_KEY") || "",
-  resendFromEmail: getEnv("RESEND_FROM_EMAIL") || "onboarding@resend.dev",
+  resendFromEmail: getEnv("RESEND_FROM_EMAIL") || "collective@opencollective.app",
 
   // Environment
   nodeEnv: getEnv("NODE_ENV") || "development",

@@ -73,10 +73,6 @@ export default function TermsPage() {
               </p>
             </section>
 
-            <p className="notice notice-gold">
-              This starter text is not legal advice. Have local counsel review before opening
-              public acquisition campaigns or taking payments.
-            </p>
           </div>
         </div>
       </article>

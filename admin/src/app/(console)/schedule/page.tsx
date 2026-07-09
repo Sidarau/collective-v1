@@ -5,9 +5,13 @@ import { listCalls, listScreeningWindows } from "@/lib/funnel-data";
 import {
   addScreeningWindowAction,
   deleteScreeningWindowAction,
+  ensureCalendarFeedAction,
+  rotateCalendarFeedAction,
   setCallStatusAction,
   toggleScreeningWindowAction,
 } from "@/lib/funnel-actions";
+import { getAdminUser } from "@/lib/auth";
+import { getSettingValue } from "@core/settings";
 import { fmtMinute } from "@core/scheduling";
 import { googleCalendarUrl } from "@core/ics";
 import { config } from "@core/config";
@@ -43,12 +47,14 @@ export default async function SchedulePage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
-  const [windows, upcoming, past] = await Promise.all([
+  const admin = (await getAdminUser())!;
+  const [windows, upcoming, past, feedToken] = await Promise.all([
     listScreeningWindows(),
     listCalls({ from: oneHourAgoIso(), statuses: ["scheduled"] }),
     listCalls({ statuses: ["completed", "no_show", "cancelled"], limit: 15 }).then((rows) =>
       rows.reverse()
     ),
+    getSettingValue<string>(`calendar_feed:${admin.id}`),
   ]);
 
   return (
@@ -56,7 +62,7 @@ export default async function SchedulePage({
       <PageHeader title="Screening schedule" eyebrow="The host's calendar" />
       <ErrorBanner error={error} />
 
-      <div className="grid grid-cols-[1fr_380px] gap-5">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_380px]">
         {/* Agenda */}
         <div className="space-y-5">
           <section className="panel overflow-hidden">
@@ -226,6 +232,44 @@ export default async function SchedulePage({
               Prospects see these as 15-minute slots on the Ibiza clock, at least 2 hours ahead,
               21 days out. Booked slots disappear automatically.
             </p>
+          </section>
+
+          {/* Google Calendar connector */}
+          <section className="panel p-5">
+            <p className="label">Your Google Calendar</p>
+            {feedToken ? (
+              <>
+                <p className="text-[12.5px] leading-relaxed text-muted">
+                  Subscribe once and every screening call and interview lands in your calendar.
+                  In Google Calendar: <span className="text-ink">Other calendars → + → From URL</span>,
+                  paste this link:
+                </p>
+                <code className="mt-3 block select-all break-all rounded-[10px] border border-white/12 bg-black/40 p-3 text-[11.5px] text-gold">
+                  {`${config.adminUrl || "https://opencollective.app"}/api/schedule/feed/${feedToken}`}
+                </code>
+                <p className="mt-2 text-[11.5px] text-faint">
+                  Works in Apple Calendar and Outlook too. Google refreshes feeds every few hours.
+                  The link is personal — rotate it if it ever leaks.
+                </p>
+                <form action={rotateCalendarFeedAction} className="mt-3">
+                  <button type="submit" className="btn btn-red">
+                    Rotate link
+                  </button>
+                </form>
+              </>
+            ) : (
+              <>
+                <p className="text-[12.5px] leading-relaxed text-muted">
+                  Create a personal read-only feed and subscribe to it from Google Calendar —
+                  bookings appear automatically, no account linking needed.
+                </p>
+                <form action={ensureCalendarFeedAction} className="mt-3">
+                  <button type="submit" className="btn btn-gold">
+                    Create my calendar link
+                  </button>
+                </form>
+              </>
+            )}
           </section>
 
           <section className="panel overflow-hidden">

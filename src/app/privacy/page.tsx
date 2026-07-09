@@ -34,7 +34,7 @@ export default function PrivacyPage() {
               <p>
                 Depending on the flow, we collect name, email, phone or WhatsApp, optional
                 Instagram/social links, application answers, profile copy, RSVP notes,
-                dietary or allergy notes, booking details, internal admin notes, and message
+                dietary or allergy notes, stay-window details, internal admin notes, and message
                 delivery logs. Passwords are stored only as hashes.
               </p>
             </section>
@@ -88,11 +88,16 @@ export default function PrivacyPage() {
               </p>
             </section>
 
-            <p className="notice notice-gold">
-              This starter notice is a practical baseline, not legal advice. Review controller
-              identity, lawful bases, processor list, retention schedule, and international
-              transfer terms before launch.
-            </p>
+            <section>
+              <h2 className="eyebrow mb-2">Contact</h2>
+              <p>
+                For privacy questions or to exercise your rights, write to{" "}
+                <a className="text-champagne hover:underline" href="mailto:collective@opencollective.app">
+                  collective@opencollective.app
+                </a>
+                .
+              </p>
+            </section>
           </div>
         </div>
       </article>

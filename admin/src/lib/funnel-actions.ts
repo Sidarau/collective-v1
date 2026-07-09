@@ -8,6 +8,7 @@ import { writeAudit } from "@core/audit";
 import { sendMagicLinkEmail, sendTrackedEmail } from "@core/email";
 import { mintMagicLink } from "@core/invites";
 import { config } from "@core/config";
+import { getSettingValue, setSetting } from "@core/settings";
 import type {
   ReferralLinkKind,
   ScreeningWindowRow,
@@ -564,4 +565,46 @@ export async function expirePhoneInviteAction(formData: FormData) {
   });
   revalidatePath("/referrals");
   backTo("/referrals");
+}
+
+// ---------------------------------------------------------------- Calendar feed
+
+/**
+ * Personal ICS feed token (Google Calendar connector). Created on demand,
+ * rotated on request — rotation invalidates the old URL immediately.
+ */
+export async function ensureCalendarFeedAction() {
+  const admin = await getAdminUser();
+  if (!admin) backTo("/login");
+  const key = `calendar_feed:${admin.id}`;
+  const existing = await getSettingValue<string>(key);
+  if (!existing) {
+    await setSetting(key, crypto.randomBytes(24).toString("base64url"), admin.id);
+    await writeAudit({
+      actorId: admin.id,
+      actorEmail: admin.email,
+      action: "schedule.feed_created",
+      entityType: "user",
+      entityId: admin.id,
+      summary: "Created a personal calendar feed link",
+    });
+  }
+  revalidatePath("/schedule");
+  backTo("/schedule");
+}
+
+export async function rotateCalendarFeedAction() {
+  const admin = await getAdminUser();
+  if (!admin) backTo("/login");
+  await setSetting(`calendar_feed:${admin.id}`, crypto.randomBytes(24).toString("base64url"), admin.id);
+  await writeAudit({
+    actorId: admin.id,
+    actorEmail: admin.email,
+    action: "schedule.feed_rotated",
+    entityType: "user",
+    entityId: admin.id,
+    summary: "Rotated their calendar feed link (old URL is dead)",
+  });
+  revalidatePath("/schedule");
+  backTo("/schedule");
 }

@@ -205,9 +205,15 @@ export default async function AgentsPage({
               {mcpUrl}
             </code>
             <p className="mt-3 text-[12px] leading-relaxed text-muted">
-              Tools: <code>kb_tree</code>, <code>kb_get</code>, <code>kb_search</code>,{" "}
-              <code>kb_upsert</code>, <code>leads_search</code>, and{" "}
-              <code>operations_report</code>. Reads are free; writes are audited under your token.
+              Read: <code>kb_tree</code> · <code>kb_get</code> · <code>kb_search</code> ·{" "}
+              <code>leads_search</code> · <code>operations_report</code>
+              <br />
+              Write: <code>kb_upsert</code> · <code>event_upsert</code> · <code>gate_update</code> ·{" "}
+              <code>room_update</code> · <code>application_set_status</code> ·{" "}
+              <code>lead_update_status</code>
+              <br />
+              Writes go live without a redeploy and are audited under your token. Approving
+              applications stays console-only.
             </p>
           </section>
 

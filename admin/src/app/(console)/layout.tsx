@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import SignOutButton from "@/components/SignOutButton";
 import { getAdminUserWithPassword } from "@/lib/auth";
 
 const NAV: [string, [string, string][]][] = [
@@ -83,6 +84,9 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
             </span>
           </summary>
           <nav className="mt-5 grid gap-4 pb-2 sm:grid-cols-2">{navSections}</nav>
+          <div className="px-1 pb-2">
+            <SignOutButton />
+          </div>
         </details>
 
         <div className="hidden lg:block">
@@ -92,6 +96,9 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
             <p className="mt-1 truncate text-xs text-muted">{user.email}</p>
           </div>
           <nav className="mt-6 space-y-5">{navSections}</nav>
+          <div className="mt-6 border-t border-line px-1 pt-4">
+            <SignOutButton />
+          </div>
         </div>
       </aside>
       <main className="min-w-0">

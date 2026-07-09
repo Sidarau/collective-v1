@@ -4,7 +4,60 @@ import { z } from "zod";
 import { buildKbTree, getKbNode, listKbNodes, searchKb, upsertKbNode } from "@core/kb";
 import { writeAudit } from "@core/audit";
 import { getSupabaseAdmin } from "@core/supabase";
+import { DEFAULT_TIMEZONE, zonedToUtc } from "@core/scheduling";
+import type { CrmEntityType, Json } from "@core/database.types";
 import { agentContext, resolveAgent } from "@/lib/agent-auth";
+
+/** Accept ISO-with-offset ("2026-07-20T19:00:00+02:00" / "…Z") or villa
+ *  wall-clock ("2026-07-20T19:00") — wall clock is read as Europe/Madrid. */
+function parseWhen(input: string | undefined | null): string | null {
+  if (!input) return null;
+  const trimmed = input.trim();
+  if (/(Z|[+-]\d{2}:?\d{2})$/.test(trimmed)) {
+    const d = new Date(trimmed);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  const m = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if (!m) return null;
+  return zonedToUtc(
+    Number(m[1]),
+    Number(m[2]),
+    Number(m[3]),
+    Number(m[4]) * 60 + Number(m[5]),
+    DEFAULT_TIMEZONE
+  ).toISOString();
+}
+
+function slugify(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "")
+    .slice(0, 60);
+}
+
+/** Every agent write is attributed to the admin whose token performed it. */
+async function auditAgent(
+  action: string,
+  entityType: CrmEntityType,
+  entityId: string | null,
+  summary: string,
+  meta?: Record<string, Json | undefined>
+) {
+  const who = agentContext.getStore();
+  await writeAudit({
+    actorId: who?.adminId || null,
+    actorEmail: who?.adminEmail || "agent",
+    action,
+    entityType,
+    entityId,
+    summary: `${who?.tokenLabel ? `[${who.tokenLabel}] ` : ""}${summary}`,
+    meta: { ...meta, via: who?.kind || "unknown" },
+  });
+}
+
+const err = (text: string) => ({ content: [{ type: "text" as const, text }], isError: true });
+const ok = (text: string) => ({ content: [{ type: "text" as const, text }] });
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -272,6 +325,278 @@ const handler = createMcpHandler(
         ].join("\n");
 
         return { content: [{ type: "text", text: report }] };
+      }
+    );
+
+    // ---------------------------------------------------------------- Writes
+    // Everything below mutates the live product with no redeploy. Each write
+    // is validated, audited under the calling admin's token, and visible in
+    // the console (Agents & MCP → activity).
+
+    server.registerTool(
+      "event_upsert",
+      {
+        title: "Create or update an event",
+        description:
+          "Create an event (omit id; title + startAt required) or update one (pass id; only provided fields change). Times: ISO with offset, or villa wall-clock 'YYYY-MM-DDTHH:MM' read as Europe/Madrid. audience 'public' = guest-list event on the landing page; 'member' = members only. capacity is what members see; hardCapacity is the hidden RSVP ceiling.",
+        inputSchema: {
+          id: z.string().uuid().optional(),
+          title: z.string().min(2).optional(),
+          description: z.string().optional(),
+          eventType: z.enum(["dinner", "experience", "session", "gathering", "wellness"]).optional(),
+          audience: z.enum(["member", "public"]).optional(),
+          startAt: z.string().optional(),
+          endAt: z.string().optional(),
+          capacity: z.number().int().positive().nullable().optional(),
+          hardCapacity: z.number().int().positive().nullable().optional(),
+          locationNote: z.string().nullable().optional(),
+          image: z.string().url().nullable().optional(),
+          status: z.enum(["draft", "published", "cancelled"]).optional(),
+          gateSlug: z.string().optional(),
+        },
+      },
+      async (input) => {
+        const supabase = getSupabaseAdmin();
+        const startAt = input.startAt !== undefined ? parseWhen(input.startAt) : undefined;
+        if (input.startAt !== undefined && !startAt) return err("Could not parse startAt");
+        const endAt = input.endAt !== undefined ? parseWhen(input.endAt) : undefined;
+
+        let villaId: string | null | undefined;
+        if (input.gateSlug) {
+          const { data: gate } = await supabase.from("villas").select("id").eq("slug", input.gateSlug).maybeSingle();
+          if (!gate) return err(`No gate with slug "${input.gateSlug}"`);
+          villaId = gate.id;
+        }
+
+        const patch: Record<string, unknown> = {};
+        if (input.title !== undefined) patch.title = input.title;
+        if (input.description !== undefined) patch.description = input.description;
+        if (input.eventType !== undefined) patch.event_type = input.eventType;
+        if (input.audience !== undefined) patch.audience = input.audience;
+        if (startAt !== undefined) patch.start_at = startAt;
+        if (endAt !== undefined) patch.end_at = endAt;
+        if (input.capacity !== undefined) patch.capacity = input.capacity;
+        if (input.hardCapacity !== undefined) patch.hard_capacity = input.hardCapacity;
+        if (input.locationNote !== undefined) patch.location_note = input.locationNote;
+        if (input.image !== undefined) patch.image = input.image;
+        if (input.status !== undefined) patch.status = input.status;
+        if (villaId !== undefined) patch.villa_id = villaId;
+
+        if (input.id) {
+          const { data: current } = await supabase
+            .from("events")
+            .select("id, title, capacity, hard_capacity")
+            .eq("id", input.id)
+            .maybeSingle();
+          if (!current) return err("Event not found");
+          const cap = (patch.capacity ?? current.capacity) as number | null;
+          const hard = (patch.hard_capacity ?? current.hard_capacity) as number | null;
+          if (cap && hard && hard < cap) return err("hardCapacity cannot be lower than capacity");
+          const { error } = await supabase.from("events").update(patch).eq("id", input.id);
+          if (error) return err(error.message);
+          await auditAgent("agent.event_update", "event", input.id, `updated event "${(patch.title as string) || current.title}"`);
+          return ok(`Updated event ${input.id}`);
+        }
+
+        if (!input.title || !startAt) return err("Creating an event needs title and startAt");
+        if (input.capacity && input.hardCapacity && input.hardCapacity < input.capacity) {
+          return err("hardCapacity cannot be lower than capacity");
+        }
+        const { data: created, error } = await supabase
+          .from("events")
+          .insert({
+            title: input.title,
+            slug: `${slugify(input.title)}-${Date.now().toString(36).slice(-4)}`,
+            description: input.description || null,
+            event_type: input.eventType || "gathering",
+            audience: input.audience || "member",
+            start_at: startAt,
+            end_at: endAt || null,
+            capacity: input.capacity ?? null,
+            hard_capacity: input.hardCapacity ?? null,
+            location_note: input.locationNote || null,
+            image: input.image || null,
+            status: input.status || "draft",
+            villa_id: villaId ?? null,
+          })
+          .select("id, slug")
+          .single();
+        if (error || !created) return err(error?.message || "Create failed");
+        await auditAgent("agent.event_create", "event", created.id, `created event "${input.title}" (${input.status || "draft"})`);
+        return ok(`Created event "${input.title}" — id ${created.id}, slug ${created.slug}. Draft until status is 'published'.`);
+      }
+    );
+
+    server.registerTool(
+      "gate_update",
+      {
+        title: "Update a gate (villa) presentation",
+        description:
+          "Update content fields of a gate by slug. Only provided fields change. status: published | coming_soon | archived.",
+        inputSchema: {
+          gateSlug: z.string(),
+          name: z.string().optional(),
+          tagline: z.string().nullable().optional(),
+          story: z.string().nullable().optional(),
+          description: z.string().nullable().optional(),
+          region: z.string().nullable().optional(),
+          heroImage: z.string().url().nullable().optional(),
+          amenities: z.array(z.string()).optional(),
+          status: z.enum(["published", "coming_soon", "archived"]).optional(),
+          maxGuests: z.number().int().positive().optional(),
+        },
+      },
+      async (input) => {
+        const supabase = getSupabaseAdmin();
+        const { data: gate } = await supabase.from("villas").select("id, name").eq("slug", input.gateSlug).maybeSingle();
+        if (!gate) return err(`No gate with slug "${input.gateSlug}"`);
+
+        const patch: Record<string, unknown> = {};
+        if (input.name !== undefined) patch.name = input.name;
+        if (input.tagline !== undefined) patch.tagline = input.tagline;
+        if (input.story !== undefined) patch.story = input.story;
+        if (input.description !== undefined) patch.description = input.description;
+        if (input.region !== undefined) patch.region = input.region;
+        if (input.heroImage !== undefined) patch.hero_image = input.heroImage;
+        if (input.amenities !== undefined) patch.amenities = input.amenities;
+        if (input.status !== undefined) patch.status = input.status;
+        if (input.maxGuests !== undefined) patch.max_guests = input.maxGuests;
+        if (Object.keys(patch).length === 0) return err("Nothing to update");
+
+        const { error } = await supabase.from("villas").update(patch).eq("id", gate.id);
+        if (error) return err(error.message);
+        await auditAgent("agent.gate_update", "villa", gate.id, `updated gate "${gate.name}" (${Object.keys(patch).join(", ")})`);
+        return ok(`Updated ${gate.name}: ${Object.keys(patch).join(", ")}`);
+      }
+    );
+
+    server.registerTool(
+      "room_update",
+      {
+        title: "Update a room",
+        description:
+          "Update a room by gateSlug + roomSlug. priceEur is per night in whole euros. Only provided fields change.",
+        inputSchema: {
+          gateSlug: z.string(),
+          roomSlug: z.string(),
+          name: z.string().optional(),
+          description: z.string().nullable().optional(),
+          bedType: z.string().nullable().optional(),
+          priceEur: z.number().int().positive().optional(),
+          images: z.array(z.string().url()).optional(),
+          amenities: z.array(z.string()).optional(),
+        },
+      },
+      async (input) => {
+        const supabase = getSupabaseAdmin();
+        const { data: gate } = await supabase.from("villas").select("id").eq("slug", input.gateSlug).maybeSingle();
+        if (!gate) return err(`No gate with slug "${input.gateSlug}"`);
+        const { data: room } = await supabase
+          .from("rooms")
+          .select("id, name")
+          .eq("villa_id", gate.id)
+          .eq("slug", input.roomSlug)
+          .maybeSingle();
+        if (!room) return err(`No room "${input.roomSlug}" at that gate`);
+
+        const patch: Record<string, unknown> = {};
+        if (input.name !== undefined) patch.name = input.name;
+        if (input.description !== undefined) patch.description = input.description;
+        if (input.bedType !== undefined) patch.bed_type = input.bedType;
+        if (input.priceEur !== undefined) patch.base_price_per_night = input.priceEur * 100;
+        if (input.images !== undefined) patch.images = input.images;
+        if (input.amenities !== undefined) patch.amenities = input.amenities;
+        if (Object.keys(patch).length === 0) return err("Nothing to update");
+
+        const { error } = await supabase.from("rooms").update(patch).eq("id", room.id);
+        if (error) return err(error.message);
+        await auditAgent("agent.room_update", "room", room.id, `updated room "${room.name}" (${Object.keys(patch).join(", ")})`);
+        return ok(`Updated ${room.name}: ${Object.keys(patch).join(", ")}`);
+      }
+    );
+
+    server.registerTool(
+      "application_set_status",
+      {
+        title: "Move an application through screening",
+        description:
+          "Set an application's status: submitted | screening | waitlist | rejected. Approval is deliberately console-only (it creates the member account and entrance link).",
+        inputSchema: {
+          id: z.string().uuid(),
+          status: z.enum(["submitted", "screening", "waitlist", "rejected"]),
+          note: z.string().optional(),
+        },
+      },
+      async ({ id, status, note }) => {
+        const supabase = getSupabaseAdmin();
+        const { data: app } = await supabase
+          .from("applications")
+          .select("id, first_name, last_name, status")
+          .eq("id", id)
+          .maybeSingle();
+        if (!app) return err("Application not found");
+        if (app.status === "approved") return err("Already approved — manage approved members in the console");
+
+        const who = agentContext.getStore();
+        const { error } = await supabase
+          .from("applications")
+          .update({ status, reviewed_by: who?.adminId || null, reviewed_at: new Date().toISOString() })
+          .eq("id", id);
+        if (error) return err(error.message);
+        if (note) {
+          await supabase.from("admin_notes").insert({
+            author_id: who?.adminId || null,
+            author_email: who?.adminEmail || "agent",
+            entity_type: "application",
+            entity_id: id,
+            body: note,
+          });
+        }
+        await auditAgent(
+          "agent.application_status",
+          "application",
+          id,
+          `${app.first_name} ${app.last_name}: ${app.status} → ${status}`
+        );
+        return ok(`${app.first_name} ${app.last_name} → ${status}`);
+      }
+    );
+
+    server.registerTool(
+      "lead_update_status",
+      {
+        title: "Update a lead's status",
+        description: "Set a lead's CRM status by email: new | active | inactive | blacklisted. Optional note lands on the lead record.",
+        inputSchema: {
+          email: z.string().email(),
+          status: z.enum(["new", "active", "inactive", "blacklisted"]),
+          note: z.string().optional(),
+        },
+      },
+      async ({ email, status, note }) => {
+        const supabase = getSupabaseAdmin();
+        const normalized = email.toLowerCase().trim();
+        const { data: lead } = await supabase
+          .from("leads")
+          .select("id, first_name, last_name, status")
+          .eq("email", normalized)
+          .maybeSingle();
+        if (!lead) return err(`No lead with email ${normalized}`);
+
+        const { error } = await supabase.from("leads").update({ status }).eq("id", lead.id);
+        if (error) return err(error.message);
+        if (note) {
+          const who = agentContext.getStore();
+          await supabase.from("admin_notes").insert({
+            author_id: who?.adminId || null,
+            author_email: who?.adminEmail || "agent",
+            entity_type: "lead",
+            entity_id: lead.id,
+            body: note,
+          });
+        }
+        await auditAgent("agent.lead_status", "lead", lead.id, `${lead.first_name} ${lead.last_name} (${normalized}): ${lead.status} → ${status}`);
+        return ok(`${normalized} → ${status}`);
       }
     );
   },
