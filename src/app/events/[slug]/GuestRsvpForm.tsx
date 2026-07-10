@@ -13,6 +13,7 @@ interface FormState {
   email: string;
   phone: string;
   instagram: string;
+  birthday: string;
   note: string;
   consent: boolean;
 }
@@ -23,6 +24,7 @@ const initial: FormState = {
   email: "",
   phone: "",
   instagram: "",
+  birthday: "",
   note: "",
   consent: false,
 };
@@ -110,6 +112,16 @@ export default function GuestRsvpForm({ eventId }: Props) {
       <div>
         <label className="tag">Instagram</label>
         <input className="field" value={form.instagram} onChange={setText("instagram")} placeholder="@handle" />
+      </div>
+      <div>
+        <label className="tag">Birthday (optional)</label>
+        <input
+          className="field"
+          type="date"
+          max={new Date().toISOString().slice(0, 10)}
+          value={form.birthday}
+          onChange={setText("birthday")}
+        />
       </div>
       <div>
         <label className="tag">Note</label>

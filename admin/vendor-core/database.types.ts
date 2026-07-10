@@ -23,6 +23,7 @@ export type GateStatus = "published" | "coming_soon" | "archived";
 export type BookingStatus =
   | "inquiry"
   | "requested"
+  | "waitlisted"
   | "approved"
   | "deposit_paid"
   | "paid"
@@ -111,6 +112,7 @@ export interface LeadRow {
   hubspot_contact_id: string | null;
   hubspot_deal_id: string | null;
   dietary_restrictions: string | null;
+  birthday: string | null;
   notes: string | null;
   source: string;
   status: "new" | "active" | "inactive" | "blacklisted";
@@ -189,6 +191,7 @@ export interface ProfileRow {
   links: Json;
   allergies: string | null;
   dietary: string | null;
+  birthday: string | null;
   phone: string | null;
   whatsapp: string | null;
   onboarding_completed: boolean;
@@ -213,6 +216,7 @@ export interface ApplicationRow {
   linkedin: string | null;
   links: Json;
   preferred_window: string | null;
+  birthday: string | null;
   status: ApplicationStatus;
   screening_token: string | null;
   referral_link_id: string | null;
@@ -266,6 +270,7 @@ export interface EventGuestRsvpRow {
   phone: string;
   instagram: string | null;
   note: string | null;
+  birthday: string | null;
   consent_terms: boolean;
   status: GuestRsvpStatus;
   invited_user_id: string | null;
@@ -335,6 +340,7 @@ export interface ScreeningCallRow {
   timezone: string;
   status: ScreeningCallStatus;
   notes: string | null;
+  google_event_ids: Record<string, string> | null;
   created_at: string;
   updated_at: string;
 }

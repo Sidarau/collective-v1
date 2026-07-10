@@ -37,8 +37,10 @@ export async function POST(req: NextRequest) {
       linkedin,
       phone,
       whatsapp,
+      birthday,
       preferredWindow,
     } = body;
+    const birthdayDate = birthday && /^\d{4}-\d{2}-\d{2}$/.test(birthday) ? birthday : null;
 
     if (!firstName || !lastName || !motivation || !contribution) {
       return NextResponse.json(
@@ -87,6 +89,7 @@ export async function POST(req: NextRequest) {
         instagram,
         linkedin,
         preferred_window: preferredWindow,
+        birthday: birthdayDate,
         status: "submitted",
         screening_token: screeningToken,
       })
@@ -106,6 +109,7 @@ export async function POST(req: NextRequest) {
           last_name: lastName,
           phone: phone || null,
           whatsapp: whatsapp || null,
+          birthday: birthdayDate,
           status: "active",
         })
         .eq("id", user.leadId);

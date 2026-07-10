@@ -22,6 +22,10 @@ export async function POST(req: NextRequest) {
     const phone = typeof body.phone === "string" ? cleanPhone(body.phone) : "";
     const instagram = typeof body.instagram === "string" ? body.instagram.trim() : "";
     const note = typeof body.note === "string" ? body.note.trim() : "";
+    const birthday =
+      typeof body.birthday === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.birthday.trim())
+        ? body.birthday.trim()
+        : null;
     const consent = body.consent === true;
 
     if (!eventId || !firstName || !lastName || !EMAIL_RE.test(email) || !phone) {
@@ -67,6 +71,7 @@ export async function POST(req: NextRequest) {
         phone,
         instagram: instagram || null,
         note: note || null,
+        birthday,
         consent_terms: true,
         status,
       },

@@ -32,6 +32,7 @@ export async function PATCH(req: NextRequest) {
         contribution: body.contribution || null,
         allergies: body.allergies || null,
         dietary: body.dietary || null,
+        birthday: /^\d{4}-\d{2}-\d{2}$/.test(body.birthday || "") ? body.birthday : null,
         phone: body.phone || null,
         whatsapp: body.whatsapp || null,
       },

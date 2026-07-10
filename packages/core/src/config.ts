@@ -53,6 +53,12 @@ export const config = {
 
   // Agent access (KB REST + MCP). Endpoints refuse to serve when unset.
   agentApiToken: getEnv("AGENT_API_TOKEN") || "",
+
+  // Google Calendar 2-way sync (server-only). Feature stays dark until both
+  // are set: create an OAuth client (Web) in Google Cloud console and add
+  // <adminUrl>/api/google/oauth/callback as an authorized redirect URI.
+  googleClientId: getEnv("GOOGLE_OAUTH_CLIENT_ID") || "",
+  googleClientSecret: getEnv("GOOGLE_OAUTH_CLIENT_SECRET") || "",
 };
 
 export function requireConfig(key: keyof typeof config): string {

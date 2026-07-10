@@ -51,6 +51,7 @@ export default async function ApplicationDetailPage({
     ["Instagram", app.instagram],
     ["LinkedIn", app.linkedin],
     ["Preferred window", app.preferred_window],
+    ["Birthday", app.birthday],
   ];
 
   return (

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import ApplicationWindowPicker from "@/components/ApplicationWindowPicker";
 
 interface Props {
   email: string;
@@ -25,6 +26,7 @@ export default function JoinForm(initial: Props) {
     linkedin: "",
     phone: initial.phone,
     whatsapp: initial.whatsapp,
+    birthday: "",
     preferredWindow: "",
   });
   const [loading, setLoading] = useState(false);
@@ -143,12 +145,20 @@ export default function JoinForm(initial: Props) {
       </div>
 
       <div className="mt-4">
-        <label className="tag">When could you see yourself at the Gate? (optional)</label>
+        <label className="tag">Birthday (optional — for the house&apos;s rituals)</label>
         <input
           className="field"
-          placeholder="e.g. late July, first half of August"
-          value={form.preferredWindow}
-          onChange={set("preferredWindow")}
+          type="date"
+          max={new Date().toISOString().slice(0, 10)}
+          value={form.birthday}
+          onChange={set("birthday")}
+        />
+      </div>
+
+      <div className="mt-4">
+        <label className="tag">When could you see yourself at the Gate? (optional)</label>
+        <ApplicationWindowPicker
+          onChange={(value) => setForm((f) => ({ ...f, preferredWindow: value }))}
         />
       </div>
 

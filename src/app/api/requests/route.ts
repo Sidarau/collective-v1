@@ -39,10 +39,13 @@ export async function POST(req: NextRequest) {
       companionName?: string | null;
       notes?: string | null;
       eventId?: string | null;
+      waitlist?: boolean;
     };
-    const { gateSlug, roomId, from, to } = body;
+    const { gateSlug, from, to } = body;
+    const isWaitlist = body.waitlist === true;
+    let roomId = body.roomId;
 
-    if (!gateSlug || !roomId || !from || !to || !ISO_DATE.test(from) || !ISO_DATE.test(to) || from >= to) {
+    if (!gateSlug || (!roomId && !isWaitlist) || !from || !to || !ISO_DATE.test(from) || !ISO_DATE.test(to) || from >= to) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
     const today = new Date().toISOString().slice(0, 10);
@@ -52,49 +55,78 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    const { data: room } = await supabase
-      .from("rooms")
-      .select("*")
-      .eq("id", roomId)
-      .maybeSingle();
+    let roomRow: RoomRow | null = null;
+    let villa: Pick<VillaRow, "id" | "slug" | "name" | "status"> | null = null;
 
-    const roomRow = room as RoomRow | null;
-    const { data: villaData } = roomRow
-      ? await supabase
-          .from("villas")
-          .select("id, slug, name, status")
-          .eq("id", roomRow.villa_id)
-          .maybeSingle()
-      : { data: null };
-    const villa = villaData as Pick<VillaRow, "id" | "slug" | "name" | "status"> | null;
-    if (!roomRow || !villa || villa.slug !== gateSlug || villa.status !== "published") {
-      return NextResponse.json({ error: "Room not found" }, { status: 404 });
-    }
+    if (isWaitlist) {
+      // Waiting list is villa-level: park the entry on the gate's first room
+      // as a placeholder. It never blocks availability (status=waitlisted).
+      const { data: villaData } = await supabase
+        .from("villas")
+        .select("id, slug, name, status")
+        .eq("slug", gateSlug)
+        .maybeSingle();
+      villa = villaData as Pick<VillaRow, "id" | "slug" | "name" | "status"> | null;
+      if (!villa || villa.status !== "published") {
+        return NextResponse.json({ error: "Gate not found" }, { status: 404 });
+      }
+      const { data: anyRoom } = await supabase
+        .from("rooms")
+        .select("*")
+        .eq("villa_id", villa.id)
+        .order("base_price_per_night", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      roomRow = anyRoom as RoomRow | null;
+      if (!roomRow) {
+        return NextResponse.json({ error: "Gate has no rooms yet" }, { status: 404 });
+      }
+      roomId = roomRow.id;
+    } else {
+      const { data: room } = await supabase
+        .from("rooms")
+        .select("*")
+        .eq("id", roomId!)
+        .maybeSingle();
 
-    // Re-check availability at write time (the client list can be stale).
-    const [{ data: bookings }, { data: blocks }, closures] = await Promise.all([
-      supabase
-        .from("bookings")
-        .select("room_id, check_in, check_out, status")
-        .eq("room_id", roomId)
-        .in("status", BLOCKING_STATUSES)
-        .lt("check_in", to)
-        .gt("check_out", from),
-      supabase
-        .from("availability_blocks")
-        .select("room_id, date, status")
-        .eq("room_id", roomId)
-        .neq("status", "available")
-        .gte("date", from)
-        .lt("date", to),
-      fetchVillaClosures(supabase, villa.id, from, to),
-    ]);
+      roomRow = room as RoomRow | null;
+      const { data: villaData } = roomRow
+        ? await supabase
+            .from("villas")
+            .select("id, slug, name, status")
+            .eq("id", roomRow.villa_id)
+            .maybeSingle()
+        : { data: null };
+      villa = villaData as Pick<VillaRow, "id" | "slug" | "name" | "status"> | null;
+      if (!roomRow || !villa || villa.slug !== gateSlug || villa.status !== "published") {
+        return NextResponse.json({ error: "Room not found" }, { status: 404 });
+      }
 
-    if (!isRoomAvailable(roomId, from, to, bookings || [], blocks || [], closures)) {
-      return NextResponse.json(
-        { error: "That room was just taken for those dates. Pick another window." },
-        { status: 409 }
-      );
+      // Re-check availability at write time (the client list can be stale).
+      const [{ data: bookings }, { data: blocks }, closures] = await Promise.all([
+        supabase
+          .from("bookings")
+          .select("room_id, check_in, check_out, status")
+          .eq("room_id", roomId!)
+          .in("status", BLOCKING_STATUSES)
+          .lt("check_in", to)
+          .gt("check_out", from),
+        supabase
+          .from("availability_blocks")
+          .select("room_id, date, status")
+          .eq("room_id", roomId!)
+          .neq("status", "available")
+          .gte("date", from)
+          .lt("date", to),
+        fetchVillaClosures(supabase, villa.id, from, to),
+      ]);
+
+      if (!isRoomAvailable(roomId!, from, to, bookings || [], blocks || [], closures)) {
+        return NextResponse.json(
+          { error: "That room was just taken for those dates. Pick another window." },
+          { status: 409 }
+        );
+      }
     }
 
     // bookings.lead_id is NOT NULL — make sure this member has a lead row.
@@ -142,10 +174,12 @@ export async function POST(req: NextRequest) {
         guest_names: companion ? [companion] : [],
         companion_name: companion,
         event_id: body.eventId || null,
-        status: "requested",
+        status: isWaitlist ? "waitlisted" : "requested",
         total_price: roomRow.base_price_per_night * nights,
         currency: roomRow.currency,
-        special_requests: body.notes?.trim() || null,
+        special_requests: isWaitlist
+          ? `[Waiting list — any room] ${body.notes?.trim() || ""}`.trim()
+          : body.notes?.trim() || null,
       })
       .select()
       .single();
@@ -156,9 +190,13 @@ export async function POST(req: NextRequest) {
       try {
         await sendNotificationEmail({
           to: config.adminEmail,
-          subject: `Window request: ${villa.name} · ${from} → ${to}`,
-          heading: "New window request",
-          body: `${user.email} requested ${roomRow.name} at ${villa.name}, ${from} → ${to}${companion ? `, with ${companion}` : ""}. Review it in the operator console.`,
+          subject: isWaitlist
+            ? `Waiting list: ${villa.name} · ${from} → ${to}`
+            : `Window request: ${villa.name} · ${from} → ${to}`,
+          heading: isWaitlist ? "New waiting-list entry" : "New window request",
+          body: isWaitlist
+            ? `${user.email} joined the waiting list for ${villa.name}, ${from} → ${to} (any room). They get the first call if those nights open.`
+            : `${user.email} requested ${roomRow.name} at ${villa.name}, ${from} → ${to}${companion ? `, with ${companion}` : ""}. Review it in the operator console.`,
           ctaHref: config.adminUrl || undefined,
           ctaLabel: "Open console",
         });

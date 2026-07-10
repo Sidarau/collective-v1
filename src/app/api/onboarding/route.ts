@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
         whatsapp: body.whatsapp || null,
         allergies: body.allergies || null,
         dietary: body.dietary || null,
+        birthday: /^\d{4}-\d{2}-\d{2}$/.test(body.birthday || "") ? body.birthday : null,
         onboarding_completed: true,
         visibility: "members",
       },
@@ -67,6 +68,7 @@ export async function POST(req: NextRequest) {
             [body.allergies, body.dietary].filter(Boolean).join(" · ") || null,
           phone: body.phone || null,
           whatsapp: body.whatsapp || null,
+          birthday: /^\d{4}-\d{2}-\d{2}$/.test(body.birthday || "") ? body.birthday : null,
         })
         .eq("id", user.leadId);
     }

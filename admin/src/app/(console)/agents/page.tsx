@@ -206,11 +206,14 @@ export default async function AgentsPage({
             </code>
             <p className="mt-3 text-[12px] leading-relaxed text-muted">
               Read: <code>kb_tree</code> · <code>kb_get</code> · <code>kb_search</code> ·{" "}
-              <code>leads_search</code> · <code>operations_report</code>
+              <code>leads_search</code> · <code>operations_report</code> ·{" "}
+              <code>referral_link_list</code> · <code>closure_list</code>
               <br />
               Write: <code>kb_upsert</code> · <code>event_upsert</code> · <code>gate_update</code> ·{" "}
               <code>room_update</code> · <code>application_set_status</code> ·{" "}
-              <code>lead_update_status</code>
+              <code>lead_update_status</code> · <code>referral_link_create</code> ·{" "}
+              <code>referral_link_set</code> · <code>closure_create</code> ·{" "}
+              <code>closure_delete</code>
               <br />
               Writes go live without a redeploy and are audited under your token. Approving
               applications stays console-only.

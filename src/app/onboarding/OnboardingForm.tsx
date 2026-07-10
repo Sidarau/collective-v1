@@ -14,6 +14,7 @@ interface Initial {
   whatsapp: string;
   allergies: string;
   dietary: string;
+  birthday: string;
 }
 
 export default function OnboardingForm({ initial }: { initial: Initial }) {
@@ -101,6 +102,17 @@ export default function OnboardingForm({ initial }: { initial: Initial }) {
           <label className="tag">WhatsApp</label>
           <input className="field" type="tel" value={form.whatsapp} onChange={set("whatsapp")} />
         </div>
+      </div>
+      <div className="mt-4">
+        <label className="tag">Birthday</label>
+        <input
+          className="field"
+          type="date"
+          max={new Date().toISOString().slice(0, 10)}
+          value={form.birthday}
+          onChange={set("birthday")}
+        />
+        <p className="faint mt-1.5 text-[11.5px]">Private — the house likes to mark it.</p>
       </div>
       <p className="faint mt-2 text-[11.5px] leading-relaxed">
         Add at least one. Email, password, phone, and WhatsApp stay private; only your

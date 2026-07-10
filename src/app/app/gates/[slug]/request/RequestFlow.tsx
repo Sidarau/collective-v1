@@ -47,6 +47,7 @@ export default function RequestFlow({ gate, initialFrom, initialTo, preferredRoo
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [waitlisted, setWaitlisted] = useState(false);
 
   const loadAvailability = useCallback(async (f: string, t: string) => {
     setChecking(true);
@@ -87,6 +88,36 @@ export default function RequestFlow({ gate, initialFrom, initialTo, preferredRoo
     return () => window.clearTimeout(timer);
   }, [rooms, preferredRoom, roomId]);
 
+  async function joinWaitlist() {
+    if (!from || !to) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gateSlug: gate.slug,
+          from,
+          to,
+          waitlist: true,
+          notes: notes.trim() || null,
+        }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setError(data.error || "Could not join the waiting list.");
+        return;
+      }
+      setWaitlisted(true);
+      setDone(true);
+    } catch {
+      setError("Connection issue — try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function submit() {
     if (!from || !to || !roomId) return;
     if (withCompanion && !companionName.trim()) {
@@ -125,13 +156,14 @@ export default function RequestFlow({ gate, initialFrom, initialTo, preferredRoo
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center px-6 text-center">
         <div className="glass-strong reveal w-full max-w-sm p-8">
-          <span className="chip chip-olive">Request sent</span>
+          <span className="chip chip-olive">{waitlisted ? "On the waiting list" : "Request sent"}</span>
           <h1 className="display mt-4 text-[28px] leading-tight text-ink">
-            The host has your window.
+            {waitlisted ? "You're on the list." : "The host has your window."}
           </h1>
           <p className="muted mt-3 text-[14px] leading-relaxed">
-            {fmtDay(from!)} → {fmtDay(to!)} at {gate.name}. You&apos;ll hear back once
-            it&apos;s confirmed — usually within a day.
+            {waitlisted
+              ? `${fmtDay(from!)} → ${fmtDay(to!)} at ${gate.name}. If those nights open, you're the first call.`
+              : `${fmtDay(from!)} → ${fmtDay(to!)} at ${gate.name}. You'll hear back once it's confirmed — usually within a day.`}
           </p>
           <Link href="/app" className="btn-champagne tap mt-6 inline-flex h-12 items-center px-8 text-[14px]">
             Back home
@@ -184,8 +216,17 @@ export default function RequestFlow({ gate, initialFrom, initialTo, preferredRoo
           <div className="glass reveal p-5">
             <p className="text-[15px] font-semibold text-ink">The house is full for those dates.</p>
             <p className="muted mt-1 text-[13px]">
-              Try shifting your window a few days — or ask the concierge about the waitlist.
+              Shift your window a few days — or put your name down and the host calls you first
+              if a room opens.
             </p>
+            <button
+              type="button"
+              onClick={joinWaitlist}
+              disabled={submitting}
+              className="btn-champagne tap mt-4 h-12 w-full text-[14px]"
+            >
+              {submitting ? "Sending…" : "Join the waiting list"}
+            </button>
           </div>
         )}
 

@@ -29,6 +29,7 @@ export default async function ProfilePage() {
             contribution: profile?.contribution || "",
             allergies: profile?.allergies || "",
             dietary: profile?.dietary || "",
+            birthday: profile?.birthday || "",
             phone: profile?.phone || "",
             whatsapp: profile?.whatsapp || "",
           }}

@@ -1,6 +1,6 @@
 const GREEN = new Set(["approved", "confirmed", "paid", "published", "completed", "member", "admin", "operator"]);
 const RED = new Set(["rejected", "cancelled", "archived", "declined"]);
-const GOLD = new Set(["submitted", "screening", "requested", "waitlist", "draft", "lead", "interested"]);
+const GOLD = new Set(["submitted", "screening", "requested", "waitlist", "waitlisted", "draft", "lead", "interested"]);
 
 export default function StatusChip({ value }: { value: string | null | undefined }) {
   const label = value || "unknown";

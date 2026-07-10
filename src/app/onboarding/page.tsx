@@ -38,6 +38,7 @@ export default async function OnboardingPage() {
     whatsapp: profile?.whatsapp || lead?.whatsapp || "",
     allergies: profile?.allergies || "",
     dietary: profile?.dietary || lead?.dietary_restrictions || "",
+    birthday: profile?.birthday || application?.birthday || "",
   };
 
   return (

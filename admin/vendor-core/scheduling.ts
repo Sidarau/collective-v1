@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "./supabase";
+import { fetchGoogleBusy } from "./google-calendar";
 import type { ScreeningCallRow, ScreeningWindowRow } from "./database.types";
 
 /**
@@ -137,23 +138,37 @@ export function isSlotOpen(query: SlotQuery, startsAtIso: string): OpenSlot | nu
   return computeOpenSlots(query).find((s) => s.startsAt === startsAtIso) || null;
 }
 
-/** Windows + blocking calls straight from the database. */
+/**
+ * Windows + blocking calls straight from the database, plus each connected
+ * admin's Google Calendar busy periods (two-way sync, pull direction) folded
+ * in as synthetic blocking calls so private appointments block the picker.
+ */
 export async function loadSlotInputs(kind: "member" | "vendor") {
   const supabase = getSupabaseAdmin();
+  const horizonStart = new Date(Date.now() - 60 * 60_000).toISOString();
   const horizonEnd = new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString();
-  const [{ data: windows }, { data: calls }] = await Promise.all([
+  const [{ data: windows }, { data: calls }, googleBusy] = await Promise.all([
     supabase.from("screening_windows").select("*").eq("active", true),
     supabase
       .from("screening_calls")
       .select("scheduled_at, duration_minutes, status")
       .eq("status", "scheduled")
-      .gte("scheduled_at", new Date(Date.now() - 60 * 60_000).toISOString())
+      .gte("scheduled_at", horizonStart)
       .lte("scheduled_at", horizonEnd),
+    fetchGoogleBusy(horizonStart, horizonEnd),
   ]);
+  const busyAsCalls = googleBusy.map((b) => ({
+    scheduled_at: b.start,
+    duration_minutes: Math.max(1, Math.ceil((Date.parse(b.end) - Date.parse(b.start)) / 60_000)),
+    status: "scheduled" as const,
+  }));
   return {
     kind,
     windows: (windows as ScreeningWindowRow[]) || [],
-    calls: (calls as Pick<ScreeningCallRow, "scheduled_at" | "duration_minutes" | "status">[]) || [],
+    calls: [
+      ...((calls as Pick<ScreeningCallRow, "scheduled_at" | "duration_minutes" | "status">[]) || []),
+      ...busyAsCalls,
+    ],
   };
 }
 

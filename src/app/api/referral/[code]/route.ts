@@ -45,6 +45,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ code: stri
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       return NextResponse.json({ error: "That email doesn't look right." }, { status: 400 });
     }
+    const birthday = /^\d{4}-\d{2}-\d{2}$/.test(clean(body.birthday)) ? clean(body.birthday) : null;
 
     const supabase = getSupabaseAdmin();
 
@@ -87,6 +88,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ code: stri
           last_name: lastName,
           phone: clean(body.phone) || null,
           whatsapp: clean(body.whatsapp) || null,
+          birthday,
           source: `referral_link:${link.code}`,
           status: "new",
         },
@@ -124,6 +126,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ code: stri
         instagram: clean(body.instagram) || null,
         linkedin: clean(body.linkedin) || null,
         preferred_window: clean(body.preferredWindow) || null,
+        birthday,
         status: "submitted",
         screening_token: screeningToken,
         referral_link_id: link.id,

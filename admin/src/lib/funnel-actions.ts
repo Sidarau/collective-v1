@@ -8,6 +8,7 @@ import { writeAudit } from "@core/audit";
 import { sendMagicLinkEmail, sendTrackedEmail } from "@core/email";
 import { mintMagicLink } from "@core/invites";
 import { config } from "@core/config";
+import { deleteGoogleConnection, deleteGoogleEvent } from "@core/google-calendar";
 import { getSettingValue, setSetting } from "@core/settings";
 import type {
   ReferralLinkKind,
@@ -319,6 +320,11 @@ export async function setCallStatusAction(formData: FormData) {
     .update({ status, notes: str(formData, "note") || call.notes })
     .eq("id", id);
 
+  // Cancelled calls disappear from connected Google calendars too.
+  if (status === "cancelled") {
+    await deleteGoogleEvent(call.google_event_ids || null);
+  }
+
   await writeAudit({
     actorId: admin.id,
     actorEmail: admin.email,
@@ -604,6 +610,23 @@ export async function rotateCalendarFeedAction() {
     entityType: "user",
     entityId: admin.id,
     summary: "Rotated their calendar feed link (old URL is dead)",
+  });
+  revalidatePath("/schedule");
+  backTo("/schedule");
+}
+
+/** Sever the two-way Google Calendar link for the signed-in admin. */
+export async function disconnectGoogleAction() {
+  const admin = await getAdminUser();
+  if (!admin) backTo("/login");
+  await deleteGoogleConnection(admin.id);
+  await writeAudit({
+    actorId: admin.id,
+    actorEmail: admin.email,
+    action: "gcal.disconnected",
+    entityType: "user",
+    entityId: admin.id,
+    summary: "Disconnected Google Calendar two-way sync",
   });
   revalidatePath("/schedule");
   backTo("/schedule");

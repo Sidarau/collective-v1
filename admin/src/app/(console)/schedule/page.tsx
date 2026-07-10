@@ -5,12 +5,14 @@ import { listCalls, listScreeningWindows } from "@/lib/funnel-data";
 import {
   addScreeningWindowAction,
   deleteScreeningWindowAction,
+  disconnectGoogleAction,
   ensureCalendarFeedAction,
   rotateCalendarFeedAction,
   setCallStatusAction,
   toggleScreeningWindowAction,
 } from "@/lib/funnel-actions";
 import { getAdminUser } from "@/lib/auth";
+import { getGoogleConnection, isGoogleSyncConfigured } from "@core/google-calendar";
 import { getSettingValue } from "@core/settings";
 import { fmtMinute } from "@core/scheduling";
 import { googleCalendarUrl } from "@core/ics";
@@ -48,14 +50,16 @@ export default async function SchedulePage({
 }) {
   const { error } = await searchParams;
   const admin = (await getAdminUser())!;
-  const [windows, upcoming, past, feedToken] = await Promise.all([
+  const [windows, upcoming, past, feedToken, googleConnection] = await Promise.all([
     listScreeningWindows(),
     listCalls({ from: oneHourAgoIso(), statuses: ["scheduled"] }),
     listCalls({ statuses: ["completed", "no_show", "cancelled"], limit: 15 }).then((rows) =>
       rows.reverse()
     ),
     getSettingValue<string>(`calendar_feed:${admin.id}`),
+    getGoogleConnection(admin.id),
   ]);
+  const googleReady = isGoogleSyncConfigured();
 
   return (
     <>
@@ -234,9 +238,50 @@ export default async function SchedulePage({
             </p>
           </section>
 
-          {/* Google Calendar connector */}
+          {/* Two-way Google Calendar sync */}
           <section className="panel p-5">
-            <p className="label">Your Google Calendar</p>
+            <p className="label">Google Calendar — two-way sync</p>
+            {!googleReady ? (
+              <p className="text-[12.5px] leading-relaxed text-muted">
+                Needs a one-time setup: create an OAuth client (Web) in Google Cloud, add{" "}
+                <span className="text-ink">/api/google/oauth/callback</span> as the redirect URI,
+                and set <span className="text-ink">GOOGLE_OAUTH_CLIENT_ID</span> /{" "}
+                <span className="text-ink">GOOGLE_OAUTH_CLIENT_SECRET</span> on both apps. Until
+                then, use the read-only feed below.
+              </p>
+            ) : googleConnection ? (
+              <>
+                <p className="text-[12.5px] leading-relaxed text-muted">
+                  Connected as{" "}
+                  <span className="text-ink">{googleConnection.email || "your Google account"}</span>.
+                  New screening calls and interviews land in your calendar the moment they are
+                  booked, and your private busy times automatically block the public slot picker.
+                </p>
+                <form action={disconnectGoogleAction} className="mt-3">
+                  <button type="submit" className="btn btn-red">
+                    Disconnect
+                  </button>
+                </form>
+              </>
+            ) : (
+              <>
+                <p className="text-[12.5px] leading-relaxed text-muted">
+                  Connect once and it works both ways: bookings push straight into your Google
+                  Calendar, and anything already in your calendar blocks those minutes for
+                  prospects — no double bookings.
+                </p>
+                {/* Plain <a>: OAuth must hit the route handler with a full page load. */}
+                {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+                <a href="/api/google/oauth/start" className="btn btn-gold mt-3 inline-flex">
+                  Connect Google Calendar
+                </a>
+              </>
+            )}
+          </section>
+
+          {/* Read-only ICS feed (works without OAuth) */}
+          <section className="panel p-5">
+            <p className="label">Read-only feed</p>
             {feedToken ? (
               <>
                 <p className="text-[12.5px] leading-relaxed text-muted">

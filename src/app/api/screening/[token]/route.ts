@@ -5,6 +5,7 @@ import { writeAudit } from "@core/audit";
 import { isToggleEnabled } from "@core/settings";
 import { config } from "@core/config";
 import { computeOpenSlots, isSlotOpen, loadSlotInputs } from "@core/scheduling";
+import { deleteGoogleEvent, pushGoogleEvent } from "@core/google-calendar";
 import { googleCalendarUrl } from "@core/ics";
 import { fmtCallTime, resolveScreeningToken } from "@/lib/screening";
 
@@ -45,12 +46,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
 
     const supabase = getSupabaseAdmin();
 
-    // Rescheduling replaces the previous call.
+    // Rescheduling replaces the previous call (and its synced Google events).
     if (context.existingCall) {
       await supabase
         .from("screening_calls")
         .update({ status: "cancelled", notes: "Rescheduled by prospect" })
         .eq("id", context.existingCall.id);
+      await deleteGoogleEvent(context.existingCall.google_event_ids);
     }
 
     const { data: call, error } = await supabase
@@ -69,6 +71,27 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
       .select("id")
       .single();
     if (error || !call) throw new Error(error?.message || "Booking failed");
+
+    // Two-way sync, push direction: land the call in every connected admin's
+    // Google Calendar. Fail-soft — a Google outage never blocks the booking.
+    try {
+      const eventIds = await pushGoogleEvent({
+        summary: `${config.brandName} — ${context.kind === "member" ? "screening" : "interview"}: ${context.firstName}`,
+        description: `${context.email}\nBooked via the scheduling link.`,
+        startIso: slot.startsAt,
+        endIso: new Date(
+          new Date(slot.startsAt).getTime() + slot.durationMinutes * 60_000
+        ).toISOString(),
+      });
+      if (Object.keys(eventIds).length) {
+        await supabase
+          .from("screening_calls")
+          .update({ google_event_ids: eventIds })
+          .eq("id", call.id);
+      }
+    } catch (err) {
+      console.error("Google Calendar push failed:", err);
+    }
 
     // Funnel stage follows the booking.
     if (context.applicationId) {

@@ -5,6 +5,7 @@ import { buildKbTree, getKbNode, listKbNodes, searchKb, upsertKbNode } from "@co
 import { writeAudit } from "@core/audit";
 import { getSupabaseAdmin } from "@core/supabase";
 import { DEFAULT_TIMEZONE, zonedToUtc } from "@core/scheduling";
+import { config } from "@core/config";
 import type { CrmEntityType, Json } from "@core/database.types";
 import { agentContext, resolveAgent } from "@/lib/agent-auth";
 
@@ -597,6 +598,275 @@ const handler = createMcpHandler(
         }
         await auditAgent("agent.lead_status", "lead", lead.id, `${lead.first_name} ${lead.last_name} (${normalized}): ${lead.status} → ${status}`);
         return ok(`${normalized} → ${status}`);
+      }
+    );
+
+    server.registerTool(
+      "referral_link_create",
+      {
+        title: "Create a referral link (hosted application form)",
+        description:
+          "Mint a new referral door: a public application form at /r/<code> (member funnel) or /v/<code> (vendor hiring). Optional custom code, usage cap, and expiry. Returns the shareable URL.",
+        inputSchema: {
+          kind: z.enum(["member", "vendor"]),
+          label: z.string().min(2).describe("Internal name, e.g. 'Don's July dinner guests'"),
+          code: z.string().optional().describe("Custom URL code; defaults to a slug of the label"),
+          note: z.string().optional(),
+          maxUses: z.number().int().positive().optional(),
+          expiresAt: z.string().optional().describe("ISO date/datetime when the door closes"),
+        },
+      },
+      async (input) => {
+        const supabase = getSupabaseAdmin();
+        const base = slugify(input.code || input.label) || "door";
+        let code = base;
+        const { data: taken } = await supabase
+          .from("referral_links")
+          .select("code")
+          .like("code", `${base}%`);
+        const existing = new Set(((taken as { code: string }[]) || []).map((r) => r.code));
+        for (let i = 2; existing.has(code); i++) code = `${base}-${i}`;
+
+        const expiresAt = input.expiresAt ? parseWhen(input.expiresAt) || null : null;
+        const who = agentContext.getStore();
+        const { data: link, error } = await supabase
+          .from("referral_links")
+          .insert({
+            code,
+            kind: input.kind,
+            label: input.label,
+            note: input.note || null,
+            max_uses: input.maxUses ?? null,
+            expires_at: expiresAt,
+            active: true,
+            created_by: who?.adminId || null,
+          })
+          .select("id, code")
+          .single();
+        if (error || !link) return err(error?.message || "Could not create the link");
+
+        const url = `${config.baseUrl}/${input.kind === "member" ? "r" : "v"}/${link.code}`;
+        await auditAgent("agent.referral_link_create", "referral_link", link.id, `created ${input.kind} door "${input.label}" → ${url}`);
+        return ok(`Created "${input.label}" — share ${url}${expiresAt ? ` (closes ${expiresAt.slice(0, 10)})` : ""}${input.maxUses ? ` · max ${input.maxUses} uses` : ""}`);
+      }
+    );
+
+    server.registerTool(
+      "referral_link_set",
+      {
+        title: "Open, close, or edit a referral link",
+        description:
+          "Update a referral door by code: activate/deactivate, rename, change note, usage cap, or expiry.",
+        inputSchema: {
+          code: z.string(),
+          active: z.boolean().optional(),
+          label: z.string().optional(),
+          note: z.string().optional(),
+          maxUses: z.number().int().positive().nullable().optional(),
+          expiresAt: z.string().nullable().optional().describe("ISO date, or null to remove expiry"),
+        },
+      },
+      async (input) => {
+        const supabase = getSupabaseAdmin();
+        const code = input.code.toLowerCase().trim();
+        const { data: link } = await supabase
+          .from("referral_links")
+          .select("id, code, kind, label, active")
+          .eq("code", code)
+          .maybeSingle();
+        if (!link) return err(`No referral link with code "${code}"`);
+
+        const patch: Record<string, unknown> = {};
+        if (input.active !== undefined) patch.active = input.active;
+        if (input.label !== undefined) patch.label = input.label;
+        if (input.note !== undefined) patch.note = input.note;
+        if (input.maxUses !== undefined) patch.max_uses = input.maxUses;
+        if (input.expiresAt !== undefined)
+          patch.expires_at = input.expiresAt ? parseWhen(input.expiresAt) : null;
+        if (Object.keys(patch).length === 0) return err("Nothing to update");
+
+        const { error } = await supabase.from("referral_links").update(patch).eq("id", link.id);
+        if (error) return err(error.message);
+        await auditAgent("agent.referral_link_set", "referral_link", link.id, `updated door "${link.label}" (${Object.keys(patch).join(", ")})`);
+        return ok(`Updated ${code}: ${Object.keys(patch).join(", ")}`);
+      }
+    );
+
+    server.registerTool(
+      "referral_link_list",
+      {
+        title: "List referral links",
+        description: "All referral doors with URLs, status, and use counts.",
+        inputSchema: {
+          kind: z.enum(["member", "vendor"]).optional(),
+        },
+      },
+      async (input) => {
+        const supabase = getSupabaseAdmin();
+        let query = supabase
+          .from("referral_links")
+          .select("code, kind, label, active, use_count, max_uses, expires_at")
+          .order("created_at", { ascending: false })
+          .limit(50);
+        if (input.kind) query = query.eq("kind", input.kind);
+        const { data } = await query;
+        const rows = (data as {
+          code: string; kind: string; label: string; active: boolean;
+          use_count: number; max_uses: number | null; expires_at: string | null;
+        }[]) || [];
+        if (!rows.length) return ok("No referral links yet — create one with referral_link_create.");
+        const lines = rows.map((r) => {
+          const url = `${config.baseUrl}/${r.kind === "member" ? "r" : "v"}/${r.code}`;
+          return `${r.active ? "🟢" : "⚫"} ${r.label} — ${url} · ${r.use_count}${r.max_uses ? `/${r.max_uses}` : ""} uses${r.expires_at ? ` · closes ${r.expires_at.slice(0, 10)}` : ""}`;
+        });
+        return ok(lines.join("\n"));
+      }
+    );
+
+    server.registerTool(
+      "closure_create",
+      {
+        title: "Close a gate or room for a period",
+        description:
+          "Block availability: whole gate (omit roomSlug) or one room, from startsOn to endsOn inclusive. Omit endsOn to close indefinitely. Members immediately stop seeing those dates as bookable.",
+        inputSchema: {
+          gateSlug: z.string(),
+          roomSlug: z.string().optional(),
+          startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          reason: z.string().optional(),
+        },
+      },
+      async (input) => {
+        const supabase = getSupabaseAdmin();
+        const { data: gate } = await supabase
+          .from("villas")
+          .select("id, name")
+          .eq("slug", input.gateSlug)
+          .maybeSingle();
+        if (!gate) return err(`No gate "${input.gateSlug}"`);
+        if (input.endsOn && input.endsOn < input.startsOn) return err("endsOn is before startsOn");
+
+        let roomId: string | null = null;
+        let roomName = "";
+        if (input.roomSlug) {
+          const { data: room } = await supabase
+            .from("rooms")
+            .select("id, name")
+            .eq("villa_id", gate.id)
+            .eq("slug", input.roomSlug)
+            .maybeSingle();
+          if (!room) return err(`No room "${input.roomSlug}" at that gate`);
+          roomId = room.id;
+          roomName = room.name;
+        }
+
+        const who = agentContext.getStore();
+        const { data: closure, error } = await supabase
+          .from("closure_periods")
+          .insert({
+            villa_id: gate.id,
+            room_id: roomId,
+            starts_on: input.startsOn,
+            ends_on: input.endsOn || null,
+            reason: input.reason || null,
+            created_by: who?.adminId || null,
+          })
+          .select("id")
+          .single();
+        if (error || !closure) return err(error?.message || "Could not create the closure");
+
+        const scope = roomId ? `room ${roomName}` : `all of ${gate.name}`;
+        const until = input.endsOn || "further notice";
+        await auditAgent("agent.closure_create", roomId ? "room" : "villa", roomId || gate.id, `closed ${scope}: ${input.startsOn} → ${until}${input.reason ? ` (${input.reason})` : ""}`, { closure_id: closure.id });
+        return ok(`Closed ${scope} from ${input.startsOn} until ${until}. Closure id: ${closure.id}`);
+      }
+    );
+
+    server.registerTool(
+      "closure_list",
+      {
+        title: "List closures",
+        description: "Current and upcoming closure periods (gate-wide and per-room), with ids for closure_delete.",
+        inputSchema: {
+          gateSlug: z.string().optional(),
+        },
+      },
+      async (input) => {
+        const supabase = getSupabaseAdmin();
+        const today = new Date().toISOString().slice(0, 10);
+        let query = supabase
+          .from("closure_periods")
+          .select("id, villa_id, room_id, starts_on, ends_on, reason")
+          .or(`ends_on.is.null,ends_on.gte.${today}`)
+          .order("starts_on", { ascending: true })
+          .limit(60);
+        if (input.gateSlug) {
+          const { data: gate } = await supabase
+            .from("villas")
+            .select("id")
+            .eq("slug", input.gateSlug)
+            .maybeSingle();
+          if (!gate) return err(`No gate "${input.gateSlug}"`);
+          query = query.eq("villa_id", gate.id);
+        }
+        const { data } = await query;
+        const rows = (data as {
+          id: string; villa_id: string | null; room_id: string | null;
+          starts_on: string; ends_on: string | null; reason: string | null;
+        }[]) || [];
+        if (!rows.length) return ok("No active or upcoming closures.");
+
+        const roomIds = rows.map((r) => r.room_id).filter((x): x is string => !!x);
+        const villaIds = rows.map((r) => r.villa_id).filter((x): x is string => !!x);
+        const [{ data: rooms }, { data: villas }] = await Promise.all([
+          roomIds.length
+            ? supabase.from("rooms").select("id, name").in("id", roomIds)
+            : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+          villaIds.length
+            ? supabase.from("villas").select("id, name").in("id", villaIds)
+            : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+        ]);
+        const roomName = new Map(((rooms as { id: string; name: string }[]) || []).map((r) => [r.id, r.name]));
+        const villaName = new Map(((villas as { id: string; name: string }[]) || []).map((v) => [v.id, v.name]));
+
+        const lines = rows.map((r) => {
+          const scope = r.room_id
+            ? `${roomName.get(r.room_id) || "room"} @ ${villaName.get(r.villa_id || "") || "gate"}`
+            : `ALL of ${villaName.get(r.villa_id || "") || "gate"}`;
+          return `${scope}: ${r.starts_on} → ${r.ends_on || "∞"}${r.reason ? ` (${r.reason})` : ""} · id ${r.id}`;
+        });
+        return ok(lines.join("\n"));
+      }
+    );
+
+    server.registerTool(
+      "closure_delete",
+      {
+        title: "Reopen a closed period",
+        description: "Delete a closure by id (get ids from closure_list). Availability opens back up immediately.",
+        inputSchema: {
+          id: z.string().uuid(),
+        },
+      },
+      async ({ id }) => {
+        const supabase = getSupabaseAdmin();
+        const { data: closure } = await supabase
+          .from("closure_periods")
+          .select("id, villa_id, room_id, starts_on, ends_on")
+          .eq("id", id)
+          .maybeSingle();
+        if (!closure) return err("Closure not found");
+
+        const { error } = await supabase.from("closure_periods").delete().eq("id", id);
+        if (error) return err(error.message);
+        await auditAgent(
+          "agent.closure_delete",
+          closure.room_id ? "room" : "villa",
+          closure.room_id || closure.villa_id,
+          `reopened ${closure.starts_on} → ${closure.ends_on || "∞"} (closure ${id})`
+        );
+        return ok(`Reopened — closure ${id} deleted.`);
       }
     );
   },
