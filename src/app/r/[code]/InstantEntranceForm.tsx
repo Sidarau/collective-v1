@@ -93,11 +93,11 @@ export default function InstantEntranceForm({ code }: { code: string }) {
       />
 
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <div>
+        <div className="min-w-0">
           <label className="tag">Phone (optional)</label>
           <input className="field" type="tel" autoComplete="tel" value={form.phone} onChange={set("phone")} />
         </div>
-        <div>
+        <div className="min-w-0">
           <label className="tag">Birthday (optional)</label>
           <input
             className="field"
