@@ -92,7 +92,7 @@ export default function InstantEntranceForm({ code }: { code: string }) {
         className="absolute -left-[9999px] h-0 w-0 opacity-0"
       />
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="min-w-0">
           <label className="tag">Phone (optional)</label>
           <input className="field" type="tel" autoComplete="tel" value={form.phone} onChange={set("phone")} />
