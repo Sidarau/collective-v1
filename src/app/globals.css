@@ -163,6 +163,19 @@ body {
   background: rgba(255, 255, 255, 0.1);
 }
 
+/* iOS Safari lets a native date control paint wider than its CSS box. Make
+   this public referral field a fully sized, styled control while retaining
+   the input's native date semantics and picker behavior. */
+.safari-date-field {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 textarea.field {
   min-height: 104px;
   resize: vertical;

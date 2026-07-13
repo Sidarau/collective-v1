@@ -100,7 +100,7 @@ export default function InstantEntranceForm({ code }: { code: string }) {
         <div className="min-w-0">
           <label className="tag">Birthday (optional)</label>
           <input
-            className="field"
+            className="field safari-date-field"
             type="date"
             max={new Date().toISOString().slice(0, 10)}
             value={form.birthday}
