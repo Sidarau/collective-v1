@@ -1,249 +1,183 @@
 import PageHeader from "@/components/PageHeader";
 import ErrorBanner from "@/components/ErrorBanner";
 import CopyButton from "@/components/CopyButton";
-import { listOpenPhoneInvites, listReferralLinks } from "@/lib/funnel-data";
-import {
-  createPhoneInviteAction,
-  createReferralLinkAction,
-  createReturningMemberInviteAction,
-  expirePhoneInviteAction,
-  toggleReferralLinkAction,
-} from "@/lib/funnel-actions";
-import { fmtDate } from "@/lib/format";
+import LabelsInput from "@/components/LabelsInput";
+import { listLabelsInUse, listReferralLinks } from "@/lib/funnel-data";
+import { createReferralLinkAction, toggleReferralLinkAction } from "@/lib/funnel-actions";
+import { doorPath, fmtDate } from "@/lib/format";
+import { LABEL_SUGGESTIONS, mergeLabels } from "@core/labels";
 import { config } from "@core/config";
 
 export const dynamic = "force-dynamic";
 
-const WA_COPY: Record<string, string> = {
-  member_returning:
-    "Your entrance to the Collective is ready — no forms, no call. Claim it here:",
-  member_new: "You've been vouched for at the Collective. Introduce yourself here:",
+const KIND_COPY: Record<string, { label: string; chip: string; blurb: string }> = {
+  member: {
+    label: "Member — application + host call",
+    chip: "chip-gold",
+    blurb: "Introduction form, then fifteen minutes with Dominik.",
+  },
+  instant_member: {
+    label: "Instant member — no screening",
+    chip: "chip-green",
+    blurb: "Account opens on the spot. For investor decks, QR cards, people you already trust.",
+  },
+  vendor: { label: "Vendor — hiring funnel", chip: "", blurb: "Vendor application and interview." },
+  staff: { label: "Staff — hiring funnel", chip: "", blurb: "Staff application and interview." },
 };
 
+/**
+ * One door system: every entrance is a link. Kind picks the flow
+ * (application + screening, instant account, or hiring), labels stamp the
+ * CRM, max uses + expiry bound the exposure. QR the URL anywhere.
+ */
 export default async function ReferralsPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
-  const [links, phoneInvites] = await Promise.all([listReferralLinks(), listOpenPhoneInvites()]);
+  const [links, labelsInUse] = await Promise.all([listReferralLinks(), listLabelsInUse()]);
   const base = config.baseUrl.replace(/\/$/, "");
-  const urlFor = (kind: string, code: string) => `${base}/${kind === "member" ? "r" : "v"}/${code}`;
-  const welcomeUrl = (token: string) => `${base}/welcome/${token}`;
-  const waHref = (invite: { phone: string | null; kind: string; token: string }) =>
-    `https://wa.me/${(invite.phone || "").replace(/\D/g, "")}?text=${encodeURIComponent(
-      `${WA_COPY[invite.kind] || WA_COPY.member_new} ${welcomeUrl(invite.token)}`
-    )}`;
+  const suggestions = mergeLabels(labelsInUse, LABEL_SUGGESTIONS);
 
   return (
     <>
-      <PageHeader title="Referral links" eyebrow="Doors" />
+      <PageHeader title="Doors" eyebrow="Referral links" />
       <ErrorBanner error={error} />
 
-      {/* WhatsApp invites — for people we only have a number for */}
-      <section className="panel mb-5 p-5">
-        <p className="label">Invite by WhatsApp — no email yet</p>
-        <p className="mt-1 text-[12px] text-muted">
-          Creates a one-time entrance link to paste into WhatsApp. Past guests skip the
-          application and Dominik&apos;s call — they leave an email, pick a password, done.
-          Prospects go into the normal introduction.
-        </p>
-        <form action={createPhoneInviteAction} className="mt-4 grid grid-cols-1 items-end gap-3 md:grid-cols-[1.2fr_1fr_1fr_1.4fr_auto]">
-          <div>
-            <label className="label">Phone (international)</label>
-            <input name="phone" type="tel" required className="input" placeholder="+34600123456" />
-          </div>
-          <div>
-            <label className="label">First name</label>
-            <input name="firstName" className="input" />
-          </div>
-          <div>
-            <label className="label">Last name</label>
-            <input name="lastName" className="input" />
-          </div>
-          <div>
-            <label className="label">Type</label>
-            <select name="kind" className="input" defaultValue="member_returning">
-              <option value="member_returning">Past guest — instant member</option>
-              <option value="member_new">Prospect — application flow</option>
-            </select>
-          </div>
-          <button type="submit" className="btn btn-gold">
-            Create link
-          </button>
-        </form>
-
-        {phoneInvites.length > 0 && (
-          <div className="mt-5 space-y-2">
-            {phoneInvites.map((inv) => (
-              <div
-                key={inv.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-line bg-white/[0.03] px-3.5 py-2.5"
-              >
-                <div className="min-w-0">
-                  <p className="text-[13px] font-medium text-ink">
-                    {[inv.first_name, inv.last_name].filter(Boolean).join(" ") || "Unnamed"}{" "}
-                    <span className="text-muted">· {inv.phone}</span>
-                  </p>
-                  <p className="text-[11px] text-faint">
-                    {inv.kind === "member_returning" ? "instant member" : "prospect"} · expires{" "}
-                    {fmtDate(inv.expires_at)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <a href={waHref(inv)} target="_blank" rel="noopener noreferrer" className="btn btn-gold">
-                    Open in WhatsApp
-                  </a>
-                  <CopyButton value={welcomeUrl(inv.token)} label="Copy link" />
-                  <form action={expirePhoneInviteAction}>
-                    <input type="hidden" name="id" value={inv.id} />
-                    <button type="submit" className="btn btn-red">
-                      Expire
-                    </button>
-                  </form>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
       <section className="panel p-5">
-        <p className="label">Fast-track a past guest</p>
+        <p className="label">Open a new door</p>
         <p className="mt-1 text-[12px] text-muted">
-          Creates a member account, sends password setup, and only asks them to complete
-          their member-visible profile. Email, password, phone, and WhatsApp stay private.
+          One link covers every situation: members go through the introduction and
+          Dominik&apos;s call, instant members get an account with no hoops, vendors and
+          staff land in hiring. Labels stick to everyone who enters — you&apos;ll see them
+          across the CRM.
         </p>
-        <form action={createReturningMemberInviteAction} className="mt-4 space-y-3">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <form action={createReferralLinkAction} className="mt-4 space-y-3">
+          <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-[1.3fr_1.2fr_140px_110px]">
             <div>
-              <label className="label">First name</label>
-              <input name="firstName" required className="input" />
+              <label className="label">Name</label>
+              <input name="label" required className="input" placeholder='e.g. "Investor deck" or "Don — WhatsApp"' />
             </div>
             <div>
-              <label className="label">Last name</label>
-              <input name="lastName" required className="input" />
+              <label className="label">Kind</label>
+              <select name="kind" className="input" defaultValue="member">
+                {Object.entries(KIND_COPY).map(([value, k]) => (
+                  <option key={value} value={value}>
+                    {k.label}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="md:col-span-2">
-              <label className="label">Email</label>
-              <input name="email" type="email" required className="input" placeholder="guest@example.com" />
+            <div>
+              <label className="label">Code (optional)</label>
+              <input name="code" className="input" placeholder="auto" />
+            </div>
+            <div>
+              <label className="label">Max uses</label>
+              <input name="maxUses" type="number" min="1" className="input" placeholder="∞" />
             </div>
           </div>
-          <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-[1fr_1fr_2fr_auto]">
+          <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-[1fr_1fr_auto]">
             <div>
-              <label className="label">Phone</label>
-              <input name="phone" type="tel" className="input" />
+              <label className="label">Labels for everyone who enters</label>
+              <LabelsInput name="labels" suggestions={suggestions} />
             </div>
             <div>
-              <label className="label">WhatsApp</label>
-              <input name="whatsapp" type="tel" className="input" />
+              <label className="label">Note (internal)</label>
+              <input name="note" className="input" placeholder="Where this link travels" />
             </div>
-            <div>
-              <label className="label">Admin note</label>
-              <input
-                name="note"
-                className="input"
-                placeholder="Who referred them, prior stay context, anything operators should know"
-              />
-            </div>
-            <button type="submit" className="btn btn-gold">
-              Send setup link
+            <button type="submit" className="btn btn-gold self-end">
+              Open door
             </button>
           </div>
         </form>
-      </section>
-
-      <section className="panel mt-5 p-5">
-        <p className="label">Open a new door</p>
-        <form action={createReferralLinkAction} className="grid grid-cols-1 items-end gap-3 md:grid-cols-[1fr_150px_150px_120px_auto]">
-          <div>
-            <label className="label">Label</label>
-            <input name="label" required className="input" placeholder='e.g. "Don — WhatsApp"' />
-          </div>
-          <div>
-            <label className="label">Kind</label>
-            <select name="kind" className="input">
-              <option value="member">Member</option>
-              <option value="vendor">Vendor / staff</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Code (optional)</label>
-            <input name="code" className="input" placeholder="auto" />
-          </div>
-          <div>
-            <label className="label">Max uses</label>
-            <input name="maxUses" type="number" min="1" className="input" placeholder="∞" />
-          </div>
-          <button type="submit" className="btn btn-gold">
-            Create link
-          </button>
-        </form>
         <p className="mt-3 text-[12px] text-faint">
-          Member doors open the application at /r/&lt;code&gt;; vendor doors at /v/&lt;code&gt;.
-          Share them anywhere — WhatsApp, a card, a story. Close a door any time.
+          Member and instant doors live at /r/&lt;code&gt;; vendor and staff doors at
+          /v/&lt;code&gt;. Share anywhere — WhatsApp, a deck, a QR on a card. Close a door
+          any time; agents can mint these over MCP too.
         </p>
       </section>
 
       <section className="panel mt-5 overflow-hidden">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Door</th>
-              <th>Kind</th>
-              <th>Link</th>
-              <th>Uses</th>
-              <th>Created</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {links.map((link) => (
-              <tr key={link.id} className={link.active ? "" : "opacity-50"}>
-                <td>
-                  <p className="font-medium text-ink">{link.label}</p>
-                  {link.note && <p className="text-xs text-muted">{link.note}</p>}
-                </td>
-                <td>
-                  <span className={`chip ${link.kind === "member" ? "chip-gold" : ""}`}>{link.kind}</span>
-                </td>
-                <td>
-                  <div className="flex items-center gap-2">
-                    <code className="text-[12px] text-muted">/{link.kind === "member" ? "r" : "v"}/{link.code}</code>
-                    <CopyButton value={urlFor(link.kind, link.code)} />
-                  </div>
-                </td>
-                <td>
-                  {link.use_count}
-                  {link.max_uses ? ` / ${link.max_uses}` : ""}
-                </td>
-                <td>{fmtDate(link.created_at)}</td>
-                <td>
-                  <span className={`chip ${link.active ? "chip-green" : "chip-red"}`}>
-                    {link.active ? "open" : "closed"}
-                  </span>
-                </td>
-                <td>
-                  <form action={toggleReferralLinkAction}>
-                    <input type="hidden" name="id" value={link.id} />
-                    <input type="hidden" name="active" value={link.active ? "false" : "true"} />
-                    <button type="submit" className={`btn ${link.active ? "btn-red" : ""}`}>
-                      {link.active ? "Close" : "Reopen"}
-                    </button>
-                  </form>
-                </td>
-              </tr>
-            ))}
-            {links.length === 0 && (
+        <div className="overflow-x-auto">
+          <table className="table">
+            <thead>
               <tr>
-                <td colSpan={7} className="text-muted">
-                  No doors yet — create the first one above.
-                </td>
+                <th>Door</th>
+                <th>Kind</th>
+                <th>Labels</th>
+                <th>Link</th>
+                <th>Uses</th>
+                <th>Created</th>
+                <th>Status</th>
+                <th></th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {links.map((link) => {
+                const kind = KIND_COPY[link.kind] || KIND_COPY.member;
+                const path = doorPath(link.kind, link.code);
+                return (
+                  <tr key={link.id} className={link.active ? "" : "opacity-50"}>
+                    <td>
+                      <p className="font-medium text-ink">{link.label}</p>
+                      {link.note && <p className="text-xs text-muted">{link.note}</p>}
+                    </td>
+                    <td>
+                      <span className={`chip ${kind.chip}`}>{link.kind.replace("_", " ")}</span>
+                    </td>
+                    <td>
+                      {(link.labels || []).length ? (
+                        <div className="flex max-w-[220px] flex-wrap gap-1">
+                          {link.labels.map((label) => (
+                            <span key={label} className="chip">
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-faint">—</span>
+                      )}
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <code className="text-[12px] text-muted">{path}</code>
+                        <CopyButton value={`${base}${path}`} />
+                      </div>
+                    </td>
+                    <td>
+                      {link.use_count}
+                      {link.max_uses ? ` / ${link.max_uses}` : ""}
+                    </td>
+                    <td>{fmtDate(link.created_at)}</td>
+                    <td>
+                      <span className={`chip ${link.active ? "chip-green" : "chip-red"}`}>
+                        {link.active ? "open" : "closed"}
+                      </span>
+                    </td>
+                    <td>
+                      <form action={toggleReferralLinkAction}>
+                        <input type="hidden" name="id" value={link.id} />
+                        <input type="hidden" name="active" value={link.active ? "false" : "true"} />
+                        <button type="submit" className={`btn ${link.active ? "btn-red" : ""}`}>
+                          {link.active ? "Close" : "Reopen"}
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                );
+              })}
+              {links.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="text-muted">
+                    No doors yet — open the first one above.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
     </>
   );

@@ -2,6 +2,7 @@ import "server-only";
 import { getSupabaseAdmin } from "@core/supabase";
 import type {
   ApplicationRow,
+  ReferralLinkKind,
   ReferralLinkRow,
   ScreeningCallRow,
   StaffApplicationRow,
@@ -79,13 +80,13 @@ async function latestScheduledCall(
 /** Active referral link for a public funnel page; null when the door is closed. */
 export async function loadActiveReferralLink(
   code: string,
-  kind: "member" | "vendor"
+  kinds: ReferralLinkKind | ReferralLinkKind[]
 ): Promise<ReferralLinkRow | null> {
   const { data } = await db()
     .from("referral_links")
     .select("*")
     .eq("code", code.toLowerCase())
-    .eq("kind", kind)
+    .in("kind", Array.isArray(kinds) ? kinds : [kinds])
     .eq("active", true)
     .maybeSingle();
   const link = (data as ReferralLinkRow) || null;

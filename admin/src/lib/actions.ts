@@ -7,6 +7,7 @@ import { writeAudit } from "@core/audit";
 import { sendTrackedEmail, sendMagicLinkEmail } from "@core/email";
 import { mintMagicLink } from "@core/invites";
 import { config } from "@core/config";
+import { mergeLabels } from "@core/labels";
 import { BLOCKING_STATUSES, fetchVillaClosures, isClosedFor, isRoomAvailable } from "@core/availability";
 import type {
   ApplicationRow,
@@ -663,4 +664,47 @@ export async function mintWhatsAppEntranceAction(formData: FormData) {
     if (err && typeof err === "object" && "digest" in err) throw err;
     backTo(path, err instanceof Error ? err.message : "Could not mint the link");
   }
+}
+
+// ---------------------------------------------------------------- CRM labels
+
+/** Replace a person's labels (users row + mirrored onto the linked lead). */
+export async function updatePersonLabelsAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const userId = str(formData, "userId");
+  const path = `/people/${userId}`;
+  let labels: string[] = [];
+  try {
+    labels = mergeLabels(JSON.parse(str(formData, "labels") || "[]"));
+  } catch {
+    backTo(path, "Could not read the labels");
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { data: user } = await supabase
+    .from("users")
+    .select("id, email, lead_id, labels")
+    .eq("id", userId)
+    .maybeSingle();
+  if (!user) backTo("/people", "Person not found");
+
+  const { error } = await supabase.from("users").update({ labels }).eq("id", userId);
+  if (error) backTo(path, error.message);
+  if (user.lead_id) {
+    await supabase.from("leads").update({ labels }).eq("id", user.lead_id);
+  }
+
+  await writeAudit({
+    actorId: admin.id,
+    actorEmail: admin.email,
+    action: "person.labels_updated",
+    entityType: "user",
+    entityId: userId,
+    summary: labels.length ? `Labels set: ${labels.join(", ")}` : "Labels cleared",
+    meta: { previous: user.labels || [], labels },
+  });
+
+  revalidatePath(path);
+  revalidatePath("/people");
+  backTo(path);
 }

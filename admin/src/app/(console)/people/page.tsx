@@ -37,7 +37,14 @@ export default async function PeoplePage() {
                   <p className="text-xs text-muted">{person.email}</p>
                 </td>
                 <td>
-                  <StatusChip value={person.role} />
+                  <div className="flex flex-wrap items-center gap-1">
+                    <StatusChip value={person.role} />
+                    {(person.labels || []).map((label) => (
+                      <span key={label} className="chip chip-gold">
+                        {label}
+                      </span>
+                    ))}
+                  </div>
                 </td>
                 <td>{person.profile?.headline || "-"}</td>
                 <td>{person.lead?.source || "-"}</td>

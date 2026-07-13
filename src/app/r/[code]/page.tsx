@@ -1,7 +1,9 @@
 import Image from "next/image";
+import { redirect } from "next/navigation";
 import { loadActiveReferralLink } from "@/lib/screening";
 import { fetchContentBlock } from "@/lib/data";
 import ReferralForm from "./ReferralForm";
+import InstantEntranceForm from "./InstantEntranceForm";
 
 export const dynamic = "force-dynamic";
 
@@ -9,15 +11,21 @@ const BG =
   "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=2400&auto=format&fit=crop";
 
 /**
- * The public front door: a referral link IS the invitation. No login — the
- * prospect introduces themselves and books the host call in one sitting.
+ * The public front door: a referral link IS the invitation. Member doors run
+ * the application + host call; instant doors open an account on the spot
+ * (investor decks, QR cards); vendor/staff doors route to the hiring funnel.
  */
 export default async function ReferralPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
   const [link, intro] = await Promise.all([
-    loadActiveReferralLink(code, "member"),
+    loadActiveReferralLink(code, ["member", "instant_member", "vendor", "staff"]),
     fetchContentBlock("join.intro"),
   ]);
+
+  if (link && (link.kind === "vendor" || link.kind === "staff")) {
+    redirect(`/v/${link.code}`);
+  }
+  const instant = link?.kind === "instant_member";
 
   return (
     <main className="relative min-h-dvh">
@@ -32,17 +40,19 @@ export default async function ReferralPage({ params }: { params: Promise<{ code:
         {link ? (
           <>
             <div className="reveal mt-10" style={{ animationDelay: "0.08s" }}>
-              <p className="eyebrow">Your introduction</p>
+              <p className="eyebrow">{instant ? "Your entrance" : "Your introduction"}</p>
               <h1 className="display mt-3 text-[34px] leading-[1.08] text-ink">
                 A door has been opened for you.
               </h1>
               <p className="muted mt-4 text-[15px] leading-relaxed">
-                {intro ||
-                  "Introductions are personal. Tell us who you are — then choose fifteen minutes with the host."}
+                {instant
+                  ? "This entrance opens immediately — tell us who you are and step inside. No application, no call."
+                  : intro ||
+                    "Introductions are personal. Tell us who you are — then choose fifteen minutes with the host."}
               </p>
             </div>
             <div className="reveal mt-8" style={{ animationDelay: "0.16s" }}>
-              <ReferralForm code={link.code} />
+              {instant ? <InstantEntranceForm code={link.code} /> : <ReferralForm code={link.code} />}
             </div>
           </>
         ) : (

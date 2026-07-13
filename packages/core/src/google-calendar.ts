@@ -158,13 +158,19 @@ async function accessTokenFor(refreshToken: string): Promise<string | null> {
 }
 
 /**
- * Busy periods across every connected admin's primary calendar. Fail-soft:
- * a dead connection or Google hiccup returns [] for that admin rather than
- * blocking the slot picker.
+ * Busy periods from connected admins' primary calendars. Pass `hostId` to
+ * scope to one host's calendar (per-host screening); omit for all admins.
+ * Fail-soft: a dead connection or Google hiccup returns [] for that admin
+ * rather than blocking the slot picker.
  */
-export async function fetchGoogleBusy(timeMin: string, timeMax: string): Promise<BusyInterval[]> {
+export async function fetchGoogleBusy(
+  timeMin: string,
+  timeMax: string,
+  hostId?: string | null
+): Promise<BusyInterval[]> {
   if (!isGoogleSyncConfigured()) return [];
-  const connections = await listGoogleConnections();
+  let connections = await listGoogleConnections();
+  if (hostId) connections = connections.filter((c) => c.adminId === hostId);
   if (!connections.length) return [];
 
   const results = await Promise.all(
@@ -191,17 +197,26 @@ export async function fetchGoogleBusy(timeMin: string, timeMax: string): Promise
 }
 
 /**
- * Insert an event into every connected admin's calendar. Returns the
- * adminId → eventId map to store on the call row (empty when sync is dark).
+ * Insert an event into connected admins' calendars. With `hostId`, only the
+ * assigned host's calendar gets the event — unless that host has no connection
+ * yet, in which case every connected admin receives it so nothing is missed.
+ * Returns the adminId → eventId map to store on the call row (empty when dark).
  */
-export async function pushGoogleEvent(event: {
-  summary: string;
-  description?: string;
-  startIso: string;
-  endIso: string;
-}): Promise<Record<string, string>> {
+export async function pushGoogleEvent(
+  event: {
+    summary: string;
+    description?: string;
+    startIso: string;
+    endIso: string;
+  },
+  hostId?: string | null
+): Promise<Record<string, string>> {
   if (!isGoogleSyncConfigured()) return {};
-  const connections = await listGoogleConnections();
+  let connections = await listGoogleConnections();
+  if (hostId) {
+    const hostConnections = connections.filter((c) => c.adminId === hostId);
+    if (hostConnections.length) connections = hostConnections;
+  }
   const ids: Record<string, string> = {};
 
   await Promise.all(

@@ -14,3 +14,8 @@ export function fmtMoney(cents: number, currency = "EUR"): string {
     maximumFractionDigits: 0,
   }).format(cents / 100);
 }
+
+/** Public path a door opens: member/instant doors at /r, hiring doors at /v. */
+export function doorPath(kind: string, code: string): string {
+  return `/${kind === "vendor" || kind === "staff" ? "v" : "r"}/${code}`;
+}

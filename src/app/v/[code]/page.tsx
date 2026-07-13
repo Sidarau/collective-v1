@@ -13,7 +13,7 @@ const BG =
  */
 export default async function VendorPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
-  const link = await loadActiveReferralLink(code, "vendor");
+  const link = await loadActiveReferralLink(code, ["vendor", "staff"]);
 
   return (
     <main className="relative min-h-dvh">

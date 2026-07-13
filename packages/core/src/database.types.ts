@@ -49,7 +49,7 @@ export type StaffApplicationStatus =
   | "shortlisted"
   | "rejected"
   | "hired";
-export type ReferralLinkKind = "member" | "vendor";
+export type ReferralLinkKind = "member" | "instant_member" | "vendor" | "staff";
 export type ScreeningCallStatus = "scheduled" | "completed" | "no_show" | "cancelled";
 export type KbVisibility = "internal" | "staff" | "members";
 export type CampaignStatus = "draft" | "sending" | "sent" | "cancelled";
@@ -114,6 +114,7 @@ export interface LeadRow {
   dietary_restrictions: string | null;
   birthday: string | null;
   notes: string | null;
+  labels: string[];
   source: string;
   status: "new" | "active" | "inactive" | "blacklisted";
   created_at: string;
@@ -128,6 +129,7 @@ export interface UserRow {
   password_hash: string | null;
   phone: string | null;
   phone_verified: boolean;
+  labels: string[];
   created_at: string;
   updated_at: string;
 }
@@ -303,6 +305,7 @@ export interface ReferralLinkRow {
   kind: ReferralLinkKind;
   label: string;
   note: string | null;
+  labels: string[];
   active: boolean;
   max_uses: number | null;
   use_count: number;
@@ -324,6 +327,8 @@ export interface ScreeningWindowRow {
   slot_minutes: number;
   active: boolean;
   note: string | null;
+  /** Owning host. NULL = shared/legacy window that matches any host. */
+  admin_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -340,6 +345,8 @@ export interface ScreeningCallRow {
   timezone: string;
   status: ScreeningCallStatus;
   notes: string | null;
+  /** Assigned host admin (defaults to the screening.default_host setting). */
+  admin_id: string | null;
   google_event_ids: Record<string, string> | null;
   created_at: string;
   updated_at: string;
@@ -418,7 +425,7 @@ export interface ClosurePeriodRow {
   created_at: string;
 }
 
-export type InviteKind = "member_returning" | "member_new";
+export type InviteKind = "member_returning" | "member_new" | "instant_member";
 
 /** WhatsApp/phone invite redeemed at /welcome/[token] on the member app. */
 export interface InviteTokenRow {
@@ -426,9 +433,12 @@ export interface InviteTokenRow {
   token: string;
   kind: InviteKind;
   phone: string | null;
+  email: string | null;
   first_name: string | null;
   last_name: string | null;
   note: string | null;
+  labels: string[];
+  referral_link_id: string | null;
   created_by: string | null;
   used_by: string | null;
   used_at: string | null;

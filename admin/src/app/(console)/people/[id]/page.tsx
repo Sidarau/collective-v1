@@ -6,14 +6,18 @@ import Timeline from "@/components/Timeline";
 import CrmPanel from "@/components/CrmPanel";
 import ErrorBanner from "@/components/ErrorBanner";
 import StripQuery from "@/components/StripQuery";
+import LabelsInput from "@/components/LabelsInput";
 import { getPersonDetail } from "@/lib/admin-data";
+import { listLabelsInUse } from "@/lib/funnel-data";
 import { fmtDate } from "@/lib/format";
+import { LABEL_SUGGESTIONS, mergeLabels } from "@core/labels";
 import {
   setPersonRoleAction,
   reinvitePersonAction,
   mintWhatsAppEntranceAction,
   toggleSuppressionAction,
   setFollowUpStatusAction,
+  updatePersonLabelsAction,
 } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
@@ -29,8 +33,9 @@ export default async function PersonDetailPage({
 }) {
   const { id } = await params;
   const { error, walink } = await searchParams;
-  const detail = await getPersonDetail(id);
+  const [detail, labelsInUse] = await Promise.all([getPersonDetail(id), listLabelsInUse()]);
   if (!detail) notFound();
+  const labelSuggestions = mergeLabels(labelsInUse, LABEL_SUGGESTIONS);
   const {
     user,
     profile,
@@ -59,8 +64,13 @@ export default async function PersonDetailPage({
         ← People
       </Link>
       <PageHeader title={name} eyebrow="Person">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {suppression && <span className="chip chip-red">suppressed</span>}
+          {(user.labels || []).map((label) => (
+            <span key={label} className="chip chip-gold">
+              {label}
+            </span>
+          ))}
           <StatusChip value={user.role} />
         </div>
       </PageHeader>
@@ -161,6 +171,24 @@ export default async function PersonDetailPage({
                 </button>
               </form>
             </div>
+          </section>
+
+          {/* Labels — stick to the person across the CRM; agents can set them over MCP too. */}
+          <section className="panel p-5">
+            <p className="label">Labels</p>
+            <form action={updatePersonLabelsAction} className="mt-2 flex flex-wrap items-end gap-3">
+              <input type="hidden" name="userId" value={user.id} />
+              <div className="min-w-[260px] flex-1">
+                <LabelsInput
+                  name="labels"
+                  suggestions={labelSuggestions}
+                  initial={user.labels || []}
+                />
+              </div>
+              <button type="submit" className="btn btn-gold">
+                Save labels
+              </button>
+            </form>
           </section>
 
           {/* Footprint */}

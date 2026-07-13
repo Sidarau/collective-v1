@@ -6,8 +6,10 @@ import { writeAudit } from "@core/audit";
 import { getSupabaseAdmin } from "@core/supabase";
 import { DEFAULT_TIMEZONE, zonedToUtc } from "@core/scheduling";
 import { config } from "@core/config";
+import { mergeLabels, removeLabels } from "@core/labels";
 import type { CrmEntityType, Json } from "@core/database.types";
 import { agentContext, resolveAgent } from "@/lib/agent-auth";
+import { doorPath } from "@/lib/format";
 
 /** Accept ISO-with-offset ("2026-07-20T19:00:00+02:00" / "…Z") or villa
  *  wall-clock ("2026-07-20T19:00") — wall clock is read as Europe/Madrid. */
@@ -604,12 +606,13 @@ const handler = createMcpHandler(
     server.registerTool(
       "referral_link_create",
       {
-        title: "Create a referral link (hosted application form)",
+        title: "Create a referral door (hosted signup form)",
         description:
-          "Mint a new referral door: a public application form at /r/<code> (member funnel) or /v/<code> (vendor hiring). Optional custom code, usage cap, and expiry. Returns the shareable URL.",
+          "Mint a new door: member (application + screening call at /r/<code>), instant_member (account on the spot, no screening — investor decks, QR cards), or vendor/staff (hiring at /v/<code>). Labels stamp everyone who enters (visible across the CRM). Optional custom code, usage cap, expiry. Returns the shareable URL.",
         inputSchema: {
-          kind: z.enum(["member", "vendor"]),
-          label: z.string().min(2).describe("Internal name, e.g. 'Don's July dinner guests'"),
+          kind: z.enum(["member", "instant_member", "vendor", "staff"]),
+          label: z.string().min(2).describe("Internal name, e.g. 'Investor deck' or 'Don's July dinner guests'"),
+          labels: z.array(z.string()).optional().describe("CRM labels applied to everyone who enters, e.g. ['investor']"),
           code: z.string().optional().describe("Custom URL code; defaults to a slug of the label"),
           note: z.string().optional(),
           maxUses: z.number().int().positive().optional(),
@@ -628,6 +631,7 @@ const handler = createMcpHandler(
         for (let i = 2; existing.has(code); i++) code = `${base}-${i}`;
 
         const expiresAt = input.expiresAt ? parseWhen(input.expiresAt) || null : null;
+        const labels = mergeLabels(input.labels || []);
         const who = agentContext.getStore();
         const { data: link, error } = await supabase
           .from("referral_links")
@@ -636,6 +640,7 @@ const handler = createMcpHandler(
             kind: input.kind,
             label: input.label,
             note: input.note || null,
+            labels,
             max_uses: input.maxUses ?? null,
             expires_at: expiresAt,
             active: true,
@@ -645,9 +650,9 @@ const handler = createMcpHandler(
           .single();
         if (error || !link) return err(error?.message || "Could not create the link");
 
-        const url = `${config.baseUrl}/${input.kind === "member" ? "r" : "v"}/${link.code}`;
-        await auditAgent("agent.referral_link_create", "referral_link", link.id, `created ${input.kind} door "${input.label}" → ${url}`);
-        return ok(`Created "${input.label}" — share ${url}${expiresAt ? ` (closes ${expiresAt.slice(0, 10)})` : ""}${input.maxUses ? ` · max ${input.maxUses} uses` : ""}`);
+        const url = `${config.baseUrl}${doorPath(input.kind, link.code)}`;
+        await auditAgent("agent.referral_link_create", "referral_link", link.id, `created ${input.kind} door "${input.label}" → ${url}${labels.length ? ` · labels: ${labels.join(", ")}` : ""}`);
+        return ok(`Created "${input.label}" — share ${url}${labels.length ? ` · labels ${labels.join(", ")}` : ""}${expiresAt ? ` (closes ${expiresAt.slice(0, 10)})` : ""}${input.maxUses ? ` · max ${input.maxUses} uses` : ""}`);
       }
     );
 
@@ -662,6 +667,7 @@ const handler = createMcpHandler(
           active: z.boolean().optional(),
           label: z.string().optional(),
           note: z.string().optional(),
+          labels: z.array(z.string()).optional().describe("Replace the door's CRM labels"),
           maxUses: z.number().int().positive().nullable().optional(),
           expiresAt: z.string().nullable().optional().describe("ISO date, or null to remove expiry"),
         },
@@ -680,6 +686,7 @@ const handler = createMcpHandler(
         if (input.active !== undefined) patch.active = input.active;
         if (input.label !== undefined) patch.label = input.label;
         if (input.note !== undefined) patch.note = input.note;
+        if (input.labels !== undefined) patch.labels = mergeLabels(input.labels);
         if (input.maxUses !== undefined) patch.max_uses = input.maxUses;
         if (input.expiresAt !== undefined)
           patch.expires_at = input.expiresAt ? parseWhen(input.expiresAt) : null;
@@ -696,30 +703,76 @@ const handler = createMcpHandler(
       "referral_link_list",
       {
         title: "List referral links",
-        description: "All referral doors with URLs, status, and use counts.",
+        description: "All referral doors with URLs, kinds, labels, status, and use counts.",
         inputSchema: {
-          kind: z.enum(["member", "vendor"]).optional(),
+          kind: z.enum(["member", "instant_member", "vendor", "staff"]).optional(),
         },
       },
       async (input) => {
         const supabase = getSupabaseAdmin();
         let query = supabase
           .from("referral_links")
-          .select("code, kind, label, active, use_count, max_uses, expires_at")
+          .select("code, kind, label, labels, active, use_count, max_uses, expires_at")
           .order("created_at", { ascending: false })
           .limit(50);
         if (input.kind) query = query.eq("kind", input.kind);
         const { data } = await query;
         const rows = (data as {
-          code: string; kind: string; label: string; active: boolean;
+          code: string; kind: string; label: string; labels: string[] | null; active: boolean;
           use_count: number; max_uses: number | null; expires_at: string | null;
         }[]) || [];
         if (!rows.length) return ok("No referral links yet — create one with referral_link_create.");
         const lines = rows.map((r) => {
-          const url = `${config.baseUrl}/${r.kind === "member" ? "r" : "v"}/${r.code}`;
-          return `${r.active ? "🟢" : "⚫"} ${r.label} — ${url} · ${r.use_count}${r.max_uses ? `/${r.max_uses}` : ""} uses${r.expires_at ? ` · closes ${r.expires_at.slice(0, 10)}` : ""}`;
+          const url = `${config.baseUrl}${doorPath(r.kind, r.code)}`;
+          return `${r.active ? "🟢" : "⚫"} ${r.label} [${r.kind.replace("_", " ")}] — ${url} · ${r.use_count}${r.max_uses ? `/${r.max_uses}` : ""} uses${(r.labels || []).length ? ` · labels: ${(r.labels || []).join(", ")}` : ""}${r.expires_at ? ` · closes ${r.expires_at.slice(0, 10)}` : ""}`;
         });
         return ok(lines.join("\n"));
+      }
+    );
+
+    server.registerTool(
+      "user_labels_update",
+      {
+        title: "Add or remove CRM labels on a person",
+        description:
+          "Edit the labels that stick to a person across the CRM (e.g. 'investor', 'past guest'). Finds the person by email. add/remove merge with what's there; set replaces everything.",
+        inputSchema: {
+          email: z.string().describe("The person's account email"),
+          add: z.array(z.string()).optional(),
+          remove: z.array(z.string()).optional(),
+          set: z.array(z.string()).optional().describe("Replace all labels (overrides add/remove)"),
+        },
+      },
+      async (input) => {
+        const supabase = getSupabaseAdmin();
+        const email = input.email.toLowerCase().trim();
+        const { data: user } = await supabase
+          .from("users")
+          .select("id, email, lead_id, labels")
+          .eq("email", email)
+          .maybeSingle();
+        if (!user) return err(`No account with email ${email}`);
+
+        let labels: string[];
+        if (input.set !== undefined) {
+          labels = mergeLabels(input.set);
+        } else {
+          labels = mergeLabels(user.labels, input.add || []);
+          if (input.remove?.length) labels = removeLabels(labels, input.remove);
+        }
+
+        const { error } = await supabase.from("users").update({ labels }).eq("id", user.id);
+        if (error) return err(error.message);
+        if (user.lead_id) {
+          await supabase.from("leads").update({ labels }).eq("id", user.lead_id);
+        }
+        await auditAgent(
+          "agent.user_labels_update",
+          "user",
+          user.id,
+          labels.length ? `labels for ${email}: ${labels.join(", ")}` : `labels cleared for ${email}`
+        );
+        return ok(`${email} → ${labels.length ? labels.join(", ") : "(no labels)"}`);
       }
     );
 

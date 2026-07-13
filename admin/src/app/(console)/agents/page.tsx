@@ -211,12 +211,13 @@ export default async function AgentsPage({
               <br />
               Write: <code>kb_upsert</code> · <code>event_upsert</code> · <code>gate_update</code> ·{" "}
               <code>room_update</code> · <code>application_set_status</code> ·{" "}
-              <code>lead_update_status</code> · <code>referral_link_create</code> ·{" "}
-              <code>referral_link_set</code> · <code>closure_create</code> ·{" "}
-              <code>closure_delete</code>
+              <code>lead_update_status</code> · <code>user_labels_update</code> ·{" "}
+              <code>referral_link_create</code> · <code>referral_link_set</code> ·{" "}
+              <code>closure_create</code> · <code>closure_delete</code>
               <br />
-              Writes go live without a redeploy and are audited under your token. Approving
-              applications stays console-only.
+              Doors come in four kinds (member, instant member, vendor, staff) and can carry
+              CRM labels. Writes go live without a redeploy and are audited under your token.
+              Approving applications stays console-only.
             </p>
           </section>
 

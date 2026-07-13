@@ -1,7 +1,7 @@
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import ErrorBanner from "@/components/ErrorBanner";
-import { listCalls, listScreeningWindows } from "@/lib/funnel-data";
+import { listAdminHosts, listCalls, listScreeningWindows } from "@/lib/funnel-data";
 import {
   addScreeningWindowAction,
   deleteScreeningWindowAction,
@@ -14,7 +14,7 @@ import {
 import { getAdminUser } from "@/lib/auth";
 import { getGoogleConnection, isGoogleSyncConfigured } from "@core/google-calendar";
 import { getSettingValue } from "@core/settings";
-import { fmtMinute } from "@core/scheduling";
+import { fmtMinute, getDefaultScreeningHost } from "@core/scheduling";
 import { googleCalendarUrl } from "@core/ics";
 import { config } from "@core/config";
 
@@ -50,16 +50,33 @@ export default async function SchedulePage({
 }) {
   const { error } = await searchParams;
   const admin = (await getAdminUser())!;
-  const [windows, upcoming, past, feedToken, googleConnection] = await Promise.all([
-    listScreeningWindows(),
-    listCalls({ from: oneHourAgoIso(), statuses: ["scheduled"] }),
-    listCalls({ statuses: ["completed", "no_show", "cancelled"], limit: 15 }).then((rows) =>
-      rows.reverse()
-    ),
-    getSettingValue<string>(`calendar_feed:${admin.id}`),
-    getGoogleConnection(admin.id),
-  ]);
+  const [windows, upcoming, past, feedToken, googleConnection, hosts, defaultHost] =
+    await Promise.all([
+      listScreeningWindows(),
+      listCalls({ from: oneHourAgoIso(), statuses: ["scheduled"] }),
+      listCalls({ statuses: ["completed", "no_show", "cancelled"], limit: 15 }).then((rows) =>
+        rows.reverse()
+      ),
+      getSettingValue<string>(`calendar_feed:${admin.id}`),
+      getGoogleConnection(admin.id),
+      listAdminHosts(),
+      getDefaultScreeningHost(),
+    ]);
   const googleReady = isGoogleSyncConfigured();
+  const hostName = (id: string | null) => (id && hosts.find((h) => h.id === id)?.name) || null;
+  const hostSelect = (
+    <div>
+      <label className="label">Host</label>
+      <select name="hostId" className="input" defaultValue={defaultHost || admin.id}>
+        {hosts.map((h) => (
+          <option key={h.id} value={h.id}>
+            {h.name}
+            {h.id === defaultHost ? " (default)" : ""}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 
   return (
     <>
@@ -92,7 +109,10 @@ export default async function SchedulePage({
                         <p className="text-[13px] font-semibold text-gold">
                           {callTime(call.scheduled_at, call.timezone)}
                         </p>
-                        <p className="text-[11px] text-faint">{call.duration_minutes} min · {call.kind}</p>
+                        <p className="text-[11px] text-faint">
+                          {call.duration_minutes} min · {call.kind}
+                          {hostName(call.admin_id) ? ` · ${hostName(call.admin_id)}` : ""}
+                        </p>
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[13px] text-ink">
@@ -186,15 +206,8 @@ export default async function SchedulePage({
                   ))}
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="label">From</label>
-                  <input name="start" type="time" required defaultValue="09:30" className="input" />
-                </div>
-                <div>
-                  <label className="label">To</label>
-                  <input name="end" type="time" required defaultValue="11:00" className="input" />
-                </div>
+              <div className="grid grid-cols-2 gap-3">
+                {hostSelect}
                 <div>
                   <label className="label">For</label>
                   <select name="kind" className="input">
@@ -202,6 +215,14 @@ export default async function SchedulePage({
                     <option value="member">Members only</option>
                     <option value="vendor">Vendors only</option>
                   </select>
+                </div>
+                <div>
+                  <label className="label">From</label>
+                  <input name="start" type="time" required defaultValue="13:00" className="input" />
+                </div>
+                <div>
+                  <label className="label">To</label>
+                  <input name="end" type="time" required defaultValue="14:00" className="input" />
                 </div>
               </div>
               <button type="submit" className="btn btn-gold w-full">
@@ -213,7 +234,8 @@ export default async function SchedulePage({
 
             <form action={addScreeningWindowAction} className="space-y-3">
               <input type="hidden" name="mode" value="date" />
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                {hostSelect}
                 <div>
                   <label className="label">One-off date</label>
                   <input name="date" type="date" className="input" />
@@ -233,8 +255,10 @@ export default async function SchedulePage({
               </button>
             </form>
             <p className="mt-3 text-[12px] text-faint">
-              Prospects see these as 15-minute slots on the Ibiza clock, at least 2 hours ahead,
-              21 days out. Booked slots disappear automatically.
+              Blocks belong to the chosen host — prospects only see the assigned host&apos;s
+              slots (15 minutes, Ibiza clock, at least 2 hours ahead, 21 days out). New
+              bookings go to {hostName(defaultHost) || "the default host"} by default; booked
+              slots disappear automatically.
             </p>
           </section>
 
@@ -332,7 +356,10 @@ export default async function SchedulePage({
                     </p>
                     <p className="flex-1 text-[13px] text-muted">
                       {fmtMinute(w.start_minute)}–{fmtMinute(w.end_minute)}
-                      <span className="text-faint"> · {w.kind}</span>
+                      <span className="text-faint">
+                        {" "}
+                        · {w.kind} · {hostName(w.admin_id) || "any host"}
+                      </span>
                     </p>
                     <form action={toggleScreeningWindowAction}>
                       <input type="hidden" name="id" value={w.id} />

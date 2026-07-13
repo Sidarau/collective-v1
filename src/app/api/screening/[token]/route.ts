@@ -4,7 +4,12 @@ import { sendNotificationEmail, sendTrackedEmail } from "@core/email";
 import { writeAudit } from "@core/audit";
 import { isToggleEnabled } from "@core/settings";
 import { config } from "@core/config";
-import { computeOpenSlots, isSlotOpen, loadSlotInputs } from "@core/scheduling";
+import {
+  computeOpenSlots,
+  getDefaultScreeningHost,
+  isSlotOpen,
+  loadSlotInputs,
+} from "@core/scheduling";
 import { deleteGoogleEvent, pushGoogleEvent } from "@core/google-calendar";
 import { googleCalendarUrl } from "@core/ics";
 import { fmtCallTime, resolveScreeningToken } from "@/lib/screening";
@@ -17,7 +22,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ token: str
   const context = await resolveScreeningToken(token);
   if (!context) return NextResponse.json({ error: "Unknown link" }, { status: 404 });
 
-  const slots = computeOpenSlots(await loadSlotInputs(context.kind));
+  const host = context.existingCall?.admin_id || (await getDefaultScreeningHost());
+  const slots = computeOpenSlots(await loadSlotInputs(context.kind, host));
   return NextResponse.json({ kind: context.kind, slots });
 }
 
@@ -36,7 +42,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
       return NextResponse.json({ error: "Pick a time" }, { status: 400 });
     }
 
-    const slot = isSlotOpen(await loadSlotInputs(context.kind), new Date(startsAt).toISOString());
+    // Reschedules stay with the original host; fresh bookings go to the default (Dominik).
+    const host = context.existingCall?.admin_id || (await getDefaultScreeningHost());
+    const slot = isSlotOpen(await loadSlotInputs(context.kind, host), new Date(startsAt).toISOString());
     if (!slot) {
       return NextResponse.json(
         { error: "That window was just taken — choose another." },
@@ -67,6 +75,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
         duration_minutes: slot.durationMinutes,
         timezone: slot.timezone,
         status: "scheduled",
+        admin_id: host,
       })
       .select("id")
       .single();
@@ -75,14 +84,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
     // Two-way sync, push direction: land the call in every connected admin's
     // Google Calendar. Fail-soft — a Google outage never blocks the booking.
     try {
-      const eventIds = await pushGoogleEvent({
-        summary: `${config.brandName} — ${context.kind === "member" ? "screening" : "interview"}: ${context.firstName}`,
-        description: `${context.email}\nBooked via the scheduling link.`,
-        startIso: slot.startsAt,
-        endIso: new Date(
-          new Date(slot.startsAt).getTime() + slot.durationMinutes * 60_000
-        ).toISOString(),
-      });
+      const eventIds = await pushGoogleEvent(
+        {
+          summary: `${config.brandName} — ${context.kind === "member" ? "screening" : "interview"}: ${context.firstName}`,
+          description: `${context.email}\nBooked via the scheduling link.`,
+          startIso: slot.startsAt,
+          endIso: new Date(
+            new Date(slot.startsAt).getTime() + slot.durationMinutes * 60_000
+          ).toISOString(),
+        },
+        host
+      );
       if (Object.keys(eventIds).length) {
         await supabase
           .from("screening_calls")

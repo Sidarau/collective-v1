@@ -22,7 +22,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ code: stri
 
     if (clean(body.website)) return NextResponse.json({ success: true });
 
-    const link = await loadActiveReferralLink(code, "vendor");
+    const link = await loadActiveReferralLink(code, ["vendor", "staff"]);
     if (!link) {
       return NextResponse.json({ error: "This door is no longer open." }, { status: 404 });
     }

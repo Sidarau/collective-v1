@@ -5,9 +5,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@core/supabase";
 import { writeAudit } from "@core/audit";
-import { sendMagicLinkEmail, sendTrackedEmail } from "@core/email";
-import { mintMagicLink } from "@core/invites";
+import { sendTrackedEmail } from "@core/email";
 import { config } from "@core/config";
+import { mergeLabels } from "@core/labels";
 import { deleteGoogleConnection, deleteGoogleEvent } from "@core/google-calendar";
 import { getSettingValue, setSetting } from "@core/settings";
 import type {
@@ -36,11 +36,23 @@ function str(formData: FormData, key: string): string {
 
 // ---------------------------------------------------------------- Referral links
 
+const DOOR_KINDS: ReferralLinkKind[] = ["member", "instant_member", "vendor", "staff"];
+const doorPath = (kind: ReferralLinkKind, code: string) =>
+  `/${kind === "vendor" || kind === "staff" ? "v" : "r"}/${code}`;
+
 export async function createReferralLinkAction(formData: FormData) {
   const admin = await requireAdmin();
   const label = str(formData, "label");
-  const kind = (str(formData, "kind") === "vendor" ? "vendor" : "member") as ReferralLinkKind;
+  const kindRaw = str(formData, "kind") as ReferralLinkKind;
+  const kind = DOOR_KINDS.includes(kindRaw) ? kindRaw : "member";
   if (!label) backTo("/referrals", "Give the link a label");
+
+  let labels: string[] = [];
+  try {
+    labels = mergeLabels(JSON.parse(str(formData, "labels") || "[]"));
+  } catch {
+    labels = [];
+  }
 
   const explicit = str(formData, "code").toLowerCase().replace(/[^a-z0-9-]/g, "");
   const code = explicit || crypto.randomBytes(4).toString("hex");
@@ -54,6 +66,7 @@ export async function createReferralLinkAction(formData: FormData) {
         kind,
         label,
         note: str(formData, "note") || null,
+        labels,
         max_uses: Number.isFinite(maxUses) && maxUses > 0 ? maxUses : null,
         expires_at: str(formData, "expiresAt") || null,
         created_by: admin.id,
@@ -68,7 +81,7 @@ export async function createReferralLinkAction(formData: FormData) {
       action: "referral_link.create",
       entityType: "referral_link",
       entityId: data.id,
-      summary: `Opened ${kind} door "${label}" (/${kind === "member" ? "r" : "v"}/${code})`,
+      summary: `Opened ${kind.replace("_", " ")} door "${label}" (${doorPath(kind, code)})${labels.length ? ` — labels: ${labels.join(", ")}` : ""}`,
     });
   } catch (err) {
     backTo("/referrals", err instanceof Error ? err.message : "Create failed");
@@ -93,139 +106,6 @@ export async function toggleReferralLinkAction(formData: FormData) {
   });
   revalidatePath("/referrals");
   backTo("/referrals");
-}
-
-export async function createReturningMemberInviteAction(formData: FormData) {
-  const admin = await requireAdmin();
-  const firstName = str(formData, "firstName");
-  const lastName = str(formData, "lastName");
-  const email = str(formData, "email").toLowerCase();
-  const phone = str(formData, "phone");
-  const whatsapp = str(formData, "whatsapp");
-  const note = str(formData, "note");
-
-  if (!firstName || !lastName || !email) {
-    backTo("/referrals", "First name, last name, and email are required");
-  }
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    backTo("/referrals", "That email doesn't look right");
-  }
-  if (!phone && !whatsapp) {
-    backTo("/referrals", "Add a phone or WhatsApp number for the private profile");
-  }
-
-  let userId = "";
-  try {
-    const supabase = db();
-    const { data: lead, error: leadError } = await supabase
-      .from("leads")
-      .upsert(
-        {
-          email,
-          first_name: firstName,
-          last_name: lastName,
-          phone: phone || null,
-          whatsapp: whatsapp || null,
-          source: "past_guest_fast_track",
-          status: "active",
-          notes: note || null,
-        },
-        { onConflict: "email" }
-      )
-      .select("id")
-      .single();
-    if (leadError || !lead) throw new Error(leadError?.message || "Failed to save lead");
-
-    const phoneForLogin = phone || whatsapp || null;
-    const { data: existing } = await supabase
-      .from("users")
-      .select("id, lead_id")
-      .eq("email", email)
-      .maybeSingle();
-
-    if (existing) {
-      userId = existing.id;
-      const { error } = await supabase
-        .from("users")
-        .update({
-          role: "member",
-          lead_id: existing.lead_id || lead.id,
-          password_hash: null,
-          phone: phoneForLogin,
-        })
-        .eq("id", userId);
-      if (error) throw new Error(error.message);
-    } else {
-      const { data: created, error } = await supabase
-        .from("users")
-        .insert({
-          email,
-          role: "member",
-          lead_id: lead.id,
-          password_hash: null,
-          phone: phoneForLogin,
-        })
-        .select("id")
-        .single();
-      if (error || !created) throw new Error(error?.message || "Failed to create member");
-      userId = created.id;
-    }
-
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .upsert(
-        {
-          user_id: userId,
-          first_name: firstName,
-          last_name: lastName,
-          phone: phone || null,
-          whatsapp: whatsapp || null,
-          onboarding_completed: false,
-          visibility: "members",
-        },
-        { onConflict: "user_id" }
-      );
-    if (profileError) throw new Error(profileError.message);
-
-    if (note) {
-      await supabase.from("admin_notes").insert({
-        author_id: admin.id,
-        author_email: admin.email,
-        entity_type: "user",
-        entity_id: userId,
-        body: note,
-      });
-    }
-
-    const link = await mintMagicLink(userId, email, config.baseUrl);
-    await sendMagicLinkEmail({
-      to: email,
-      firstName,
-      magicLink: link,
-      intro:
-        "You have been fast-tracked from a past stay. Use this private link to choose a password and fill the profile other members will see.",
-      cta: "Set password and profile",
-      template: "past_guest_fast_track",
-      entityType: "user",
-      entityId: userId,
-      actorId: admin.id,
-    });
-
-    await writeAudit({
-      actorId: admin.id,
-      actorEmail: admin.email,
-      action: "member.fast_track",
-      entityType: "user",
-      entityId: userId,
-      summary: `Fast-tracked past guest ${firstName} ${lastName} as a member`,
-    });
-  } catch (err) {
-    backTo("/referrals", err instanceof Error ? err.message : "Could not create fast-track invite");
-  }
-
-  revalidatePath("/referrals");
-  revalidatePath("/people");
-  backTo(`/people/${userId}`);
 }
 
 // ---------------------------------------------------------------- Screening windows
@@ -256,6 +136,16 @@ export async function addScreeningWindowAction(formData: FormData) {
     | "vendor"
     | "both";
 
+  // Blocks belong to a host. Any admin can manage another host's calendar
+  // (Alex sets up Dominik's hours until Don works the console himself).
+  const hostRaw = str(formData, "hostId");
+  let hostId = admin.id;
+  if (hostRaw && hostRaw !== admin.id) {
+    const { data: host } = await db().from("users").select("id").eq("id", hostRaw).eq("role", "admin").maybeSingle();
+    if (!host) backTo("/schedule", "That host is not an admin");
+    hostId = hostRaw;
+  }
+
   try {
     const rows: Partial<ScreeningWindowRow>[] =
       mode === "weekly"
@@ -265,8 +155,9 @@ export async function addScreeningWindowAction(formData: FormData) {
             date: null,
             start_minute: startMinute,
             end_minute: endMinute,
+            admin_id: hostId,
           }))
-        : [{ kind, weekday: null, date, start_minute: startMinute, end_minute: endMinute }];
+        : [{ kind, weekday: null, date, start_minute: startMinute, end_minute: endMinute, admin_id: hostId }];
     const { error } = await db().from("screening_windows").insert(rows);
     if (error) throw new Error(error.message);
 
@@ -497,88 +388,8 @@ export async function inviteVendorToInterviewAction(formData: FormData) {
   backTo(path);
 }
 
-// ---------------------------------------------------------------- Phone / WhatsApp invites
+// ---------------------------------------------------------------- Google Calendar
 
-const PHONE_RE = /^\+[1-9]\d{6,14}$/;
-
-/**
- * Invite someone Alex/Don only has a number for. Creates a one-time
- * /welcome/[token] link on the member app — returning guests become members
- * instantly there (no application, no screening); prospects flow into /join.
- * The link is meant to be pasted into WhatsApp (share button on the page).
- */
-export async function createPhoneInviteAction(formData: FormData) {
-  const admin = await getAdminUser();
-  if (!admin) backTo("/login");
-
-  const rawPhone = (formData.get("phone") as string | null)?.replace(/[\s\-()]/g, "") || "";
-  const kindRaw = (formData.get("kind") as string | null) || "member_returning";
-  const kind = kindRaw === "member_new" ? "member_new" : "member_returning";
-  const firstName = (formData.get("firstName") as string | null)?.trim() || null;
-  const lastName = (formData.get("lastName") as string | null)?.trim() || null;
-  const note = (formData.get("note") as string | null)?.trim() || null;
-
-  if (!PHONE_RE.test(rawPhone)) {
-    backTo("/referrals", "Phone must be international format, e.g. +34600123456");
-  }
-
-  const supabase = getSupabaseAdmin();
-  const { data: taken } = await supabase.from("users").select("id").eq("phone", rawPhone).maybeSingle();
-  if (taken) backTo("/referrals", "That number is already linked to an account — use People → mint entrance link instead");
-
-  const token = crypto.randomBytes(18).toString("base64url");
-  const { error } = await supabase.from("invite_tokens").insert({
-    token,
-    kind,
-    phone: rawPhone,
-    first_name: firstName,
-    last_name: lastName,
-    note,
-    created_by: admin.id,
-    expires_at: new Date(Date.now() + 7 * 24 * 3600_000).toISOString(),
-  });
-  if (error) backTo("/referrals", error.message);
-
-  await writeAudit({
-    actorId: admin.id,
-    actorEmail: admin.email,
-    action: "invite.phone_created",
-    entityType: "lead",
-    entityId: null,
-    summary: `WhatsApp ${kind === "member_returning" ? "returning-member" : "prospect"} invite for ${firstName || "someone"} (${rawPhone})`,
-  });
-
-  revalidatePath("/referrals");
-  backTo("/referrals");
-}
-
-export async function expirePhoneInviteAction(formData: FormData) {
-  const admin = await getAdminUser();
-  if (!admin) backTo("/login");
-  const id = (formData.get("id") as string | null) || "";
-  await getSupabaseAdmin()
-    .from("invite_tokens")
-    .update({ expires_at: new Date(0).toISOString() })
-    .eq("id", id)
-    .is("used_at", null);
-  await writeAudit({
-    actorId: admin.id,
-    actorEmail: admin.email,
-    action: "invite.phone_expired",
-    entityType: "lead",
-    entityId: null,
-    summary: "Expired a WhatsApp invite link",
-  });
-  revalidatePath("/referrals");
-  backTo("/referrals");
-}
-
-// ---------------------------------------------------------------- Calendar feed
-
-/**
- * Personal ICS feed token (Google Calendar connector). Created on demand,
- * rotated on request — rotation invalidates the old URL immediately.
- */
 export async function ensureCalendarFeedAction() {
   const admin = await getAdminUser();
   if (!admin) backTo("/login");

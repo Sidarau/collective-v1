@@ -1,5 +1,6 @@
 import "server-only";
 import { getSupabaseAdmin } from "@core/supabase";
+import { mergeLabels } from "@core/labels";
 import type {
   ApplicationRow,
   ContentBlockRow,
@@ -158,16 +159,46 @@ export async function listContentBlocks(): Promise<ContentBlockRow[]> {
   return (data as ContentBlockRow[]) || [];
 }
 
-import type { InviteTokenRow } from "@core/database.types";
+/** Admin hosts for the schedule page (id + display name). */
+export interface AdminHost {
+  id: string;
+  email: string;
+  name: string;
+}
 
-/** Live (unused, unexpired) phone/WhatsApp invites for the Referrals page. */
-export async function listOpenPhoneInvites(): Promise<InviteTokenRow[]> {
-  const { data } = await getSupabaseAdmin()
-    .from("invite_tokens")
-    .select("*")
-    .is("used_at", null)
-    .gte("expires_at", new Date().toISOString())
-    .order("created_at", { ascending: false })
-    .limit(50);
-  return (data as InviteTokenRow[]) || [];
+export async function listAdminHosts(): Promise<AdminHost[]> {
+  const supabase = getSupabaseAdmin();
+  const { data: admins } = await supabase
+    .from("users")
+    .select("id, email")
+    .eq("role", "admin")
+    .order("created_at", { ascending: true });
+  const ids = (admins || []).map((a) => a.id);
+  const { data: profiles } = ids.length
+    ? await supabase.from("profiles").select("user_id, first_name, last_name").in("user_id", ids)
+    : { data: [] };
+  const names = new Map(
+    (profiles || []).map((p) => [p.user_id, [p.first_name, p.last_name].filter(Boolean).join(" ")])
+  );
+  return (admins || []).map((a) => ({
+    id: a.id,
+    email: a.email,
+    name: names.get(a.id) || a.email.split("@")[0],
+  }));
+}
+
+/** Every label in use (doors + people) for dropdown suggestions. */
+export async function listLabelsInUse(): Promise<string[]> {
+  const supabase = getSupabaseAdmin();
+  const [links, users, leads] = await Promise.all([
+    supabase.from("referral_links").select("labels").limit(500),
+    supabase.from("users").select("labels").limit(1000),
+    supabase.from("leads").select("labels").limit(1000),
+  ]);
+  const all = [
+    ...(links.data || []),
+    ...(users.data || []),
+    ...(leads.data || []),
+  ].flatMap((row) => (row.labels as string[] | null) || []);
+  return mergeLabels(all);
 }

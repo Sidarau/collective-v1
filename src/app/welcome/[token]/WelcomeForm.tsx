@@ -9,11 +9,11 @@ export default function WelcomeForm({
   lastName,
 }: {
   token: string;
-  kind: "member_returning" | "member_new";
+  kind: "member_returning" | "member_new" | "instant_member";
   firstName: string;
   lastName: string;
 }) {
-  const returning = kind === "member_returning";
+  const returning = kind === "member_returning" || kind === "instant_member";
   const [form, setForm] = useState({ email: "", firstName, lastName });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
