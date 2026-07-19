@@ -64,7 +64,7 @@ export default async function KbIndexPage({
         <section className="panel mt-5 p-5">
           <p className="label">Agents</p>
           <p className="text-[13px] text-muted">
-            This knowledge base is the Notion replacement — agents read and write it over the KB
+            This is the owned Collective knowledge base — agents read and write it over the KB
             API. Base URL: <code className="text-gold">{config.adminUrl || "<admin-url>"}/api/kb</code> with{" "}
             <code>Authorization: Bearer $AGENT_API_TOKEN</code>. MCP endpoint:{" "}
             <code className="text-gold">{config.adminUrl || "<admin-url>"}/api/mcp</code>.

@@ -109,8 +109,6 @@ export interface LeadRow {
   whatsapp: string | null;
   first_name: string;
   last_name: string;
-  hubspot_contact_id: string | null;
-  hubspot_deal_id: string | null;
   dietary_restrictions: string | null;
   birthday: string | null;
   notes: string | null;
@@ -160,7 +158,6 @@ export interface BookingRow {
   currency: string;
   special_requests: string | null;
   operator_notes: string | null;
-  hubspot_deal_id: string | null;
   stripe_payment_intent_id: string | null;
   invoice_url: string | null;
   created_at: string;
@@ -223,9 +220,6 @@ export interface ApplicationRow {
   screening_token: string | null;
   referral_link_id: string | null;
   admin_notes: string | null;
-  hubspot_contact_id: string | null;
-  hubspot_deal_id: string | null;
-  hubspot_synced: boolean;
   reviewed_by: string | null;
   reviewed_at: string | null;
   created_at: string;

@@ -1,7 +1,7 @@
 // One-time data copy: old Supabase project -> new `collective` project.
 // Reads OLD creds from .env.local.old-db and NEW creds from .env.local
 // (run scripts/setup-new-db-env.mjs first). Preserves row UUIDs so FKs and
-// HubSpot references survive. Idempotent via upsert on id.
+// Platform-native records and identifiers survive. Idempotent via upsert on id.
 // Prints counts and user emails/roles only — never tokens or hashes.
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
