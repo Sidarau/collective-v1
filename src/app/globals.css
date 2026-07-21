@@ -279,7 +279,7 @@ label.tag {
 /* ---------- Deck-inspired landing navigation ---------- */
 .landing-nav {
   position: fixed;
-  z-index: 50;
+  z-index: 100; /* above every section's glass/stacking context */
   top: max(14px, env(safe-area-inset-top));
   left: 50%;
   width: min(calc(100% - 32px), 1180px);
@@ -576,11 +576,14 @@ label.tag {
   }
 
   .hero-photo-detail {
-    object-fit: contain;
-    object-position: 50% 50%;
-    filter: saturate(0.9) contrast(1.04) brightness(0.78);
-    -webkit-mask-image: linear-gradient(to bottom, transparent 6%, #000 25%, #000 75%, transparent 94%);
-    mask-image: linear-gradient(to bottom, transparent 6%, #000 25%, #000 75%, transparent 94%);
+    /* Full-bleed villa behind the keyhole, like the partner deck — cover
+       (not contain) so there is no empty dark band above/below on mobile.
+       Framed slightly high to keep the estate + horizon in view. */
+    object-fit: cover;
+    object-position: 50% 38%;
+    filter: saturate(0.9) contrast(1.04) brightness(0.8);
+    -webkit-mask-image: none;
+    mask-image: none;
   }
 
   .hero-scrim {

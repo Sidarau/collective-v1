@@ -62,9 +62,11 @@ export default async function Landing() {
 
   return (
     <main className="relative">
+      {/* Nav lives at the page root (not inside the hero) so its fixed
+          positioning + z-index sit above every section's stacking context. */}
+      <LandingNav />
       {/* ——— Hero ——— */}
       <section id="top" className="landing-hero relative min-h-dvh overflow-hidden bg-[#07110d]">
-        <LandingNav />
         <Image
           src={ROCA_LLISA_IMAGE}
           alt=""
@@ -141,16 +143,19 @@ export default async function Landing() {
       <div id="more" className="bg-base px-6 pb-10 pt-20 scroll-mt-4 sm:px-10 lg:pt-28">
         <div className="mx-auto w-full max-w-6xl space-y-20 lg:space-y-28">
           {publicEvents.length > 0 && (
-            <section className="glass grid gap-5 p-6 sm:p-7 lg:grid-cols-[0.55fr_1.45fr] lg:items-center lg:gap-10 lg:p-9">
-              <div>
-                <p className="eyebrow">Upcoming access</p>
-                <p className="display mt-3 text-[24px] leading-tight text-ink sm:text-[28px]">
-                  Meet the circle in Ibiza.
-                </p>
-              </div>
-              <div className="grid gap-3">
+            <section aria-label="Upcoming access">
+              <p className="eyebrow">Upcoming access</p>
+              <p className="display mt-3 text-[24px] leading-tight text-ink sm:text-[28px]">
+                Meet the circle in Ibiza.
+              </p>
+              {/* Events float on their own — no outer glass wrapper. */}
+              <div className="mt-6 grid gap-4 sm:mt-7 sm:grid-cols-2 lg:grid-cols-3">
                 {publicEvents.map((event) => (
-                  <Link key={event.id} href={`/events/${event.slug}`} className="glass-flat tap block p-4 text-left sm:p-5">
+                  <Link
+                    key={event.id}
+                    href={`/events/${event.slug}`}
+                    className="glass-flat tap block p-5 text-left"
+                  >
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="text-[14px] font-semibold text-ink sm:text-[15px]">{event.title}</p>
