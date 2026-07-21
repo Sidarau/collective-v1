@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -123,8 +124,18 @@ function LoginForm() {
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-base px-4">
-      <div className="w-full max-w-sm">
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-base px-4">
+      <Image
+        src="/villa/roca-llisa-hero.jpg"
+        alt=""
+        fill
+        priority
+        sizes="100vw"
+        className="object-cover"
+        style={{ objectPosition: "38% center" }}
+      />
+      <div className="absolute inset-0" style={{ background: "rgba(7,16,14,0.88)" }} />
+      <div className="relative z-10 w-full max-w-sm">
         <p className="text-center text-[11px] font-bold uppercase tracking-[0.24em] text-gold">
           Collective
         </p>

@@ -16,12 +16,34 @@ const figtree = Figtree({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://myopencollective.com"),
   title: "Collective",
   description: "A private circle. By invitation.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Collective",
+  },
+  openGraph: {
+    title: "Open Collective",
+    description: "A private members network. By invitation.",
+    url: "https://myopencollective.com",
+    siteName: "Open Collective",
+    type: "website",
+    images: [
+      {
+        url: "/villa/roca-llisa-og.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Roca Llisa — a private estate above the Ibiza coast",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Open Collective",
+    description: "A private members network. By invitation.",
+    images: ["/villa/roca-llisa-og.jpg"],
   },
   robots: { index: false, follow: false },
 };

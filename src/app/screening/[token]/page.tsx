@@ -7,7 +7,7 @@ import SlotPicker, { type SlotDay } from "./SlotPicker";
 export const dynamic = "force-dynamic";
 
 const BG =
-  "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=2400&auto=format&fit=crop";
+  "/villa/roca-llisa-hero.jpg";
 
 const dayLabel = (dateKey: string) =>
   new Intl.DateTimeFormat("en-GB", {

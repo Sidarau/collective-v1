@@ -5,7 +5,7 @@ import VendorForm from "./VendorForm";
 export const dynamic = "force-dynamic";
 
 const BG =
-  "https://images.unsplash.com/photo-1416331108676-a22ccb276e35?q=80&w=2400&auto=format&fit=crop";
+  "/villa/roca-llisa-hero.jpg";
 
 /**
  * Public vendor/staff door: housekeepers, chefs, maintenance, drivers…

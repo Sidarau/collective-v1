@@ -6,7 +6,7 @@ import WelcomeForm from "./WelcomeForm";
 export const dynamic = "force-dynamic";
 
 const BG =
-  "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=2400&auto=format&fit=crop";
+  "/villa/roca-llisa-hero.jpg";
 
 /** Landing for phone/WhatsApp invites: you were vouched for — claim your entrance. */
 export default async function WelcomePage({

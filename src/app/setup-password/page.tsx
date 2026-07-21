@@ -6,7 +6,7 @@ import SetupPasswordForm from "./SetupPasswordForm";
 export const dynamic = "force-dynamic";
 
 const BG =
-  "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=2400&auto=format&fit=crop";
+  "/villa/roca-llisa-hero.jpg";
 
 export default async function SetupPasswordPage() {
   const user = await getAuthUserWithPassword();

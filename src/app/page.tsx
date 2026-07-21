@@ -5,8 +5,8 @@ import { fmtGateDayTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
-const HERO =
-  "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?q=80&w=2400&auto=format&fit=crop";
+// Roca Llisa — the real estate. A still from the estate footage, cars cropped.
+const HERO = "/villa/roca-llisa-hero.jpg";
 
 const BELIEFS = [
   "Growth happens faster when ambitious people are surrounded by individuals who challenge, expand and elevate their thinking.",
@@ -24,8 +24,8 @@ const PILLARS = [
     body: "Where people spend time influences how they think, decide and create. We curate environments that support clarity, ambition and elevated living.",
   },
   {
-    title: "The Estate Access",
-    body: "Every member, location and gathering is selected with intention. The network grows only when the standard can be protected.",
+    title: "Environments & Spaces",
+    body: "Where a conversation happens shapes where it leads. We hold a small collection of private environments and spaces — homes, tables, terraces — chosen so presence comes easily and the circle feels at home.",
   },
 ];
 
@@ -35,10 +35,22 @@ const MEMBERSHIP = [
   "Access to selected private villas and curated environments around the world — designed for presence, connection, focus and elevated community moments.",
 ];
 
+// Who it's for — Don's eight, kept as a quiet numbered set.
+const WHO = [
+  "Entrepreneurs",
+  "Founders",
+  "Investors",
+  "Creators",
+  "Visionaries",
+  "Community builders",
+  "Leaders with global orientation",
+  "Individuals of discretion & depth",
+];
+
 /**
- * Landing: a silent hero (the mark, one action), then the manifesto —
- * Don's prototype copy set in the house style. No application form here;
- * entrance stays behind the door.
+ * Landing: a silent hero over the real estate (the mark, one action), then the
+ * manifesto — Don's prototype copy set in the house style. No application form
+ * here; entrance stays behind the door.
  */
 export default async function Landing() {
   const [hero, publicEvents] = await Promise.all([
@@ -50,7 +62,15 @@ export default async function Landing() {
     <main className="relative">
       {/* ——— Hero ——— */}
       <section className="relative min-h-dvh overflow-hidden">
-        <Image src={HERO} alt="" fill priority sizes="100vw" className="object-cover" />
+        <Image
+          src={HERO}
+          alt="Roca Llisa — a private estate above the Ibiza coast"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
+          style={{ objectPosition: "38% center" }}
+        />
         <div className="absolute inset-0 scrim-full" />
 
         <div className="relative z-10 flex min-h-dvh flex-col items-center justify-between px-6 py-14">
@@ -98,28 +118,45 @@ export default async function Landing() {
                 </div>
               </section>
             )}
-            <p className="faint mt-8 animate-pulse text-[11px] uppercase tracking-[0.22em]">
-              Scroll
-            </p>
           </div>
 
-          <div />
+          {/* Scroll cue — the site continues below the fold */}
+          <a
+            href="#more"
+            aria-label="Scroll to read more"
+            className="tap flex flex-col items-center gap-2 text-faint transition-colors hover:text-ink"
+          >
+            <span className="text-[11px] uppercase tracking-[0.22em]">Scroll</span>
+            <svg
+              className="animate-bounce"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </a>
         </div>
       </section>
 
       {/* ——— Manifesto ——— */}
-      <div className="bg-base px-6 pb-10 pt-20">
+      <div id="more" className="bg-base px-6 pb-10 pt-20 scroll-mt-4">
         <div className="mx-auto w-full max-w-xl space-y-16">
-          {/* Why we exist */}
+          {/* Access changes everything */}
           <section>
-            <p className="eyebrow">Why we exist</p>
-            <h2 className="display mt-3 text-[30px] leading-[1.12] text-ink">
-              A trusted global access layer for those who choose intentionally.
+            <p className="eyebrow">Open Collective</p>
+            <h2 className="display mt-3 text-[32px] leading-[1.08] text-ink">
+              Access changes everything.
             </h2>
-            <p className="muted mt-5 text-[14.5px] leading-relaxed">
-              Open Collective exists to create a trusted global access layer for high-value
-              individuals who understand that the right people and the right environments shape
-              better decisions, deeper growth and stronger opportunities.
+            <p className="mt-5 text-[15.5px] leading-relaxed text-ink/90">
+              A private members network for entrepreneurs, visionaries and leaders who choose their
+              environments, relationships and next level with intention.
             </p>
             <p className="muted mt-4 text-[14.5px] leading-relaxed">
               We bring together selected entrepreneurs, visionaries, investors and creators inside
@@ -133,8 +170,8 @@ export default async function Landing() {
           <section>
             <p className="eyebrow">What we believe</p>
             <p className="display mt-3 text-[22px] leading-snug text-ink">
-              Access to the right people. The right rooms of conversation. The right environments.
-              The right moments.
+              Access to the right people. The right environments. The right spaces. The right
+              moments.
             </p>
             <ul className="mt-6 space-y-4">
               {BELIEFS.map((line) => (
@@ -187,33 +224,53 @@ export default async function Landing() {
                 </li>
               ))}
             </ul>
-            <p className="display mt-7 text-[20px] leading-snug text-ink">
-              This is for people who do not need more contacts. They need the right circle.
-            </p>
           </section>
 
-          {/* Estates */}
+          {/* Who it's for */}
           <section>
-            <p className="eyebrow">The estates</p>
+            <p className="eyebrow">Who it&apos;s for</p>
+            <h2 className="display mt-3 text-[24px] leading-snug text-ink">
+              Built for people who choose their circle with intention.
+            </h2>
+            <p className="muted mt-4 text-[14px] leading-relaxed">
+              Not a bigger network — a better one. The people here are building something real, and
+              their presence makes the room sharper for everyone in it.
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              {WHO.map((who, i) => (
+                <div key={who} className="glass-flat flex items-baseline gap-3 p-4">
+                  <span className="faint text-[11px] tracking-[0.12em]">0{i + 1}</span>
+                  <span className="text-[13.5px] font-medium leading-snug text-ink">{who}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Global environments */}
+          <section>
+            <p className="eyebrow">Global environments</p>
+            <h2 className="display mt-3 text-[24px] leading-snug text-ink">
+              Curated private environments around the world.
+            </h2>
             <div className="relative mt-5 h-52 overflow-hidden rounded-3xl sm:h-64">
               <Image
-                src="/landing/estates.jpg"
-                alt="A private estate at dusk"
+                src="/villa/roca-llisa-wide.jpg"
+                alt="Roca Llisa, Ibiza — a private access point above the sea"
                 fill
                 sizes="(max-width: 672px) 100vw, 672px"
                 className="object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
               <p className="absolute bottom-4 left-5 right-5 text-[13px] font-medium text-ink">
-                Iconic locations. Private access points — not destinations.
+                Roca Llisa, Ibiza — a private access point, not a destination.
               </p>
             </div>
             <p className="muted mt-5 text-[14px] leading-relaxed">
               Open Collective develops access to selected private villas and estate environments in
-              iconic locations around the world. Each location is chosen for its atmosphere,
-              privacy, quality and ability to support meaningful connection. These environments are
-              not presented as destinations — they are private access points within a global
-              members network.
+              iconic locations — from Ibiza and the Mediterranean to the Alps and the United States.
+              Each is chosen for its atmosphere, privacy, quality and ability to support meaningful
+              connection. These are not destinations — they are private access points within a
+              global members network.
             </p>
             <p className="faint mt-3 text-[12.5px]">
               Access is limited, curated and allocated within the private club framework.
@@ -228,13 +285,6 @@ export default async function Landing() {
               trust, values and contribution to the collective energy of the network. Every member
               should strengthen the quality of the circle.
             </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              {["Community builders", "Leaders with global orientation", "Individuals of discretion & depth"].map(
-                (who) => (
-                  <span key={who} className="chip">{who}</span>
-                )
-              )}
-            </div>
             <p className="display mt-6 text-[19px] leading-snug text-champagne">
               The question is not only what you gain access to. The question is what your presence
               adds to the network.

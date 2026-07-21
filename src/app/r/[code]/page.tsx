@@ -8,7 +8,7 @@ import InstantEntranceForm from "./InstantEntranceForm";
 export const dynamic = "force-dynamic";
 
 const BG =
-  "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=2400&auto=format&fit=crop";
+  "/villa/roca-llisa-hero.jpg";
 
 /**
  * The public front door: a referral link IS the invitation. Member doors run

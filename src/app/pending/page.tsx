@@ -9,7 +9,7 @@ import SignOutButton from "@/components/SignOutButton";
 export const dynamic = "force-dynamic";
 
 const BG =
-  "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?q=80&w=2400&auto=format&fit=crop";
+  "/villa/roca-llisa-hero.jpg";
 
 const STATUS_COPY: Record<string, { title: string; body: string }> = {
   submitted: {

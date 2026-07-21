@@ -7,7 +7,7 @@ import JoinForm from "./JoinForm";
 export const dynamic = "force-dynamic";
 
 const BG =
-  "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=2400&auto=format&fit=crop";
+  "/villa/roca-llisa-hero.jpg";
 
 /**
  * First arrival after a referral entrance link. The form is about the person,

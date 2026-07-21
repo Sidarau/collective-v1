@@ -9,7 +9,7 @@ import type { ConfirmationResult } from "firebase/auth";
 const PHONE_LOGIN = process.env.NEXT_PUBLIC_PHONE_LOGIN === "1";
 
 const BG =
-  "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=2400&auto=format&fit=crop";
+  "/villa/roca-llisa-hero.jpg";
 
 const ERROR_COPY: Record<string, string> = {
   link_invalid: "That entrance link has expired or was already used. Request a fresh one below.",
