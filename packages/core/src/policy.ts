@@ -19,9 +19,14 @@ export type Capability =
   | "admin.tokens.manage"
   | "admin.grants.manage";
 
-/** Capabilities no automated principal may ever hold (ADR §3.2). Human-gated. */
+/**
+ * Capabilities no automated principal may ever hold. Publishing (posting to
+ * the KB) is intentionally NOT here: owner-scope agents (the operator's own
+ * infra agents) may post + edit internal KB content, always audited with the
+ * exact token/admin. External SHARING of confidential docs, granting access,
+ * campaign sends, and token/grant admin stay strictly human.
+ */
 export const HUMAN_ONLY: ReadonlySet<Capability> = new Set<Capability>([
-  "kb.publish",
   "kb.share",
   "kb.grant",
   "comms.campaign.send",
@@ -38,7 +43,7 @@ export type PrincipalKind =
   | "external_share"
   | "public";
 
-export type AgentScope = "owner" | "staff";
+export type AgentScope = "owner" | "staff" | "member";
 
 /** Audience tags used for KB tree grants (kb_grants.audience). */
 export type Audience = "operator" | "staff" | "member" | "vendor";
@@ -59,8 +64,9 @@ const OWNER: Capability[] = [
 const OPERATOR: Capability[] = [
   "kb.view", "kb.draft", "kb.render", "kb.publish", "kb.share", "kb.archive", "ops.read", "ops.write",
 ];
-const AGENT_OWNER: Capability[] = ["kb.view", "kb.draft", "kb.render", "ops.read"]; // drafts only; never publish/share
-const AGENT_STAFF: Capability[] = ["kb.view", "kb.draft", "kb.render"];
+const AGENT_OWNER: Capability[] = ["kb.view", "kb.draft", "kb.render", "kb.publish", "ops.read"]; // may post/edit; never share externally
+const AGENT_STAFF: Capability[] = ["kb.view", "kb.draft", "kb.render"]; // draft only
+const AGENT_MEMBER: Capability[] = ["kb.view"]; // read member-audience KB (events/gates) only
 const MEMBER: Capability[] = ["kb.view"];
 const VENDOR: Capability[] = ["kb.view"];
 const EXTERNAL: Capability[] = ["kb.view"]; // one pinned revision, gated separately
@@ -72,7 +78,9 @@ export function capabilitiesFor(p: Principal): Set<Capability> {
   switch (p.kind) {
     case "owner": caps = OWNER; break;
     case "operator": caps = OPERATOR; break;
-    case "agent": caps = p.agentScope === "staff" ? AGENT_STAFF : AGENT_OWNER; break;
+    case "agent":
+      caps = p.agentScope === "staff" ? AGENT_STAFF : p.agentScope === "member" ? AGENT_MEMBER : AGENT_OWNER;
+      break;
     case "member": caps = MEMBER; break;
     case "vendor": caps = VENDOR; break;
     case "external_share": caps = EXTERNAL; break;
@@ -91,7 +99,8 @@ export function audienceFor(p: Principal): Audience | null {
   switch (p.kind) {
     case "owner":
     case "operator": return "operator";
-    case "agent": return p.agentScope === "staff" ? "staff" : "operator";
+    case "agent":
+      return p.agentScope === "staff" ? "staff" : p.agentScope === "member" ? "member" : "operator";
     case "member": return "member";
     case "vendor": return "vendor";
     default: return null; // external_share and public do not traverse the tree

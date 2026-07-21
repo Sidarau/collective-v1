@@ -540,7 +540,7 @@ export interface AgentTokenRow {
   revoked_at: string | null;
   created_at: string;
 }
-export type AgentTokenScope = "owner" | "staff";
+export type AgentTokenScope = "owner" | "staff" | "member";
 
 // ---------- Native CRM (admin console) ----------
 

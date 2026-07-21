@@ -11,7 +11,7 @@ import type { CrmEntityType, Json } from "@core/database.types";
 import { agentContext, resolveAgent, toPrincipal } from "@/lib/agent-auth";
 import { authorize, audienceFor, capabilitiesFor } from "@core/policy";
 import { renderRevision, KB_TEMPLATES, type KbTemplate } from "@core/kb-render";
-import { createRevision } from "@core/kb-revisions";
+import { createRevision, publishRevision, getRevision } from "@core/kb-revisions";
 import { resolveTreeGrant, recordAccessEvent } from "@core/kb-access";
 import { doorPath } from "@/lib/format";
 
@@ -1039,8 +1039,56 @@ const handler = createMcpHandler(
           `drafted ${template2} revision ${rev.id} (hash ${rev.content_hash.slice(0, 12)})`
         );
         return ok(
-          `Draft saved. revision_id: ${rev.id}\ntemplate: ${rev.template}\ncontent_hash: ${rev.content_hash}\n\nAn owner can now preview + publish this revision in the console (Publishing).`
+          `Draft saved. revision_id: ${rev.id}\ntemplate: ${rev.template}\ncontent_hash: ${rev.content_hash}\n\nOwner-scope tokens can publish it with kb_publish; otherwise an owner publishes in the console (Publishing).`
         );
+      }
+    );
+
+    server.registerTool(
+      "kb_publish",
+      {
+        title: "Publish a KB revision",
+        description:
+          "Point a KB node at one of its draft revisions (from kb_draft), making it the live version. OWNER-scope tokens only — staff/member tokens are denied. Every publish is audited with the exact token/admin. Does not create external shares (that stays human-only).",
+        inputSchema: {
+          nodeId: z.string().uuid(),
+          revisionId: z.string().uuid(),
+        },
+      },
+      async ({ nodeId, revisionId }) => {
+        const id = agentContext.getStore();
+        const principal = id ? toPrincipal(id) : null;
+        if (!principal) return err("No identity");
+        const audience = audienceFor(principal);
+        const treeGranted = audience ? await resolveTreeGrant(nodeId, audience) : false;
+        const decision = authorize(principal, "kb.publish", { treeGranted });
+        await recordAccessEvent({
+          principal,
+          capability: "kb.publish",
+          resourceType: "kb_node",
+          resourceId: nodeId,
+          decision: decision.allow ? "allow" : "deny",
+          reason: decision.reason,
+        });
+        if (!decision.allow) {
+          return err(
+            decision.reason === "no_capability"
+              ? "Denied: only owner-scope tokens may publish. Draft with kb_draft and let an owner publish."
+              : decision.reason === "tree_denied"
+                ? "Denied: no grant on this KB subtree."
+                : `Denied (${decision.reason})`
+          );
+        }
+        const rev = await getRevision(revisionId);
+        if (!rev || rev.node_id !== nodeId) return err("Revision does not belong to that node");
+        await publishRevision(nodeId, revisionId);
+        await auditAgent(
+          "agent.kb_publish",
+          "kb_node" as CrmEntityType,
+          nodeId,
+          `published revision ${revisionId.slice(0, 8)} (${rev.template}, hash ${rev.content_hash.slice(0, 12)})`
+        );
+        return ok(`Published. Node ${nodeId} now serves revision ${revisionId} (${rev.template}).`);
       }
     );
   },

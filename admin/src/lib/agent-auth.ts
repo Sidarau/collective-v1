@@ -80,7 +80,7 @@ export async function resolveAgent(req: Request): Promise<AgentIdentity | NextRe
           adminEmail: owner?.email || null,
           tokenId: row.id,
           tokenLabel: row.label,
-          scope: row.scope === "staff" ? "staff" : "owner",
+          scope: row.scope === "staff" || row.scope === "member" ? row.scope : "owner",
         };
       }
       return NextResponse.json({ error: "Invalid or revoked token" }, { status: 401 });
