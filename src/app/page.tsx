@@ -1,12 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
+import { LandingNav } from "@/components/LandingNav";
 import { fetchContentBlock, fetchPublicEvents } from "@/lib/data";
 import { fmtGateDayTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
-// The owner-supplied Roca Llisa gate image. Keep its complete 40:21 framing
-// visible rather than cropping a landscape estate shot to fill a tall viewport.
+// The owner-supplied Roca Llisa gate image is the visual anchor for both the
+// full-bleed entrance and the environment card below.
 const ROCA_LLISA_IMAGE = "/villa/roca-llisa-gate.jpg";
 
 const BELIEFS = [
@@ -62,80 +63,60 @@ export default async function Landing() {
   return (
     <main className="relative">
       {/* ——— Hero ——— */}
-      <section className="landing-hero relative min-h-dvh overflow-hidden bg-[#07110d]">
+      <section id="top" className="landing-hero relative min-h-dvh overflow-hidden bg-[#07110d]">
+        <LandingNav />
         <Image
           src={ROCA_LLISA_IMAGE}
           alt=""
           fill
+          priority
           sizes="100vw"
+          className="hero-photo-ambient"
           aria-hidden="true"
-          className="hero-atmosphere-image object-cover"
         />
-        <div className="hero-atmosphere absolute inset-0" aria-hidden="true" />
-        <div className="hero-panorama">
-          <Image
-            src={ROCA_LLISA_IMAGE}
-            alt="Roca Llisa — a private estate above the Ibiza coast"
-            fill
-            loading="eager"
-            sizes="100vw"
-            className="hero-panorama-image object-cover"
-          />
-        </div>
+        <Image
+          src={ROCA_LLISA_IMAGE}
+          alt="Roca Llisa — a private estate above the Ibiza coast"
+          fill
+          priority
+          sizes="100vw"
+          className="hero-photo-detail"
+        />
         <div className="hero-scrim absolute inset-0" aria-hidden="true" />
 
-        <div className="relative z-10 flex min-h-dvh flex-col items-center justify-between px-6 py-14">
-          <div />
-
-          <div className="stagger flex flex-col items-center text-center">
+        <div className="hero-stage relative z-10 flex min-h-dvh flex-col items-center px-6 pb-10 pt-28 sm:px-10 sm:pb-12 sm:pt-32">
+          <div className="hero-lockup stagger my-auto flex flex-col items-center text-center">
             <Image
               src="/brand/logo-horizontal.png"
               alt="Open Collective"
               width={1400}
               height={700}
               priority
-              className="h-auto w-[250px] sm:w-[300px]"
+              className="hero-brand h-auto w-[235px] sm:w-[330px]"
             />
             <h1 className="sr-only">Open Collective</h1>
-            <p className="muted mt-4 max-w-xs text-[15px] leading-relaxed">
+            <p className="hero-copy mt-5 max-w-sm text-[17px] leading-relaxed sm:mt-7 sm:max-w-xl sm:text-[24px]">
               {hero || "A private circle around the world's quiet places."}
               <br />
               Membership is by referral.
             </p>
+            <div className="hero-meta" aria-label="Collective details">
+              <span>Ibiza · Est. 2026</span>
+              <span>By referral only</span>
+            </div>
             <Link
               href="/login"
-              className="btn-champagne tap mt-8 inline-flex h-[52px] items-center px-10 text-[15px]"
+              className="btn-champagne hero-enter tap inline-flex h-[54px] items-center px-11 text-[15px] sm:h-[58px] sm:px-14 sm:text-[16px]"
             >
               Enter
             </Link>
-            {publicEvents.length > 0 && (
-              <section className="mt-7 w-full max-w-sm">
-                <p className="eyebrow mb-3">Public events</p>
-                <div className="space-y-2">
-                  {publicEvents.map((event) => (
-                    <Link key={event.id} href={`/events/${event.slug}`} className="glass-flat tap block p-4 text-left">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-[14px] font-semibold text-ink">{event.title}</p>
-                          <p className="muted mt-1 text-[12px]">
-                            {fmtGateDayTime(event.start_at)}
-                            {event.villas?.name ? ` · ${event.villas.name}` : ""}
-                          </p>
-                        </div>
-                        <span className="chip chip-gold">RSVP</span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            )}
           </div>
 
           {/* Scroll cue — the site continues below the fold */}
           <a
             href="#more"
             aria-label="Scroll to read more"
-            className="tap flex flex-col items-center gap-2 text-faint transition-colors hover:text-ink"
+            className="hero-scroll tap flex flex-col items-center gap-2 transition-colors hover:text-ink"
           >
             <span className="text-[11px] uppercase tracking-[0.22em]">Scroll</span>
             <svg
@@ -157,28 +138,59 @@ export default async function Landing() {
       </section>
 
       {/* ——— Manifesto ——— */}
-      <div id="more" className="bg-base px-6 pb-10 pt-20 scroll-mt-4">
-        <div className="mx-auto w-full max-w-xl space-y-16">
+      <div id="more" className="bg-base px-6 pb-10 pt-20 scroll-mt-4 sm:px-10 lg:pt-28">
+        <div className="mx-auto w-full max-w-6xl space-y-20 lg:space-y-28">
+          {publicEvents.length > 0 && (
+            <section className="glass grid gap-5 p-6 sm:p-7 lg:grid-cols-[0.55fr_1.45fr] lg:items-center lg:gap-10 lg:p-9">
+              <div>
+                <p className="eyebrow">Upcoming access</p>
+                <p className="display mt-3 text-[24px] leading-tight text-ink sm:text-[28px]">
+                  Meet the circle in Ibiza.
+                </p>
+              </div>
+              <div className="grid gap-3">
+                {publicEvents.map((event) => (
+                  <Link key={event.id} href={`/events/${event.slug}`} className="glass-flat tap block p-4 text-left sm:p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-[14px] font-semibold text-ink sm:text-[15px]">{event.title}</p>
+                        <p className="muted mt-1 text-[12px]">
+                          {fmtGateDayTime(event.start_at)}
+                          {event.villas?.name ? ` · ${event.villas.name}` : ""}
+                        </p>
+                      </div>
+                      <span className="chip chip-gold">RSVP</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Access changes everything */}
-          <section>
-            <p className="eyebrow">Open Collective</p>
-            <h2 className="display mt-3 text-[32px] leading-[1.08] text-ink">
-              Access changes everything.
-            </h2>
-            <p className="mt-5 text-[15.5px] leading-relaxed text-ink/90">
-              A private members network for entrepreneurs, visionaries and leaders who choose their
-              environments, relationships and next level with intention.
-            </p>
-            <p className="muted mt-4 text-[14.5px] leading-relaxed">
-              We bring together selected entrepreneurs, visionaries, investors and creators inside
-              curated private environments designed for connection, clarity and expansion. Our
-              mission is not to build another public community — it is to build a private ecosystem
-              where access, trust and alignment become the foundation for growth.
-            </p>
+          <section id="about" className="scroll-mt-32 lg:grid lg:grid-cols-[0.82fr_1.18fr] lg:gap-20">
+            <div>
+              <p className="eyebrow">Open Collective</p>
+              <h2 className="display mt-3 text-[32px] leading-[1.08] text-ink sm:text-[40px] lg:text-[54px]">
+                Access changes everything.
+              </h2>
+            </div>
+            <div className="lg:pt-7">
+              <p className="mt-5 text-[15.5px] leading-relaxed text-ink/90 lg:mt-0 lg:text-[19px]">
+                A private members network for entrepreneurs, visionaries and leaders who choose their
+                environments, relationships and next level with intention.
+              </p>
+              <p className="muted mt-4 text-[14.5px] leading-relaxed lg:text-[16px]">
+                We bring together selected entrepreneurs, visionaries, investors and creators inside
+                curated private environments designed for connection, clarity and expansion. Our
+                mission is not to build another public community — it is to build a private ecosystem
+                where access, trust and alignment become the foundation for growth.
+              </p>
+            </div>
           </section>
 
           {/* What we believe */}
-          <section>
+          <section id="principles" className="scroll-mt-32">
             <p className="eyebrow">What we believe</p>
             <p className="display mt-3 text-[22px] leading-snug text-ink">
               Access to the right people. The right environments. The right spaces. The right
@@ -209,7 +221,7 @@ export default async function Landing() {
           {/* Pillars */}
           <section>
             <p className="eyebrow">Three layers</p>
-            <div className="mt-5 space-y-3">
+            <div className="mt-5 grid gap-3 lg:grid-cols-3">
               {PILLARS.map((pillar, i) => (
                 <div key={pillar.title} className="glass-flat p-5">
                   <p className="faint text-[11px] uppercase tracking-[0.2em]">0{i + 1}</p>
@@ -224,69 +236,75 @@ export default async function Landing() {
             </p>
           </section>
 
-          {/* Membership */}
-          <section>
-            <p className="eyebrow">What membership carries</p>
-            <ul className="mt-5 space-y-4">
-              {MEMBERSHIP.map((line) => (
-                <li key={line.slice(0, 24)} className="flex gap-3">
-                  <span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-champagne" />
-                  <p className="muted text-[14px] leading-relaxed">{line}</p>
-                </li>
-              ))}
-            </ul>
-          </section>
+          <div className="grid gap-20 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20">
+            {/* Membership */}
+            <section id="membership" className="scroll-mt-32">
+              <p className="eyebrow">What membership carries</p>
+              <ul className="mt-5 space-y-4">
+                {MEMBERSHIP.map((line) => (
+                  <li key={line.slice(0, 24)} className="flex gap-3">
+                    <span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-champagne" />
+                    <p className="muted text-[14px] leading-relaxed lg:text-[15px]">{line}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
 
-          {/* Who it's for */}
-          <section>
-            <p className="eyebrow">Who it&apos;s for</p>
-            <h2 className="display mt-3 text-[24px] leading-snug text-ink">
-              Built for people who choose their circle with intention.
-            </h2>
-            <p className="muted mt-4 text-[14px] leading-relaxed">
-              Not a bigger network — a better one. The people here are building something real, and
-              their presence makes the room sharper for everyone in it.
-            </p>
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              {WHO.map((who, i) => (
-                <div key={who} className="glass-flat flex items-baseline gap-3 p-4">
-                  <span className="faint text-[11px] tracking-[0.12em]">0{i + 1}</span>
-                  <span className="text-[13.5px] font-medium leading-snug text-ink">{who}</span>
-                </div>
-              ))}
-            </div>
-          </section>
+            {/* Who it's for */}
+            <section id="network" className="scroll-mt-32">
+              <p className="eyebrow">Who it&apos;s for</p>
+              <h2 className="display mt-3 text-[24px] leading-snug text-ink lg:text-[32px]">
+                Built for people who choose their circle with intention.
+              </h2>
+              <p className="muted mt-4 text-[14px] leading-relaxed">
+                Not a bigger network — a better one. The people here are building something real, and
+                their presence makes the room sharper for everyone in it.
+              </p>
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                {WHO.map((who, i) => (
+                  <div key={who} className="glass-flat flex items-baseline gap-3 p-4">
+                    <span className="faint text-[11px] tracking-[0.12em]">0{i + 1}</span>
+                    <span className="text-[13.5px] font-medium leading-snug text-ink">{who}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
 
           {/* Global environments */}
-          <section>
+          <section id="environments" className="scroll-mt-32">
             <p className="eyebrow">Global environments</p>
             <h2 className="display mt-3 text-[24px] leading-snug text-ink">
               Curated private environments around the world.
             </h2>
-            <div className="relative mt-5 overflow-hidden rounded-3xl bg-[#07110d]">
-              <Image
-                src={ROCA_LLISA_IMAGE}
-                alt="Roca Llisa, Ibiza — a private access point above the sea"
-                width={1200}
-                height={630}
-                sizes="(max-width: 672px) 100vw, 672px"
-                className="h-auto w-full"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
-              <p className="absolute bottom-4 left-5 right-5 text-[13px] font-medium text-ink">
-                Roca Llisa, Ibiza — a private access point, not a destination.
-              </p>
+            <div className="mt-7 grid gap-7 lg:grid-cols-[1.4fr_0.6fr] lg:items-center lg:gap-12">
+              <div className="relative overflow-hidden rounded-3xl bg-[#07110d]">
+                <Image
+                  src={ROCA_LLISA_IMAGE}
+                  alt="Roca Llisa, Ibiza — a private access point above the sea"
+                  width={1200}
+                  height={630}
+                  sizes="(max-width: 1024px) 100vw, 760px"
+                  className="h-auto w-full"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
+                <p className="absolute bottom-4 left-5 right-5 text-[13px] font-medium text-ink">
+                  Roca Llisa, Ibiza — a private access point, not a destination.
+                </p>
+              </div>
+              <div>
+                <p className="muted text-[14px] leading-relaxed lg:text-[15px]">
+                  Open Collective develops access to selected private villas and estate environments in
+                  iconic locations — from Ibiza and the Mediterranean to the Alps and the United States.
+                  Each is chosen for its atmosphere, privacy, quality and ability to support meaningful
+                  connection. These are not destinations — they are private access points within a
+                  global members network.
+                </p>
+                <p className="faint mt-3 text-[12.5px]">
+                  Access is limited, curated and allocated within the private club framework.
+                </p>
+              </div>
             </div>
-            <p className="muted mt-5 text-[14px] leading-relaxed">
-              Open Collective develops access to selected private villas and estate environments in
-              iconic locations — from Ibiza and the Mediterranean to the Alps and the United States.
-              Each is chosen for its atmosphere, privacy, quality and ability to support meaningful
-              connection. These are not destinations — they are private access points within a
-              global members network.
-            </p>
-            <p className="faint mt-3 text-[12.5px]">
-              Access is limited, curated and allocated within the private club framework.
-            </p>
           </section>
 
           {/* The standard */}
@@ -323,7 +341,7 @@ export default async function Landing() {
         </div>
 
         {/* Footer */}
-        <footer className="mx-auto mt-14 max-w-xl border-t border-white/10 pt-7">
+        <footer className="mx-auto mt-20 max-w-6xl border-t border-white/10 pt-7">
           <p className="faint text-center text-[11.5px] leading-relaxed">
             Open Collective is a private members network. Access is subject to alignment and
             personal introduction. Services referenced within the network are optional, externally
