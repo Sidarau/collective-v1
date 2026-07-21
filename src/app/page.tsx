@@ -5,8 +5,9 @@ import { fmtGateDayTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
-// Roca Llisa — the real estate. A still from the estate footage, cars cropped.
-const HERO = "/villa/roca-llisa-hero.jpg";
+// The owner-supplied Roca Llisa gate image. Keep its complete 40:21 framing
+// visible rather than cropping a landscape estate shot to fill a tall viewport.
+const ROCA_LLISA_IMAGE = "/villa/roca-llisa-gate.jpg";
 
 const BELIEFS = [
   "Growth happens faster when ambitious people are surrounded by individuals who challenge, expand and elevate their thinking.",
@@ -61,15 +62,23 @@ export default async function Landing() {
   return (
     <main className="relative">
       {/* ——— Hero ——— */}
-      <section className="relative min-h-dvh overflow-hidden">
+      <section className="relative min-h-dvh overflow-hidden bg-[#07110d]">
         <Image
-          src={HERO}
+          src={ROCA_LLISA_IMAGE}
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          aria-hidden="true"
+          className="scale-110 object-cover opacity-20 blur-xl"
+        />
+        <Image
+          src={ROCA_LLISA_IMAGE}
           alt="Roca Llisa — a private estate above the Ibiza coast"
           fill
           priority
           sizes="100vw"
-          className="object-cover"
-          style={{ objectPosition: "38% center" }}
+          className="object-contain"
         />
         <div className="absolute inset-0 scrim-full" />
 
@@ -252,13 +261,14 @@ export default async function Landing() {
             <h2 className="display mt-3 text-[24px] leading-snug text-ink">
               Curated private environments around the world.
             </h2>
-            <div className="relative mt-5 h-52 overflow-hidden rounded-3xl sm:h-64">
+            <div className="relative mt-5 overflow-hidden rounded-3xl bg-[#07110d]">
               <Image
-                src="/villa/roca-llisa-wide.jpg"
+                src={ROCA_LLISA_IMAGE}
                 alt="Roca Llisa, Ibiza — a private access point above the sea"
-                fill
+                width={1200}
+                height={630}
                 sizes="(max-width: 672px) 100vw, 672px"
-                className="object-cover"
+                className="h-auto w-full"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
               <p className="absolute bottom-4 left-5 right-5 text-[13px] font-medium text-ink">
