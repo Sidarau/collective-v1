@@ -4,6 +4,8 @@ import * as crypto from "crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { config } from "@core/config";
 import { getSupabaseAdmin } from "@core/supabase";
+import type { AgentTokenScope } from "@core/database.types";
+import type { Principal } from "@core/policy";
 import { getAdminUser } from "./auth";
 
 /**
@@ -19,6 +21,26 @@ export interface AgentIdentity {
   adminEmail: string | null;
   tokenId: string | null;
   tokenLabel: string | null;
+  scope: AgentTokenScope; // owner (default) | staff — tier of the token
+}
+
+/**
+ * Map the transport-level identity to a policy Principal (ADR §3.1). Console
+ * sessions are humans (operator) and may exercise human-only capabilities;
+ * token-backed identities are agents whose scope caps them to drafts.
+ */
+export function toPrincipal(id: AgentIdentity): Principal {
+  if (id.kind === "session") {
+    return { kind: "operator", userId: id.adminId, entityId: null, via: "session", tokenId: null };
+  }
+  return {
+    kind: "agent",
+    userId: id.adminId,
+    entityId: null,
+    agentScope: id.scope,
+    via: id.kind === "system_token" ? "system_token" : "agent_token",
+    tokenId: id.tokenId,
+  };
 }
 
 export const agentContext = new AsyncLocalStorage<AgentIdentity>();
@@ -37,7 +59,7 @@ export async function resolveAgent(req: Request): Promise<AgentIdentity | NextRe
       const supabase = getSupabaseAdmin();
       const { data: row } = await supabase
         .from("agent_tokens")
-        .select("id, admin_id, label, revoked_at")
+        .select("id, admin_id, label, revoked_at, scope")
         .eq("token_hash", hashAgentToken(bearer))
         .maybeSingle();
       if (row && !row.revoked_at) {
@@ -58,6 +80,7 @@ export async function resolveAgent(req: Request): Promise<AgentIdentity | NextRe
           adminEmail: owner?.email || null,
           tokenId: row.id,
           tokenLabel: row.label,
+          scope: row.scope === "staff" ? "staff" : "owner",
         };
       }
       return NextResponse.json({ error: "Invalid or revoked token" }, { status: 401 });
@@ -74,6 +97,7 @@ export async function resolveAgent(req: Request): Promise<AgentIdentity | NextRe
           adminEmail: "system",
           tokenId: null,
           tokenLabel: "AGENT_API_TOKEN",
+          scope: "owner",
         };
       }
     }
@@ -88,6 +112,7 @@ export async function resolveAgent(req: Request): Promise<AgentIdentity | NextRe
       adminEmail: admin.email,
       tokenId: null,
       tokenLabel: null,
+      scope: "owner",
     };
   }
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

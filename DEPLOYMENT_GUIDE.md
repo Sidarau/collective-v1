@@ -1,108 +1,66 @@
-# Collective V1 — Deployment Guide
+# Collective deployment guide
 
-## 1. Prerequisites
+## Prerequisites
 
-- Node.js 20+
-- Vercel CLI: `npm i -g vercel`
-- Access to the Collective Vercel project (or create a new one)
-- Supabase project with service role key
-- HubSpot private app token
+- Node.js 20+.
+- Access to the member and admin Vercel projects.
+- The intended Supabase project and its public/server credentials.
+- Auth secrets and public URLs for both apps.
+- Resend credentials only when real delivery is approved.
 
-## 2. Vercel project setup
+Use .env.local.example as the variable inventory. Do not read, print, or commit real environment files.
 
-```bash
-cd collective-v1
-vercel link
-```
+## Database
 
-Select the target project or create a new one.
+1. Confirm the target Supabase project.
+2. Apply the ordered files in supabase/migrations/.
+3. Verify the expected tables, policies, seed content, storage buckets, and admin account.
+4. Never apply a destructive schema change without a data check and rollback plan.
 
-## 3. Environment variables
+## Member app
 
-Copy `.env.local.example` to `.env.local` and fill it in for local development.
+From the repository root:
 
-For Vercel, add the same variables to Production and Preview environments:
-
-```bash
-vercel env add NEXT_PUBLIC_SUPABASE_URL production
-vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY production
-vercel env add SUPABASE_SERVICE_ROLE_KEY production
-vercel env add NEXTAUTH_SECRET production
-vercel env add NEXTAUTH_URL production
-vercel env add HUBSPOT_SERVICE_KEY production
-vercel env add HUBSPOT_PORTAL_ID production
-vercel env add HUBSPOT_PIPELINE_ID production
-vercel env add HUBSPOT_STAGE_INQUIRY production
-vercel env add HUBSPOT_STAGE_REQUESTED production
-vercel env add HUBSPOT_STAGE_APPROVED production
-vercel env add HUBSPOT_STAGE_BOOKED production
-vercel env add HUBSPOT_STAGE_PAID production
-vercel env add HUBSPOT_STAGE_CANCELLED production
-vercel env add HUBSPOT_WEBHOOK_SECRET production
-```
-
-Repeat for `preview` if you want preview deploys to work.
-
-## 4. Database
-
-Run `supabase/schema.sql` in the Supabase Dashboard SQL Editor before first deploy. The schema includes seed data for Roca Llisa.
-
-## 5. Deploy
-
-### Preview deploy
-
-```bash
+~~~bash
+npm install
+npm run lint
+npm run build
 vercel
-```
+~~~
 
-### Production deploy
+Use vercel --prod only after the preview passes.
 
-```bash
-vercel --prod
-```
+## Admin app
 
-## 6. Post-deploy checks
+From admin/:
 
-- `/` loads the landing page.
-- `/onboarding` submits and creates a lead + user + magic token.
-- `/login` accepts email + token and redirects to `/portal/villa`.
-- `/admin/requests` is accessible only to users with role `admin` or `operator`.
-- `/admin/invite` lets operators generate one-time invite links.
-- HubSpot webhook endpoint: `POST /api/webhooks/hubspot`.
+~~~bash
+npm install
+npm run lint
+npm run typecheck
+npm run build
+vercel
+~~~
 
-## 7. HubSpot webhook
+The prebuild step synchronizes the shared core into admin/vendor-core.
 
-Subscribe to `deal.propertyChange` for `dealstage` and point the target URL to:
+## Safe email mode
 
-```
-https://your-domain.com/api/webhooks/hubspot
-```
+Keep EMAIL_MODE=log until Alex explicitly approves delivery. In log mode, communications are persisted to the outbox but are not sent.
 
-Add the webhook client secret to Vercel as `HUBSPOT_WEBHOOK_SECRET`.
+## Owner-agent access
 
-## 8. Creating your first admin user
+The admin deployment hosts the Operator MCP and KB REST API. Agent tokens are currently owner/admin credentials because backend per-role scopes and KB row filtering are not yet enforced. Do not create or distribute a Don/staff token until scoped authorization and a whoami/capabilities action are deployed and verified.
 
-Until the first admin exists, insert them directly into Supabase:
+## Post-deploy checks
 
-```sql
-INSERT INTO public.users (email, role)
-VALUES ('you@example.com', 'admin');
+- Landing, legal pages, login, and referral doors load.
+- Application and screening routes validate invalid input safely.
+- Member login reaches the portal.
+- Admin login reaches the console and blocks unauthorized users.
+- Applications, people, requests, gates, events, referrals, schedule, communications, and KB pages load without server errors.
+- MCP and KB routes reject missing/invalid credentials.
+- EMAIL_MODE has the intended value.
+- Browser console and Vercel logs show no unexpected errors.
 
-INSERT INTO public.magic_tokens (user_id, token, expires_at)
-VALUES (
-  (SELECT id FROM public.users WHERE email = 'you@example.com'),
-  'your-first-token',
-  NOW() + INTERVAL '7 days'
-);
-```
-
-Then visit `/login?email=you@example.com&token=your-first-token`.
-
-After that, use `/admin/invite` to create additional admins, operators, or leads.
-
-## 9. HubSpot magic-link email workflow
-
-1. Create a contact property `magic_link` in HubSpot.
-2. Create a workflow triggered when `magic_link` is known.
-3. Action: send email with the `magic_link` personalization token.
-4. Onboarding will automatically populate `magic_link` on the contact.
+Record the deployment and verification evidence in the assigned Linear issue.

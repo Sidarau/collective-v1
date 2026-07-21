@@ -8,7 +8,11 @@ import { DEFAULT_TIMEZONE, zonedToUtc } from "@core/scheduling";
 import { config } from "@core/config";
 import { mergeLabels, removeLabels } from "@core/labels";
 import type { CrmEntityType, Json } from "@core/database.types";
-import { agentContext, resolveAgent } from "@/lib/agent-auth";
+import { agentContext, resolveAgent, toPrincipal } from "@/lib/agent-auth";
+import { authorize, audienceFor, capabilitiesFor } from "@core/policy";
+import { renderRevision, KB_TEMPLATES, type KbTemplate } from "@core/kb-render";
+import { createRevision } from "@core/kb-revisions";
+import { resolveTreeGrant, recordAccessEvent } from "@core/kb-access";
 import { doorPath } from "@/lib/format";
 
 /** Accept ISO-with-offset ("2026-07-20T19:00:00+02:00" / "…Z") or villa
@@ -920,6 +924,123 @@ const handler = createMcpHandler(
           `reopened ${closure.starts_on} → ${closure.ends_on || "∞"} (closure ${id})`
         );
         return ok(`Reopened — closure ${id} deleted.`);
+      }
+    );
+
+    // ---------------------------------------------------------------- KB v2 (ADR 0001)
+
+    server.registerTool(
+      "whoami",
+      {
+        title: "Who am I",
+        description:
+          "Return the resolved principal for this token: kind, tier/scope, KB audience, and the capabilities it holds. Use to check what you're allowed to do before attempting KB work.",
+        inputSchema: {},
+      },
+      async () => {
+        const id = agentContext.getStore();
+        const principal = id ? toPrincipal(id) : null;
+        if (!principal) return err("No identity");
+        const caps = [...capabilitiesFor(principal)].sort();
+        return ok(
+          JSON.stringify(
+            {
+              kind: principal.kind,
+              scope: principal.agentScope ?? (principal.kind === "operator" ? "human" : null),
+              audience: audienceFor(principal),
+              capabilities: caps,
+              can_publish_or_share: false, // publish/share are human-only, done in the console
+              tokenLabel: id?.tokenLabel ?? null,
+            },
+            null,
+            2
+          )
+        );
+      }
+    );
+
+    server.registerTool(
+      "kb_render_preview",
+      {
+        title: "Preview KB render",
+        description:
+          "Render markdown to sanitized HTML with an approved template (article | brief | deck) WITHOUT saving. Returns the sanitized HTML head and a content hash so you can check formatting before drafting.",
+        inputSchema: {
+          markdown: z.string().min(1),
+          template: z.enum(["article", "brief", "deck"]).optional(),
+        },
+      },
+      async ({ markdown, template }) => {
+        const id = agentContext.getStore();
+        const principal = id ? toPrincipal(id) : null;
+        if (!principal) return err("No identity");
+        const decision = authorize(principal, "kb.render");
+        await recordAccessEvent({
+          principal,
+          capability: "kb.render",
+          decision: decision.allow ? "allow" : "deny",
+          reason: decision.reason,
+        });
+        if (!decision.allow) return err(`Denied (${decision.reason})`);
+        const r = renderRevision(markdown, (template as KbTemplate) || "article");
+        const head = r.html.length > 2000 ? r.html.slice(0, 2000) + "\n…(truncated)" : r.html;
+        return ok(`template: ${r.template}\ncontent_hash: ${r.contentHash}\n\n${head}`);
+      }
+    );
+
+    server.registerTool(
+      "kb_draft",
+      {
+        title: "Draft a KB revision",
+        description:
+          "Create an immutable draft revision on an existing KB node (get ids from kb_tree). Renders markdown to sanitized HTML and stores it. Does NOT publish — an owner publishes in the console. Requires a tree grant for your audience on that node.",
+        inputSchema: {
+          nodeId: z.string().uuid(),
+          markdown: z.string().min(1),
+          template: z.enum(["article", "brief", "deck"]).optional(),
+          sourceRef: z.string().optional(),
+        },
+      },
+      async ({ nodeId, markdown, template, sourceRef }) => {
+        const id = agentContext.getStore();
+        const principal = id ? toPrincipal(id) : null;
+        if (!principal) return err("No identity");
+        const audience = audienceFor(principal);
+        const treeGranted = audience ? await resolveTreeGrant(nodeId, audience) : false;
+        const decision = authorize(principal, "kb.draft", { treeGranted });
+        await recordAccessEvent({
+          principal,
+          capability: "kb.draft",
+          resourceType: "kb_node",
+          resourceId: nodeId,
+          decision: decision.allow ? "allow" : "deny",
+          reason: decision.reason,
+        });
+        if (!decision.allow) {
+          return err(
+            decision.reason === "tree_denied"
+              ? "Denied: your audience has no grant on this KB subtree. Ask an owner to grant access."
+              : `Denied (${decision.reason})`
+          );
+        }
+        const template2 = KB_TEMPLATES.includes(template as KbTemplate) ? (template as KbTemplate) : "article";
+        const rev = await createRevision({
+          nodeId,
+          markdown,
+          template: template2,
+          sourceRef: sourceRef ?? null,
+          authorId: id?.adminId ?? null,
+          authorEmail: id?.adminEmail ?? "agent",
+        });
+        await auditAgent(
+          "agent.kb_draft",
+          "kb_node" as CrmEntityType,
+          nodeId,
+          `drafted ${template2} revision ${rev.id} (hash ${rev.content_hash.slice(0, 12)})`
+        );
+        return ok(
+          `Draft saved. revision_id: ${rev.id}\ntemplate: ${rev.template}\ncontent_hash: ${rev.content_hash}\n\nAn owner can now preview + publish this revision in the console (Publishing).`
+        );
       }
     );
   },

@@ -145,6 +145,7 @@ body {
 
 .field {
   width: 100%;
+  min-width: 0;
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 18px;
@@ -160,6 +161,19 @@ body {
 .field:focus {
   border-color: rgba(228, 190, 109, 0.55);
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* iOS Safari lets a native date control paint wider than its CSS box. Make
+   this public referral field a fully sized, styled control while retaining
+   the input's native date semantics and picker behavior. */
+.safari-date-field {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 textarea.field {

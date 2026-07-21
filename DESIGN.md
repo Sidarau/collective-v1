@@ -256,8 +256,8 @@ Collective may use agents to reduce operator load, but the interface must make a
 Agents must pause before:
 
 - approving or rejecting a stay request;
-- sending email, WhatsApp, SMS, or HubSpot communication;
-- changing a HubSpot deal stage or CRM lifecycle state;
+- sending email, WhatsApp, SMS, or another external communication;
+- changing a CRM lifecycle state;
 - creating, deleting, or changing access roles;
 - changing prices, payments, deposits, or inventory;
 - exposing or exporting personal/contact data.
@@ -279,7 +279,7 @@ Avoid anthropomorphic claims. The agent is a support tool, not a concierge, mana
 
 When automation fails, preserve user progress and give a next step. Good failure copy names the failed system and the safe path forward:
 
-- "We could not sync this request to HubSpot. The request is saved in Collective."
+- "We could not complete the automated update. The request is saved in Collective."
 - "The invite was created, but the email draft was not sent. Review and send it manually."
 - "The AI summary is unavailable. The original application is still ready for review."
 

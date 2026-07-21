@@ -92,15 +92,23 @@ export default function InstantEntranceForm({ code }: { code: string }) {
         className="absolute -left-[9999px] h-0 w-0 opacity-0"
       />
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <div>
-          <label className="tag">Phone (optional)</label>
-          <input className="field" type="tel" autoComplete="tel" value={form.phone} onChange={set("phone")} />
-        </div>
-        <div>
-          <label className="tag">Birthday (optional)</label>
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="min-w-0">
+          <label className="tag">Phone</label>
           <input
+            required
             className="field"
+            type="tel"
+            autoComplete="tel"
+            value={form.phone}
+            onChange={set("phone")}
+          />
+        </div>
+        <div className="min-w-0">
+          <label className="tag">Birthday</label>
+          <input
+            required
+            className="field safari-date-field"
             type="date"
             max={new Date().toISOString().slice(0, 10)}
             value={form.birthday}

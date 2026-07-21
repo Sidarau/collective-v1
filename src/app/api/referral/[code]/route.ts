@@ -16,6 +16,16 @@ const clean = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+function isValidPastOrPresentDate(value: string): boolean {
+  if (!DATE_RE.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value &&
+    value <= new Date().toISOString().slice(0, 10)
+  );
+}
+
 /**
  * Public entrance via referral link — the front door of the funnel.
  * No session required: the link itself is the invitation.
@@ -215,14 +225,20 @@ async function instantEntrance(link: ReferralLinkRow, body: Record<string, unkno
   const firstName = clean(body.firstName);
   const lastName = clean(body.lastName);
   const email = clean(body.email).toLowerCase();
-  if (!firstName || !lastName || !email) {
-    return NextResponse.json({ error: "Name and email are required." }, { status: 400 });
+  const phone = clean(body.phone);
+  const birthday = clean(body.birthday);
+  if (!firstName || !lastName || !email || !phone || !birthday) {
+    return NextResponse.json(
+      { error: "Name, email, phone, and birthday are required." },
+      { status: 400 }
+    );
   }
   if (!EMAIL_RE.test(email)) {
     return NextResponse.json({ error: "That email doesn't look right." }, { status: 400 });
   }
-  const phone = clean(body.phone) || null;
-  const birthday = DATE_RE.test(clean(body.birthday)) ? clean(body.birthday) : null;
+  if (!isValidPastOrPresentDate(birthday)) {
+    return NextResponse.json({ error: "Enter a valid birthday." }, { status: 400 });
+  }
 
   const supabase = getSupabaseAdmin();
 
@@ -276,24 +292,23 @@ async function instantEntrance(link: ReferralLinkRow, body: Record<string, unkno
     user = created;
   }
 
-  // Profile shell so onboarding pre-fills and the member shows up properly.
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("user_id", user!.id)
-    .maybeSingle();
-  if (!profile) {
-    await supabase.from("profiles").insert({
+  // Instant doors collect the minimum complete profile up front. Mark it
+  // complete so password setup hands the authenticated member straight to
+  // the platform instead of sending them through the longer onboarding form.
+  const { error: profileError } = await supabase.from("profiles").upsert(
+    {
       user_id: user!.id,
       first_name: firstName,
       last_name: lastName,
       phone,
       whatsapp: phone,
       birthday,
-      onboarding_completed: false,
+      onboarding_completed: true,
       visibility: "members",
-    });
-  }
+    },
+    { onConflict: "user_id" }
+  );
+  if (profileError) throw new Error(profileError.message);
 
   await stampLabels(link.labels || [], lead.id, user!.id);
 

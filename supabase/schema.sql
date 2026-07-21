@@ -4,6 +4,22 @@
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Restricted archive for identifiers removed from retired external systems.
+-- This schema is intentionally not exposed through the Data API.
+CREATE SCHEMA IF NOT EXISTS private;
+REVOKE ALL ON SCHEMA private FROM PUBLIC;
+
+CREATE TABLE IF NOT EXISTS private.legacy_crm_mappings (
+  source_table TEXT NOT NULL CHECK (source_table IN ('leads', 'bookings', 'applications')),
+  source_id UUID NOT NULL,
+  mapping JSONB NOT NULL,
+  archived_reason TEXT NOT NULL DEFAULT 'retired_external_crm',
+  archived_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (source_table, source_id)
+);
+ALTER TABLE private.legacy_crm_mappings ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE private.legacy_crm_mappings FROM PUBLIC, anon, authenticated;
+
 -- Villas
 CREATE TABLE IF NOT EXISTS public.villas (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -58,8 +74,6 @@ CREATE TABLE IF NOT EXISTS public.leads (
   whatsapp TEXT,
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
-  hubspot_contact_id TEXT,
-  hubspot_deal_id TEXT,
   dietary_restrictions TEXT,
   notes TEXT,
   source TEXT DEFAULT 'website',
@@ -105,7 +119,6 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   currency TEXT NOT NULL DEFAULT 'EUR',
   special_requests TEXT,
   operator_notes TEXT,
-  hubspot_deal_id TEXT,
   stripe_payment_intent_id TEXT,
   invoice_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -114,7 +127,6 @@ CREATE TABLE IF NOT EXISTS public.bookings (
 CREATE INDEX IF NOT EXISTS idx_bookings_lead_id ON public.bookings(lead_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_room_id ON public.bookings(room_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON public.bookings(status);
-CREATE INDEX IF NOT EXISTS idx_bookings_hubspot_deal_id ON public.bookings(hubspot_deal_id);
 
 -- Availability blocks
 CREATE TABLE IF NOT EXISTS public.availability_blocks (

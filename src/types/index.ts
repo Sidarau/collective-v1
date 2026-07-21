@@ -35,8 +35,6 @@ export interface Lead {
   whatsapp: string | null;
   first_name: string;
   last_name: string;
-  hubspot_contact_id: string | null;
-  hubspot_deal_id: string | null;
   dietary_restrictions: string | null;
   notes: string | null;
   source: string;
@@ -68,7 +66,6 @@ export interface Booking {
   currency: string;
   special_requests: string | null;
   operator_notes: string | null;
-  hubspot_deal_id: string | null;
   stripe_payment_intent_id: string | null;
   invoice_url: string | null;
   created_at: string;

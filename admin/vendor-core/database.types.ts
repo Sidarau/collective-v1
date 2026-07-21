@@ -109,8 +109,6 @@ export interface LeadRow {
   whatsapp: string | null;
   first_name: string;
   last_name: string;
-  hubspot_contact_id: string | null;
-  hubspot_deal_id: string | null;
   dietary_restrictions: string | null;
   birthday: string | null;
   notes: string | null;
@@ -160,7 +158,6 @@ export interface BookingRow {
   currency: string;
   special_requests: string | null;
   operator_notes: string | null;
-  hubspot_deal_id: string | null;
   stripe_payment_intent_id: string | null;
   invoice_url: string | null;
   created_at: string;
@@ -223,9 +220,6 @@ export interface ApplicationRow {
   screening_token: string | null;
   referral_link_id: string | null;
   admin_notes: string | null;
-  hubspot_contact_id: string | null;
-  hubspot_deal_id: string | null;
-  hubspot_synced: boolean;
   reviewed_by: string | null;
   reviewed_at: string | null;
   created_at: string;
@@ -362,9 +356,97 @@ export interface KbNodeRow {
   visibility: KbVisibility;
   position: number;
   archived: boolean;
+  published_revision_id: string | null;
   updated_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ---- KB v2 (migration 009): revisions, grants, shares, legal, audit ----
+export type KbTemplateName = "article" | "brief" | "deck";
+export type KbAudience = "operator" | "staff" | "member" | "vendor";
+
+export interface KbRevisionRow {
+  id: string;
+  node_id: string;
+  markdown: string;
+  html: string;
+  template: KbTemplateName;
+  theme: Json;
+  content_hash: string;
+  renderer_version: number;
+  source_ref: string | null;
+  author_id: string | null;
+  author_email: string | null;
+  created_at: string;
+}
+
+export interface KbGrantRow {
+  id: string;
+  node_id: string;
+  audience: KbAudience;
+  effect: "allow" | "deny";
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface LegalDocumentRow {
+  id: string;
+  slug: string;
+  version: number;
+  title: string;
+  body_md: string;
+  content_hash: string;
+  effective_at: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface ExternalShareRow {
+  id: string;
+  node_id: string;
+  revision_id: string;
+  recipient_label: string;
+  token_hash: string;
+  token_prefix: string;
+  password_hash: string;
+  require_nda: boolean;
+  legal_document_id: string | null;
+  watermark: boolean;
+  expires_at: string | null;
+  max_views: number | null;
+  view_count: number;
+  failed_attempts: number;
+  locked_until: string | null;
+  revoked_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LegalAcceptanceRow {
+  id: string;
+  share_id: string | null;
+  legal_document_id: string;
+  legal_version: number;
+  legal_hash: string;
+  typed_name: string;
+  ip_hash: string | null;
+  ua_hash: string | null;
+  accepted_at: string;
+}
+
+export interface AccessEventRow {
+  id: string;
+  principal_kind: string;
+  principal_id: string | null;
+  capability: string;
+  resource_type: string | null;
+  resource_id: string | null;
+  decision: "allow" | "deny";
+  reason: string | null;
+  request_id: string | null;
+  created_at: string;
 }
 
 export interface EmailCampaignRow {
@@ -453,10 +535,12 @@ export interface AgentTokenRow {
   label: string;
   token_hash: string;
   prefix: string;
+  scope: AgentTokenScope;
   last_used_at: string | null;
   revoked_at: string | null;
   created_at: string;
 }
+export type AgentTokenScope = "owner" | "staff";
 
 // ---------- Native CRM (admin console) ----------
 
@@ -618,6 +702,12 @@ export interface Database {
       screening_windows: Tbl<ScreeningWindowRow>;
       screening_calls: Tbl<ScreeningCallRow>;
       kb_nodes: Tbl<KbNodeRow>;
+      kb_revisions: Tbl<KbRevisionRow>;
+      kb_grants: Tbl<KbGrantRow>;
+      legal_documents: Tbl<LegalDocumentRow>;
+      external_shares: Tbl<ExternalShareRow>;
+      legal_acceptances: Tbl<LegalAcceptanceRow>;
+      access_events: Tbl<AccessEventRow>;
       email_campaigns: Tbl<EmailCampaignRow>;
       app_settings: Tbl<AppSettingRow>;
       content_blocks: Tbl<ContentBlockRow>;
