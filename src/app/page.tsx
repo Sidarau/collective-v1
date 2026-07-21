@@ -62,25 +62,27 @@ export default async function Landing() {
   return (
     <main className="relative">
       {/* ——— Hero ——— */}
-      <section className="relative min-h-dvh overflow-hidden bg-[#07110d]">
+      <section className="landing-hero relative min-h-dvh overflow-hidden bg-[#07110d]">
         <Image
           src={ROCA_LLISA_IMAGE}
           alt=""
           fill
-          priority
           sizes="100vw"
           aria-hidden="true"
-          className="scale-110 object-cover opacity-20 blur-xl"
+          className="hero-atmosphere-image object-cover"
         />
-        <Image
-          src={ROCA_LLISA_IMAGE}
-          alt="Roca Llisa — a private estate above the Ibiza coast"
-          fill
-          priority
-          sizes="100vw"
-          className="object-contain"
-        />
-        <div className="absolute inset-0 scrim-full" />
+        <div className="hero-atmosphere absolute inset-0" aria-hidden="true" />
+        <div className="hero-panorama">
+          <Image
+            src={ROCA_LLISA_IMAGE}
+            alt="Roca Llisa — a private estate above the Ibiza coast"
+            fill
+            loading="eager"
+            sizes="100vw"
+            className="hero-panorama-image object-cover"
+          />
+        </div>
+        <div className="hero-scrim absolute inset-0" aria-hidden="true" />
 
         <div className="relative z-10 flex min-h-dvh flex-col items-center justify-between px-6 py-14">
           <div />

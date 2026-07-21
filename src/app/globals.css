@@ -262,6 +262,79 @@ label.tag {
   );
 }
 
+/* Landing hero: preserve the full landscape frame, then dissolve it into a
+   color-matched atmosphere so portrait screens never expose hard letterbox
+   bands. The clear photograph stays uncropped inside its native 40:21 ratio. */
+.landing-hero {
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 50% 46%, rgba(85, 125, 137, 0.22), transparent 48%),
+    #07100e;
+}
+
+.hero-atmosphere-image {
+  z-index: -3;
+  opacity: 0.58;
+  filter: blur(52px) saturate(0.9) brightness(0.58);
+  transform: scale(1.18);
+  animation: hero-atmosphere-drift 24s ease-in-out infinite alternate;
+}
+
+.hero-atmosphere {
+  z-index: -2;
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(124, 157, 169, 0.18) 0%, transparent 43%),
+    radial-gradient(ellipse at 18% 58%, rgba(59, 104, 90, 0.2) 0%, transparent 36%),
+    linear-gradient(180deg, rgba(7, 16, 14, 0.5) 0%, transparent 37%, transparent 62%, #07100e 100%);
+}
+
+.hero-panorama {
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: 50%;
+  width: min(100%, 1600px);
+  aspect-ratio: 40 / 21;
+  transform: translate(-50%, -50%);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, 0.55) 9%,
+    #000 20%,
+    #000 80%,
+    rgba(0, 0, 0, 0.55) 91%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, 0.55) 9%,
+    #000 20%,
+    #000 80%,
+    rgba(0, 0, 0, 0.55) 91%,
+    transparent 100%
+  );
+}
+
+.hero-panorama-image {
+  filter: saturate(0.92) contrast(1.03) brightness(0.82);
+  animation: hero-panorama-breathe 18s cubic-bezier(0.22, 0.7, 0.3, 1) infinite alternate;
+}
+
+.hero-scrim {
+  background:
+    radial-gradient(ellipse at 50% 48%, transparent 25%, rgba(7, 16, 14, 0.38) 100%),
+    linear-gradient(
+      180deg,
+      rgba(7, 16, 14, 0.58) 0%,
+      rgba(7, 16, 14, 0.12) 34%,
+      rgba(7, 16, 14, 0.18) 59%,
+      rgba(7, 16, 14, 0.68) 82%,
+      #07100e 100%
+    );
+}
+
 /* Lighter scrim for photo cards: keep the image alive, darken only the
    caption band. (scrim-b buries dark night photography entirely.) */
 .scrim-card {
@@ -286,6 +359,16 @@ label.tag {
   }
 }
 
+@keyframes hero-panorama-breathe {
+  from { filter: saturate(0.9) contrast(1.03) brightness(0.8); }
+  to { filter: saturate(0.96) contrast(1.04) brightness(0.86); }
+}
+
+@keyframes hero-atmosphere-drift {
+  from { transform: scale(1.18) translate3d(-0.7%, 0, 0); }
+  to { transform: scale(1.23) translate3d(0.7%, -0.5%, 0); }
+}
+
 .reveal {
   animation: rise 0.7s cubic-bezier(0.22, 0.8, 0.3, 1) both;
 }
@@ -302,6 +385,8 @@ label.tag {
 .stagger > *:nth-child(8) { animation-delay: 0.54s; }
 
 @media (prefers-reduced-motion: reduce) {
+  .hero-atmosphere-image,
+  .hero-panorama-image,
   .reveal,
   .stagger > * {
     animation: none;
