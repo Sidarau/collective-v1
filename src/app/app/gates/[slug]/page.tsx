@@ -117,9 +117,7 @@ export default async function GateDetailPage({
                     <p className="muted mt-0.5 text-[13px]">
                       {room.bed_type || "Double"} · 2 guests
                     </p>
-                    <p className="mt-1 text-[13px] text-champagne">
-                      Member window · €{Math.round(room.base_price_per_night / 100)}/night
-                    </p>
+                    <p className="mt-1 text-[13px] text-champagne">Member window</p>
                   </div>
                   <span className="muted self-center pr-1">›</span>
                 </Link>

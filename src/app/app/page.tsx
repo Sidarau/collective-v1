@@ -53,8 +53,9 @@ export default async function HomePage() {
 
   return (
     <div className="px-5 pt-4">
-      {/* Hero header over photography */}
-      <header className="relative -mx-5 overflow-hidden pb-10 pt-14">
+      {/* Hero header over photography — the photo melts into the page so there
+          is no hard seam where the image ends. */}
+      <header className="relative -mx-5 overflow-hidden pb-14 pt-16">
         {liveGate?.hero_image && (
           <>
             <Image
@@ -63,14 +64,33 @@ export default async function HomePage() {
               fill
               priority
               sizes="(max-width: 768px) 100vw, 672px"
-              className="object-cover"
+              className="object-cover object-center"
             />
             <div className="absolute inset-0 scrim-b" />
+            {/* Blend the bottom of the photograph fully into the page base. */}
+            <div
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-40"
+              style={{ background: "linear-gradient(to bottom, rgba(7,16,14,0) 0%, #07100e 92%)" }}
+              aria-hidden="true"
+            />
+            {/* Soften the very top so it settles under the status bar. */}
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 h-20"
+              style={{ background: "linear-gradient(to top, rgba(7,16,14,0) 0%, rgba(7,16,14,0.6) 100%)" }}
+              aria-hidden="true"
+            />
           </>
         )}
         <div className="relative px-5">
-          <p className="wordmark reveal text-center text-[13px] text-ink/90">Collective</p>
-          <h1 className="display reveal mt-10 text-[34px] leading-tight text-ink" style={{ animationDelay: "0.06s" }}>
+          <Image
+            src="/brand/logo-horizontal.png"
+            alt="Open Collective"
+            width={1400}
+            height={700}
+            priority
+            className="reveal mx-auto h-auto w-[184px]"
+          />
+          <h1 className="display reveal mt-9 text-[34px] leading-tight text-ink" style={{ animationDelay: "0.06s" }}>
             {greeting()}, {firstName}
           </h1>
           <p className="muted reveal mt-1 text-[14px]" style={{ animationDelay: "0.1s" }}>

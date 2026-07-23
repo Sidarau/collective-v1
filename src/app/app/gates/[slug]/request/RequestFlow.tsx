@@ -174,7 +174,6 @@ export default function RequestFlow({ gate, initialFrom, initialTo, preferredRoo
   }
 
   const selected = rooms?.find((r) => r.id === roomId);
-  const euros = (cents: number) => `€${Math.round(cents / 100).toLocaleString("en-GB")}`;
 
   return (
     <div className="px-5 pb-10 pt-14">
@@ -256,9 +255,7 @@ export default function RequestFlow({ gate, initialFrom, initialTo, preferredRoo
                     <p className="muted text-[12px]">
                       {room.bed_type || "Double"} · {room.nights} night{room.nights > 1 ? "s" : ""}
                     </p>
-                    <p className="mt-0.5 text-[13px] text-champagne">
-                      {euros(room.total)} member window
-                    </p>
+                    <p className="mt-0.5 text-[13px] text-champagne">Member window</p>
                   </div>
                   <span
                     className={`self-center rounded-full border px-2 py-2 ${
@@ -330,7 +327,7 @@ export default function RequestFlow({ gate, initialFrom, initialTo, preferredRoo
           >
             {submitting
               ? "Sending…"
-              : `Request ${fmtDay(from!)} → ${fmtDay(to!)} · ${euros(selected.total)}`}
+              : `Request ${fmtDay(from!)} → ${fmtDay(to!)}`}
           </button>
         )}
       </div>

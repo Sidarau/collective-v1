@@ -32,10 +32,10 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/villa/roca-llisa-og.jpg",
+        url: "/brand/og-brand.png",
         width: 1200,
         height: 630,
-        alt: "Roca Llisa — a private estate above the Ibiza coast",
+        alt: "Open Collective",
       },
     ],
   },
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Open Collective",
     description: "A private members network. By invitation.",
-    images: ["/villa/roca-llisa-og.jpg"],
+    images: ["/brand/og-brand.png"],
   },
   robots: { index: false, follow: false },
 };

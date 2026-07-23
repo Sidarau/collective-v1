@@ -15,8 +15,25 @@ const figtree = Figtree({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://opencollective.app"),
   title: "Collective — Operator OS",
   description: "Collective operator console",
+  openGraph: {
+    title: "Open Collective — Operator OS",
+    description: "Collective operator console",
+    url: "https://opencollective.app",
+    siteName: "Open Collective",
+    type: "website",
+    images: [
+      { url: "/brand/og-brand.png", width: 1200, height: 630, alt: "Open Collective" },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Open Collective — Operator OS",
+    description: "Collective operator console",
+    images: ["/brand/og-brand.png"],
+  },
   robots: { index: false, follow: false },
 };
 
