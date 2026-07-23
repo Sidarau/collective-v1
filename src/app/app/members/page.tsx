@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { fetchMembers } from "@/lib/data";
 import Avatar from "@/components/Avatar";
+import { fullName } from "@core/names";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export default async function MembersPage() {
             <Avatar url={m.avatar_url} first={m.first_name} last={m.last_name} size="md" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-[15px] font-semibold text-ink">
-                {m.first_name} {m.last_name}
+                {fullName(m.first_name, m.last_name)}
               </p>
               <p className="muted truncate text-[13px]">{m.headline || "Member"}</p>
               {m.location && <p className="faint truncate text-[12px]">{m.location}</p>}

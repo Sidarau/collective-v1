@@ -8,6 +8,7 @@ import {
   fetchUpcomingEvents,
 } from "@/lib/data";
 import { GATE_TZ, fmtGateDayTime } from "@/lib/datetime";
+import { fullName, titleCaseName } from "@core/names";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ export default async function HomePage() {
     fetchMyRequests(user.id),
   ]);
 
-  const firstName = profile?.first_name || user.email.split("@")[0];
+  const firstName = titleCaseName(profile?.first_name || user.email.split("@")[0]);
   const liveGate = gates.find((g) => g.status === "published");
   const today = new Date().toISOString().slice(0, 10);
   const nextStay = requests.find(
@@ -52,10 +53,14 @@ export default async function HomePage() {
   );
 
   return (
-    <div className="px-5 pt-4">
-      {/* Hero header over photography — the photo melts into the page so there
-          is no hard seam where the image ends. */}
-      <header className="relative -mx-5 overflow-hidden pb-14 pt-16">
+    <div className="px-5">
+      {/* Hero header over photography — full-bleed to the very top so the photo
+          sits under the status bar (no black strip), and melts into the page at
+          the bottom (no hard seam). Mobile-first. */}
+      <header
+        className="relative -mx-5 overflow-hidden pb-14"
+        style={{ paddingTop: "max(4rem, calc(env(safe-area-inset-top) + 2.25rem))" }}
+      >
         {liveGate?.hero_image && (
           <>
             <Image
@@ -111,7 +116,7 @@ export default async function HomePage() {
                 </p>
                 <p className="muted mt-1 text-[13px]">
                   {nextStay.rooms?.name}
-                  {nextStay.companion_name ? ` · with ${nextStay.companion_name}` : ""}
+                  {nextStay.companion_name ? ` · with ${titleCaseName(nextStay.companion_name)}` : ""}
                 </p>
               </div>
               <span className={`chip ${REQUEST_CHIP[nextStay.status]?.cls || ""}`}>
@@ -221,7 +226,7 @@ export default async function HomePage() {
             </span>
             <div>
               <p className="text-[14px] font-semibold text-ink">
-                {profile ? `${profile.first_name} ${profile.last_name}` : firstName}
+                {profile ? fullName(profile.first_name, profile.last_name) : firstName}
               </p>
               <p className="muted text-[12px]">View your profile</p>
             </div>

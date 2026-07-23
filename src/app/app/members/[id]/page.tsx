@@ -6,6 +6,7 @@ import { BLOCKING_STATUSES } from "@core/availability";
 import Avatar from "@/components/Avatar";
 import Markdown from "@/components/Markdown";
 import IntroRequestButton from "./IntroRequestButton";
+import { fullName, titleCaseName } from "@core/names";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +77,7 @@ export default async function MemberProfilePage({
         />
         <div>
           <h1 className="display text-[28px] leading-tight text-ink">
-            {profile.first_name} {profile.last_name}
+            {fullName(profile.first_name, profile.last_name)}
           </h1>
           <p className="muted text-[14px]">{profile.headline || "Member"}</p>
           {profile.location && <p className="faint text-[13px]">{profile.location}</p>}
@@ -133,7 +134,7 @@ export default async function MemberProfilePage({
         ) : (
           <IntroRequestButton
             toUserId={id}
-            firstName={profile.first_name}
+            firstName={titleCaseName(profile.first_name)}
             existingStatus={existingIntroRow?.status || null}
           />
         )}

@@ -2,6 +2,7 @@ import { getAuthUser } from "@/lib/auth";
 import { db, fetchGates, fetchUpcomingEvents, fetchPresence } from "@/lib/data";
 import { buildDailyAvailability, fetchVillaClosures, BLOCKING_STATUSES } from "@core/availability";
 import CalendarView, { type CalendarEvent, type PresenceEntry } from "./CalendarView";
+import { fullName } from "@core/names";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,7 @@ export default async function CalendarPage({
   const names = new Map(
     (profileRows || []).map((p) => [
       p.user_id,
-      { name: `${p.first_name} ${p.last_name}`.trim(), headline: p.headline as string | null },
+      { name: fullName(p.first_name, p.last_name), headline: p.headline as string | null },
     ])
   );
 

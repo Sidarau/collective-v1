@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchGateBySlug, fetchPresence, fetchUpcomingEvents, fetchProfileByUserId } from "@/lib/data";
 import { GATE_TZ, fmtGateWeekday } from "@/lib/datetime";
+import { titleCaseName } from "@core/names";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ export default async function GateDetailPage({
       if (!p.users) return null;
       const profile = await fetchProfileByUserId(p.users.id);
       return profile
-        ? { name: `${profile.first_name} ${profile.last_name.charAt(0)}.`, window: `${fmtDay(p.check_in)} – ${fmtDay(p.check_out)}` }
+        ? { name: `${titleCaseName(profile.first_name)} ${profile.last_name.charAt(0).toUpperCase()}.`, window: `${fmtDay(p.check_in)} – ${fmtDay(p.check_out)}` }
         : null;
     })
   );

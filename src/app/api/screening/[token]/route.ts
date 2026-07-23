@@ -12,6 +12,7 @@ import {
 } from "@core/scheduling";
 import { deleteGoogleEvent, pushGoogleEvent } from "@core/google-calendar";
 import { googleCalendarUrl } from "@core/ics";
+import { titleCaseName } from "@core/names";
 import { fmtCallTime, resolveScreeningToken } from "@/lib/screening";
 
 export const runtime = "nodejs";
@@ -135,7 +136,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
       await sendTrackedEmail({
         to: context.email,
         subject: `Your call with the host — ${timeLabel}`,
-        heading: `Dear ${context.firstName},`,
+        heading: `Dear ${titleCaseName(context.firstName) || "there"},`,
         body: `Your fifteen minutes with the host are set for ${timeLabel}. We'll call you — keep your phone close.`,
         ctaHref: calendarUrl,
         ctaLabel: "Add to calendar",

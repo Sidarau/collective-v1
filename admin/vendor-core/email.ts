@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { config } from "./config";
 import { getSupabaseAdmin } from "./supabase";
+import { titleCaseName } from "./names";
 import type { CrmEntityType, EmailMessageStatus, Json } from "./database.types";
 
 /**
@@ -20,21 +21,33 @@ function getResend(): Resend | null {
   return config.resendApiKey ? new Resend(config.resendApiKey) : null;
 }
 
+const LOGO_URL = `${config.baseUrl.replace(/\/$/, "")}/brand/logo-horizontal.png`;
+
+/**
+ * The house email shell — the members' app design language in an inbox:
+ * near-black ground, a champagne hairline card, the Open Collective lockup,
+ * serif voice. Table-based + inline styles for client compatibility.
+ */
 const shell = (inner: string) => `
-  <div style="background:#07100e;padding:40px 16px;font-family:Georgia,'Times New Roman',serif;">
+  <div style="background:#07100e;margin:0;padding:40px 16px;font-family:Georgia,'Times New Roman',serif;">
     <div style="max-width:480px;margin:0 auto;">
-      <p style="text-align:center;color:#e4be6d;font-size:18px;letter-spacing:0.5em;margin:0 0 32px;">C O L L E C T I V E</p>
-      <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14);border-radius:24px;padding:32px 28px;color:#f7fbf8;">
+      <div style="text-align:center;margin:0 0 30px;">
+        <img src="${LOGO_URL}" alt="${config.brandName}" width="184" style="width:184px;max-width:62%;height:auto;border:0;display:inline-block;" />
+      </div>
+      <div style="background:rgba(255,255,255,0.055);border:1px solid rgba(228,190,109,0.22);border-radius:22px;padding:34px 30px;color:#f7fbf8;">
         ${inner}
       </div>
-      <p style="text-align:center;font-size:12px;color:rgba(247,251,248,0.4);margin-top:28px;font-family:system-ui,sans-serif;">
-        ${config.brandName} · ${config.supportEmail}
+      <p style="text-align:center;font-size:12px;color:rgba(247,251,248,0.42);margin:26px 0 0;font-family:-apple-system,system-ui,sans-serif;letter-spacing:0.03em;">
+        ${config.brandName} · <a href="mailto:${config.supportEmail}" style="color:rgba(247,251,248,0.6);text-decoration:none;">${config.supportEmail}</a>
+      </p>
+      <p style="text-align:center;font-size:11px;color:rgba(247,251,248,0.28);margin:9px 0 0;font-family:-apple-system,system-ui,sans-serif;letter-spacing:0.16em;text-transform:uppercase;">
+        Ibiza · By referral only
       </p>
     </div>
   </div>`;
 
 const button = (href: string, label: string) => `
-  <a href="${href}" style="display:inline-block;background:#e4be6d;color:#07100e;text-decoration:none;padding:14px 28px;border-radius:999px;font-weight:600;font-family:system-ui,sans-serif;font-size:15px;">
+  <a href="${href}" style="display:inline-block;background:#e4be6d;color:#07100e;text-decoration:none;padding:14px 30px;border-radius:999px;font-weight:600;font-family:-apple-system,system-ui,sans-serif;font-size:15px;letter-spacing:0.01em;">
     ${label}
   </a>`;
 
@@ -178,7 +191,7 @@ export async function sendMagicLinkEmail(params: SendMagicLinkParams): Promise<T
   return sendTrackedEmail({
     to: params.to,
     subject: `Your ${config.brandName} entrance`,
-    heading: `Dear ${params.firstName},`,
+    heading: `Dear ${titleCaseName(params.firstName) || "there"},`,
     body: intro,
     ctaHref: params.magicLink,
     ctaLabel: params.cta || "Enter the Circle",
