@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { GateGallery } from "@/components/GateGallery";
 import { fetchGateBySlug, fetchPresence, fetchUpcomingEvents, fetchProfileByUserId } from "@/lib/data";
 import { GATE_TZ, fmtGateWeekday } from "@/lib/datetime";
 import { titleCaseName } from "@core/names";
@@ -93,6 +94,8 @@ export default async function GateDetailPage({
           </section>
         )}
 
+        <GateGallery gateName={gate.name} heroImage={gate.hero_image} images={gate.images} />
+
         {/* Rooms */}
         <section>
           <div className="mb-3 flex items-baseline justify-between px-1">
@@ -109,14 +112,20 @@ export default async function GateDetailPage({
                   className="glass tap flex gap-4 overflow-hidden p-3"
                 >
                   <div className="relative h-24 w-28 shrink-0 overflow-hidden rounded-2xl">
-                    {room.images[0] && (
+                    {room.images[0] ? (
                       <Image src={room.images[0]} alt={room.name} fill sizes="112px" className="object-cover" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center border border-white/10 bg-[radial-gradient(circle_at_top,rgba(228,190,109,0.16),rgba(255,255,255,0.04)_62%)] px-3 text-center">
+                        <span className="faint text-[9px] font-semibold uppercase tracking-[0.18em]">
+                          Photo coming soon
+                        </span>
+                      </div>
                     )}
                   </div>
                   <div className="flex flex-1 flex-col justify-center">
                     <p className="text-[16px] font-semibold text-ink">{room.name}</p>
                     <p className="muted mt-0.5 text-[13px]">
-                      {room.bed_type || "Double"} · 2 guests
+                      {room.bed_type || "King"} · {room.max_guests} guests
                     </p>
                     <p className="mt-1 text-[13px] text-champagne">Member window</p>
                   </div>
