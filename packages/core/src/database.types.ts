@@ -542,6 +542,18 @@ export interface AgentTokenRow {
 }
 export type AgentTokenScope = "owner" | "assistant" | "staff" | "member";
 
+export type AgentName = "selene" | "collecta";
+export type AgentMessageRole = "user" | "agent" | "system";
+
+export interface AgentMessageRow {
+  id: string;
+  admin_id: string;
+  agent_name: AgentName;
+  role: AgentMessageRole;
+  content: string;
+  created_at: string;
+}
+
 export interface GoogleCalendarConnectionRow {
   id: string;
   admin_id: string;
@@ -799,6 +811,7 @@ export interface Database {
       closure_periods: Tbl<ClosurePeriodRow>;
       invite_tokens: Tbl<InviteTokenRow>;
       agent_tokens: Tbl<AgentTokenRow>;
+      agent_messages: Tbl<AgentMessageRow>;
       google_calendar_connections: Tbl<GoogleCalendarConnectionRow>;
       calendar_oauth_invites: Tbl<CalendarOAuthInviteRow>;
       google_calendar_sources: Tbl<GoogleCalendarSourceRow>;

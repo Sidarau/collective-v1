@@ -35,6 +35,8 @@ const NAV: [string, [string, string][]][] = [
     [
       ["Communications", "/communications"],
       ["Agents & MCP", "/agents"],
+      ["Selene", "/selene"],
+      ["Collecta", "/collecta"],
       ["Settings", "/settings"],
     ],
   ],
