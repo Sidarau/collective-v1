@@ -61,7 +61,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
         .from("screening_calls")
         .update({ status: "cancelled", notes: "Rescheduled by prospect" })
         .eq("id", context.existingCall.id);
-      await deleteGoogleEvent(context.existingCall.google_event_ids);
+      await deleteGoogleEvent(context.existingCall.google_event_ids, {
+        type: "screening_call",
+        id: context.existingCall.id,
+      });
     }
 
     const { data: call, error } = await supabase
@@ -94,7 +97,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
             new Date(slot.startsAt).getTime() + slot.durationMinutes * 60_000
           ).toISOString(),
         },
-        host
+        host,
+        { type: "screening_call", id: call.id }
       );
       if (Object.keys(eventIds).length) {
         await supabase

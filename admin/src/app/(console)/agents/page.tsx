@@ -4,9 +4,20 @@ import StripQuery from "@/components/StripQuery";
 import { getAdminUser } from "@/lib/auth";
 import { getSupabaseAdmin } from "@core/supabase";
 import { config } from "@core/config";
-import { mintAgentTokenAction, revokeAgentTokenAction } from "@/lib/agent-actions";
-import type { AgentTokenRow, AuditLogRow } from "@core/database.types";
+import {
+  mintAgentTokenAction,
+  mintCalendarSetupLinkAction,
+  revokeAgentTokenAction,
+  updateAgentCalendarGrantsAction,
+  updateConnectedOperatorCalendarsAction,
+} from "@/lib/agent-actions";
+import type {
+  AgentCalendarGrantRow,
+  AgentTokenRow,
+  AuditLogRow,
+} from "@core/database.types";
 import { fmtDate } from "@/lib/format";
+import { listAllGoogleSources, listGoogleSources } from "@core/google-calendar";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +26,15 @@ const MCP_URL = () => `${config.adminUrl || "https://opencollective.app"}/api/mc
 export default async function AgentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; minted?: string; label?: string }>;
+    searchParams: Promise<{
+      error?: string;
+      minted?: string;
+      label?: string;
+      calendarSetup?: string;
+      target?: string;
+    }>;
 }) {
-  const { error, minted, label } = await searchParams;
+  const { error, minted, label, calendarSetup, target } = await searchParams;
   const admin = (await getAdminUser())!;
   const supabase = getSupabaseAdmin();
 
@@ -53,6 +70,24 @@ export default async function AgentsPage({
   const all = allTokens.map((t) => ({ ...t, ownerEmail: ownerEmail.get(t.admin_id) || null }));
 
   const activeMine = mine.filter((t) => !t.revoked_at);
+  const calendarSources =
+    admin.role === "admin" ? await listAllGoogleSources() : await listGoogleSources(admin.id);
+  const { data: operatorUsersRaw } = await supabase
+    .from("users")
+    .select("id, email, role")
+    .in("role", ["admin", "operator"])
+    .order("email");
+  const operatorUsers =
+    ((operatorUsersRaw as { id: string; email: string; role: string }[]) || []).filter(
+      (user) => admin.role === "admin" || user.id === admin.id
+    );
+  const { data: grantsRaw } = activeMine.length
+    ? await supabase
+        .from("agent_calendar_grants")
+        .select("*")
+        .in("agent_token_id", activeMine.map((token) => token.id))
+    : { data: [] };
+  const grants = (grantsRaw as AgentCalendarGrantRow[]) || [];
   const mcpUrl = MCP_URL();
 
   return (
@@ -77,13 +112,93 @@ export default async function AgentsPage({
         </section>
       )}
 
+      {calendarSetup && (
+        <section className="panel mb-5 border-gold/40 p-5">
+          <p className="label">One-time calendar link{target ? ` — ${target}` : ""}</p>
+          <p className="text-[13px] text-muted">
+            Send this link privately. It expires in 48 hours and works once.
+          </p>
+          <code className="mt-3 block select-all break-all rounded-[10px] border border-white/12 bg-black/40 p-3 text-[12px] text-gold">
+            {calendarSetup}
+          </code>
+        </section>
+      )}
+
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_360px]">
         <div className="space-y-5">
+          <section className="panel p-5">
+            <p className="label">One-click Google setup</p>
+            <p className="text-[12.5px] leading-relaxed text-muted">
+              Prepare a private link. The recipient taps it, chooses their Google account,
+              presses Allow, and sees “Calendar connected.” No console password or setup screen.
+            </p>
+            <form action={mintCalendarSetupLinkAction} className="mt-3 flex flex-wrap gap-2">
+              <select name="targetAdminId" className="input min-w-[240px] flex-1">
+                {operatorUsers.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.email}{user.id === admin.id ? " (you)" : ""}
+                  </option>
+                ))}
+              </select>
+              <button type="submit" className="btn btn-gold">
+                Create setup link
+              </button>
+            </form>
+          </section>
+
+          {calendarSources.length > 0 ? (
+            <section className="panel overflow-hidden">
+              <div className="border-b border-line px-4 pb-3 pt-4">
+                <p className="label mb-1">Connected operator calendars</p>
+                <p className="text-[12px] text-muted">
+                  Choose which calendars participate in availability and may be granted to Selene.
+                </p>
+              </div>
+              {Array.from(new Set(calendarSources.map((source) => source.adminId))).map(
+                (ownerId) => {
+                  const sources = calendarSources.filter((source) => source.adminId === ownerId);
+                  return (
+                    <form
+                      key={ownerId}
+                      action={updateConnectedOperatorCalendarsAction}
+                      className="space-y-3 border-b border-line px-4 py-4 last:border-b-0"
+                    >
+                      <input type="hidden" name="targetAdminId" value={ownerId} />
+                      <p className="text-[13px] font-medium text-ink">
+                        {sources[0]?.googleEmail || ownerId}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {sources.map((source) => (
+                          <label
+                            key={source.id}
+                            className="flex cursor-pointer items-center gap-2 rounded-md border border-line bg-base px-3 py-2 text-[12px] text-muted"
+                          >
+                            <input
+                              type="checkbox"
+                              name="calendarSourceId"
+                              value={source.id}
+                              defaultChecked={source.selected}
+                              className="accent-[#e0bd73]"
+                            />
+                            {source.summary}
+                          </label>
+                        ))}
+                      </div>
+                      <button type="submit" className="btn">
+                        Save calendars
+                      </button>
+                    </form>
+                  );
+                }
+              )}
+            </section>
+          ) : null}
+
           {/* Your tokens */}
           <section className="panel overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 pb-3 pt-4">
               <p className="label mb-0">Your tokens ({activeMine.length}/3 active)</p>
-              <form action={mintAgentTokenAction} className="flex items-center gap-2">
+              <form action={mintAgentTokenAction} className="flex flex-wrap items-center gap-2">
                 <input
                   name="label"
                   className="input max-w-[190px]"
@@ -91,6 +206,12 @@ export default async function AgentsPage({
                   required
                   maxLength={40}
                 />
+                <select name="scope" className="input max-w-[150px]" defaultValue="assistant">
+                  <option value="assistant">Assistant</option>
+                  <option value="owner">Owner agent</option>
+                  <option value="staff">Staff</option>
+                  <option value="member">Member</option>
+                </select>
                 <button type="submit" className="btn btn-gold">
                   Mint token
                 </button>
@@ -101,6 +222,7 @@ export default async function AgentsPage({
                 <tr>
                   <th>Label</th>
                   <th>Token</th>
+                  <th>Role</th>
                   <th>Created</th>
                   <th>Last used</th>
                   <th />
@@ -109,7 +231,7 @@ export default async function AgentsPage({
               <tbody>
                 {mine.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="text-muted">
+                    <td colSpan={6} className="text-muted">
                       No tokens yet. Mint one and point your agent at the MCP endpoint.
                     </td>
                   </tr>
@@ -119,6 +241,9 @@ export default async function AgentsPage({
                     <td className="font-medium text-ink">{t.label}</td>
                     <td>
                       <code className="text-[12px] text-muted">{t.prefix}…</code>
+                    </td>
+                    <td>
+                      <span className="chip">{t.scope || "owner"}</span>
                     </td>
                     <td>{fmtDate(t.created_at)}</td>
                     <td>{t.last_used_at ? fmtDate(t.last_used_at) : "never"}</td>
@@ -140,6 +265,68 @@ export default async function AgentsPage({
             </table>
           </section>
 
+          <section className="panel overflow-hidden">
+            <div className="border-b border-line px-4 pb-3 pt-4">
+              <p className="label mb-1">Calendar access</p>
+              <p className="text-[12px] text-muted">
+                Choose exactly which calendars each assistant can read. Calendar changes are
+                sent to Schedule for your approval.
+              </p>
+            </div>
+            {activeMine.length === 0 ? (
+              <p className="px-4 py-5 text-sm text-faint">Mint an assistant token first.</p>
+            ) : calendarSources.length === 0 ? (
+              <p className="px-4 py-5 text-sm text-faint">
+                Connect Google Calendar on the Schedule page first.
+              </p>
+            ) : (
+              <div className="divide-y divide-line">
+                {activeMine.map((token) => {
+                  const granted = new Set(
+                    grants
+                      .filter((grant) => grant.agent_token_id === token.id && grant.can_read)
+                      .map((grant) => grant.source_id)
+                  );
+                  return (
+                    <form
+                      key={token.id}
+                      action={updateAgentCalendarGrantsAction}
+                      className="space-y-3 px-4 py-4"
+                    >
+                      <input type="hidden" name="tokenId" value={token.id} />
+                      <div className="flex items-center justify-between">
+                        <p className="text-[13px] font-medium text-ink">{token.label}</p>
+                        <span className="chip">{token.scope || "owner"}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {calendarSources
+                          .filter((source) => source.selected)
+                          .map((source) => (
+                            <label
+                              key={source.id}
+                              className="flex cursor-pointer items-center gap-2 rounded-md border border-line bg-base px-3 py-2 text-[12px] text-muted"
+                            >
+                              <input
+                                type="checkbox"
+                                name="calendarSourceId"
+                                value={source.id}
+                                defaultChecked={granted.has(source.id)}
+                                className="accent-[#e0bd73]"
+                              />
+                              {source.summary}
+                            </label>
+                          ))}
+                      </div>
+                      <button type="submit" className="btn btn-gold">
+                        Save access
+                      </button>
+                    </form>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
           {/* Team tokens (who is contributing what) */}
           <section className="panel overflow-hidden">
             <p className="label border-b border-line px-4 pb-3 pt-4">Active tokens across the team</p>
@@ -149,13 +336,14 @@ export default async function AgentsPage({
                   <th>Admin</th>
                   <th>Label</th>
                   <th>Token</th>
+                  <th>Role</th>
                   <th>Last used</th>
                 </tr>
               </thead>
               <tbody>
                 {all.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="text-muted">
+                    <td colSpan={5} className="text-muted">
                       Nobody has minted a token yet.
                     </td>
                   </tr>
@@ -167,6 +355,7 @@ export default async function AgentsPage({
                     <td>
                       <code className="text-[12px] text-muted">{t.prefix}…</code>
                     </td>
+                    <td>{t.scope || "owner"}</td>
                     <td>{t.last_used_at ? fmtDate(t.last_used_at) : "never"}</td>
                   </tr>
                 ))}
@@ -209,15 +398,12 @@ export default async function AgentsPage({
               <code>leads_search</code> · <code>operations_report</code> ·{" "}
               <code>referral_link_list</code> · <code>closure_list</code>
               <br />
-              Write: <code>kb_upsert</code> · <code>event_upsert</code> · <code>gate_update</code> ·{" "}
-              <code>room_update</code> · <code>application_set_status</code> ·{" "}
-              <code>lead_update_status</code> · <code>user_labels_update</code> ·{" "}
-              <code>referral_link_create</code> · <code>referral_link_set</code> ·{" "}
-              <code>closure_create</code> · <code>closure_delete</code>
+              Calendar: <code>calendar_list</code> · <code>calendar_events</code> ·{" "}
+              <code>calendar_event_create</code> · <code>calendar_event_update</code> ·{" "}
+              <code>calendar_event_cancel</code> · <code>calendar_action_status</code>
               <br />
-              Doors come in four kinds (member, instant member, vendor, staff) and can carry
-              CRM labels. Writes go live without a redeploy and are audited under your token.
-              Approving applications stays console-only.
+              Assistant tokens are the right choice for Selene. They see only granted calendars;
+              every write request is attributable and high-risk changes require your approval.
             </p>
           </section>
 

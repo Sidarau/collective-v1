@@ -4,15 +4,23 @@ import ErrorBanner from "@/components/ErrorBanner";
 import { listAdminHosts, listCalls, listScreeningWindows } from "@/lib/funnel-data";
 import {
   addScreeningWindowAction,
+  approveCalendarActionRequest,
   deleteScreeningWindowAction,
+  denyCalendarActionRequest,
   disconnectGoogleAction,
   ensureCalendarFeedAction,
   rotateCalendarFeedAction,
   setCallStatusAction,
   toggleScreeningWindowAction,
+  updateGoogleCalendarsAction,
 } from "@/lib/funnel-actions";
 import { getAdminUser } from "@/lib/auth";
-import { getGoogleConnection, isGoogleSyncConfigured } from "@core/google-calendar";
+import {
+  getGoogleConnection,
+  isGoogleSyncConfigured,
+  listGoogleSources,
+} from "@core/google-calendar";
+import { listCalendarActionRequests } from "@core/calendar-actions";
 import { getSettingValue } from "@core/settings";
 import { fmtMinute, getDefaultScreeningHost } from "@core/scheduling";
 import { googleCalendarUrl } from "@core/ics";
@@ -50,7 +58,17 @@ export default async function SchedulePage({
 }) {
   const { error } = await searchParams;
   const admin = (await getAdminUser())!;
-  const [windows, upcoming, past, feedToken, googleConnection, hosts, defaultHost] =
+  const [
+    windows,
+    upcoming,
+    past,
+    feedToken,
+    googleConnection,
+    googleSources,
+    calendarRequests,
+    hosts,
+    defaultHost,
+  ] =
     await Promise.all([
       listScreeningWindows(),
       listCalls({ from: oneHourAgoIso(), statuses: ["scheduled"] }),
@@ -59,6 +77,8 @@ export default async function SchedulePage({
       ),
       getSettingValue<string>(`calendar_feed:${admin.id}`),
       getGoogleConnection(admin.id),
+      listGoogleSources(admin.id),
+      listCalendarActionRequests(admin.id, undefined, admin.role === "admin"),
       listAdminHosts(),
       getDefaultScreeningHost(),
     ]);
@@ -267,11 +287,8 @@ export default async function SchedulePage({
             <p className="label">Google Calendar — two-way sync</p>
             {!googleReady ? (
               <p className="text-[12.5px] leading-relaxed text-muted">
-                Needs a one-time setup: create an OAuth client (Web) in Google Cloud, add{" "}
-                <span className="text-ink">/api/google/oauth/callback</span> as the redirect URI,
-                and set <span className="text-ink">GOOGLE_OAUTH_CLIENT_ID</span> /{" "}
-                <span className="text-ink">GOOGLE_OAUTH_CLIENT_SECRET</span> on both apps. Until
-                then, use the read-only feed below.
+                Google connection is not enabled for this environment yet. The Collective admin
+                must finish the one-time server setup; you will only need to press one button.
               </p>
             ) : googleConnection ? (
               <>
@@ -281,11 +298,40 @@ export default async function SchedulePage({
                   New screening calls and interviews land in your calendar the moment they are
                   booked, and your private busy times automatically block the public slot picker.
                 </p>
-                <form action={disconnectGoogleAction} className="mt-3">
-                  <button type="submit" className="btn btn-red">
-                    Disconnect
+                <form action={updateGoogleCalendarsAction} className="mt-4 space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
+                    Calendars Selene may see
+                  </p>
+                  {googleSources.map((source) => (
+                    <label
+                      key={source.id}
+                      className="flex cursor-pointer items-center gap-2 rounded-md border border-line bg-base px-3 py-2 text-[12px] text-muted"
+                    >
+                      <input
+                        type="checkbox"
+                        name="calendarSourceId"
+                        value={source.id}
+                        defaultChecked={source.selected}
+                        className="accent-[#e0bd73]"
+                      />
+                      <span className="min-w-0 flex-1 truncate">{source.summary}</span>
+                      {source.is_primary ? <span className="chip">Primary</span> : null}
+                    </label>
+                  ))}
+                  <button type="submit" className="btn btn-gold">
+                    Save calendars
                   </button>
                 </form>
+                <div className="mt-3 flex gap-2">
+                  <Link href="/api/google/oauth/start" className="btn">
+                    Reconnect
+                  </Link>
+                  <form action={disconnectGoogleAction}>
+                    <button type="submit" className="btn btn-red">
+                      Disconnect
+                    </button>
+                  </form>
+                </div>
               </>
             ) : (
               <>
@@ -295,13 +341,56 @@ export default async function SchedulePage({
                   prospects — no double bookings.
                 </p>
                 {/* Plain <a>: OAuth must hit the route handler with a full page load. */}
-                {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-                <a href="/api/google/oauth/start" className="btn btn-gold mt-3 inline-flex">
+                <Link href="/api/google/oauth/start" className="btn btn-gold mt-3 inline-flex">
                   Connect Google Calendar
-                </a>
+                </Link>
               </>
             )}
           </section>
+
+          {calendarRequests.length > 0 ? (
+            <section className="panel p-5">
+              <p className="label">Selene needs your approval</p>
+              <p className="mb-3 text-[12px] leading-relaxed text-muted">
+                Nothing below changes your calendar until you approve it.
+              </p>
+              <div className="space-y-2">
+                {calendarRequests.map((request) => (
+                  <div key={request.id} className="rounded-md border border-line bg-base p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[13px] text-ink">{request.preview}</p>
+                        <p className="mt-1 text-[11px] text-faint">
+                          {request.calendarName}
+                          {request.ownerEmail ? ` · ${request.ownerEmail}` : ""}
+                          {" · "}
+                          {request.status === "pending"
+                            ? `${request.risk} risk · waiting for you`
+                            : `${request.status}${request.error ? ` · ${request.error}` : ""}`}
+                        </p>
+                      </div>
+                      {request.status === "pending" ? (
+                        <div className="flex shrink-0 gap-2">
+                          <form action={approveCalendarActionRequest}>
+                            <input type="hidden" name="requestId" value={request.id} />
+                            <button type="submit" className="btn btn-gold">
+                              Approve
+                            </button>
+                          </form>
+                          <form action={denyCalendarActionRequest}>
+                            <input type="hidden" name="requestId" value={request.id} />
+                            <button type="submit" className="btn btn-red">
+                              Deny
+                            </button>
+                          </form>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           {/* Read-only ICS feed (works without OAuth) */}
           <section className="panel p-5">

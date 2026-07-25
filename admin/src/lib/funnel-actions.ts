@@ -8,7 +8,16 @@ import { writeAudit } from "@core/audit";
 import { sendTrackedEmail } from "@core/email";
 import { config } from "@core/config";
 import { mergeLabels } from "@core/labels";
-import { deleteGoogleConnection, deleteGoogleEvent } from "@core/google-calendar";
+import {
+  deleteGoogleConnection,
+  deleteGoogleEvent,
+  updateGoogleSourceSelection,
+} from "@core/google-calendar";
+import {
+  approveCalendarAction,
+  denyCalendarAction,
+  executeCalendarAction,
+} from "@core/calendar-actions";
 import { getSettingValue, setSetting } from "@core/settings";
 import type {
   ReferralLinkKind,
@@ -213,7 +222,10 @@ export async function setCallStatusAction(formData: FormData) {
 
   // Cancelled calls disappear from connected Google calendars too.
   if (status === "cancelled") {
-    await deleteGoogleEvent(call.google_event_ids || null);
+    await deleteGoogleEvent(call.google_event_ids || null, {
+      type: "screening_call",
+      id: call.id,
+    });
   }
 
   await writeAudit({
@@ -439,6 +451,70 @@ export async function disconnectGoogleAction() {
     entityId: admin.id,
     summary: "Disconnected Google Calendar two-way sync",
   });
+  revalidatePath("/schedule");
+  backTo("/schedule");
+}
+
+/** Choose which writable Google calendars participate in sync. */
+export async function updateGoogleCalendarsAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const selected = formData
+    .getAll("calendarSourceId")
+    .filter((value): value is string => typeof value === "string");
+  try {
+    await updateGoogleSourceSelection(admin.id, selected);
+    await writeAudit({
+      actorId: admin.id,
+      actorEmail: admin.email,
+      action: "gcal.sources_updated",
+      entityType: "user",
+      entityId: admin.id,
+      summary: `Selected ${selected.length} Google calendar${selected.length === 1 ? "" : "s"} for sync`,
+    });
+  } catch (error) {
+    backTo("/schedule", error instanceof Error ? error.message : "Could not save calendars");
+  }
+  revalidatePath("/schedule");
+  backTo("/schedule");
+}
+
+export async function approveCalendarActionRequest(formData: FormData) {
+  const admin = await requireAdmin();
+  const requestId = str(formData, "requestId");
+  try {
+    await approveCalendarAction(requestId, admin.id);
+    await executeCalendarAction(requestId);
+    await writeAudit({
+      actorId: admin.id,
+      actorEmail: admin.email,
+      action: "calendar.action_approved",
+      entityType: "event",
+      summary: "Approved and executed a calendar action",
+      meta: { request_id: requestId },
+    });
+  } catch (error) {
+    backTo("/schedule", error instanceof Error ? error.message : "Could not approve request");
+  }
+  revalidatePath("/schedule");
+  backTo("/schedule");
+}
+
+export async function denyCalendarActionRequest(formData: FormData) {
+  const admin = await requireAdmin();
+  const requestId = str(formData, "requestId");
+  try {
+    await denyCalendarAction(requestId, admin.id);
+    await writeAudit({
+      actorId: admin.id,
+      actorEmail: admin.email,
+      action: "calendar.action_denied",
+      entityType: "event",
+      summary: "Denied a calendar action",
+      meta: { request_id: requestId },
+    });
+  } catch (error) {
+    backTo("/schedule", error instanceof Error ? error.message : "Could not deny request");
+  }
   revalidatePath("/schedule");
   backTo("/schedule");
 }

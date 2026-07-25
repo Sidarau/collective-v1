@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "node --test --experimental-strip-types test/*.test.mts",
     "seed:test-creds": "node scripts/seed-local-test-creds.mjs"
   },
   "dependencies": {

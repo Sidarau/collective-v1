@@ -540,7 +540,116 @@ export interface AgentTokenRow {
   revoked_at: string | null;
   created_at: string;
 }
-export type AgentTokenScope = "owner" | "staff" | "member";
+export type AgentTokenScope = "owner" | "assistant" | "staff" | "member";
+
+export interface GoogleCalendarConnectionRow {
+  id: string;
+  admin_id: string;
+  google_email: string | null;
+  refresh_token_ciphertext: string;
+  scopes: string[];
+  active: boolean;
+  connected_at: string;
+  last_synced_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CalendarOAuthInviteRow {
+  id: string;
+  admin_id: string;
+  created_by: string | null;
+  token_hash: string;
+  expires_at: string;
+  used_at: string | null;
+  created_at: string;
+}
+
+export type CalendarDetailLevel = "busy" | "details" | "private";
+
+export interface GoogleCalendarSourceRow {
+  id: string;
+  connection_id: string;
+  google_calendar_id: string;
+  summary: string;
+  timezone: string | null;
+  is_primary: boolean;
+  selected: boolean;
+  detail_visibility: CalendarDetailLevel;
+  sync_token: string | null;
+  watch_channel_id: string | null;
+  watch_resource_id: string | null;
+  watch_token_hash: string | null;
+  watch_expires_at: string | null;
+  last_synced_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CalendarEventLinkRow {
+  id: string;
+  source_id: string;
+  entity_type: "screening_call" | "event";
+  entity_id: string;
+  google_event_id: string;
+  google_etag: string | null;
+  content_hash: string | null;
+  last_origin: "collective" | "google";
+  google_deleted_at: string | null;
+  last_synced_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentCalendarGrantRow {
+  id: string;
+  agent_token_id: string;
+  source_id: string;
+  detail_level: CalendarDetailLevel;
+  can_read: boolean;
+  can_request_writes: boolean;
+  low_risk_autoexecute: boolean;
+  approved_by: string | null;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CalendarActionOperation = "create" | "update" | "cancel";
+export type CalendarActionStatus =
+  | "pending"
+  | "approved"
+  | "denied"
+  | "executing"
+  | "executed"
+  | "failed"
+  | "expired";
+
+export interface CalendarActionRequestRow {
+  id: string;
+  requested_by_token_id: string | null;
+  requested_by_admin_id: string | null;
+  source_id: string;
+  operation: CalendarActionOperation;
+  google_event_id: string | null;
+  payload: Json;
+  risk: "low" | "high";
+  status: CalendarActionStatus;
+  idempotency_key: string;
+  preview: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  denied_by: string | null;
+  denied_at: string | null;
+  expires_at: string;
+  executed_at: string | null;
+  result: Json | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 // ---------- Native CRM (admin console) ----------
 
@@ -690,6 +799,12 @@ export interface Database {
       closure_periods: Tbl<ClosurePeriodRow>;
       invite_tokens: Tbl<InviteTokenRow>;
       agent_tokens: Tbl<AgentTokenRow>;
+      google_calendar_connections: Tbl<GoogleCalendarConnectionRow>;
+      calendar_oauth_invites: Tbl<CalendarOAuthInviteRow>;
+      google_calendar_sources: Tbl<GoogleCalendarSourceRow>;
+      calendar_event_links: Tbl<CalendarEventLinkRow>;
+      agent_calendar_grants: Tbl<AgentCalendarGrantRow>;
+      calendar_action_requests: Tbl<CalendarActionRequestRow>;
       audit_logs: Tbl<AuditLogRow>;
       admin_notes: Tbl<AdminNoteRow>;
       follow_ups: Tbl<FollowUpRow>;

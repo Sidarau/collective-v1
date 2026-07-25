@@ -14,7 +14,9 @@ Supabase is the live system of record for people, applications, profiles, stays,
 - Approved members complete onboarding and use the private member portal.
 - Members explore gates, request stays, attend events, view members, and manage their profile.
 - Operators manage applications, people, requests, gates, rooms, events, referrals, scheduling, communications, and KB content.
-- Agents can use the authenticated Operator MCP and KB API. Current tokens are owner/admin access only; do not issue them to staff until server-enforced scopes are implemented.
+- Agents use server-enforced Operator MCP capabilities. Assistant tokens can
+  read explicitly granted calendars and request calendar changes; they cannot
+  approve those requests or manage connections/grants.
 
 ## Stack
 
@@ -54,6 +56,7 @@ Copy .env.local.example to .env.local and provide the required Supabase, auth, U
 
 ~~~bash
 npm run lint
+npm test
 npm run build
 cd admin
 npm run lint
@@ -65,9 +68,35 @@ npm run build
 
 Tracked changes live in supabase/migrations/. Apply migrations in order to the intended Supabase project. Do not rewrite or remove a migration already applied to a shared environment; create a follow-up migration.
 
-## Operator MCP and KB
+## Operator MCP, KB, and Selene
 
-The admin application exposes authenticated KB REST routes and the MCP transport. Agent tokens currently authenticate identity and audit attribution but do not yet enforce per-role tool, record, or KB-visibility scopes. Treat them as owner/admin credentials until scoped authorization and a whoami/capabilities action ship.
+The admin application exposes authenticated KB REST routes and the MCP
+transport. Every MCP tool checks the resolved principal's capability. KB access
+also checks tree grants; calendar access checks per-token calendar grants.
+
+For Selene, mint an `assistant` token on **Agents & MCP**, connect Google on
+**Schedule**, choose calendars, then grant those calendars to the token. Agent
+creates/updates/cancellations appear in Schedule as approval requests. Don
+never needs a cloud-console account or an MCP configuration screen. An admin
+can instead create a 48-hour, one-use Google setup link on **Agents & MCP**;
+Don taps it, chooses Google, presses Allow, and is done without setting a
+console password. The admin then selects and grants the connected calendars.
+
+## Google Calendar v2
+
+The OAuth consent button lives on Schedule. Configure one Google Web OAuth
+client with this redirect URI:
+
+`https://opencollective.app/api/google/oauth/callback`
+
+Set `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
+`GOOGLE_TOKEN_ENCRYPTION_KEY`, `GOOGLE_CALENDAR_WEBHOOK_URL`, and
+`CALENDAR_CRON_SECRET` in the admin deployment. Refresh tokens are AES-GCM
+encrypted before storage.
+
+The app uses Google Calendar incremental sync tokens and expiring push
+channels. The optional stack in `infra/collective-automation/` acknowledges
+webhooks through SQS, retries failures to a DLQ, and runs daily reconciliation.
 
 ## Deployment
 
