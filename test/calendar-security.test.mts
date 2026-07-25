@@ -14,6 +14,10 @@ import {
   signCalendarOAuthTargetValue,
   verifyCalendarOAuthTargetValue,
 } from "../packages/core/src/calendar-oauth-state.ts";
+import {
+  DEFAULT_BOOKING_NOTICE_MINUTES,
+  minimumBookableStartMs,
+} from "../packages/core/src/scheduling-policy.ts";
 
 const assistant: Principal = {
   kind: "agent",
@@ -31,7 +35,9 @@ test("calendar secrets round-trip with AES-GCM and reject tampering", () => {
   assert.equal(decryptCalendarSecret(ciphertext, key), "refresh-token");
 
   const parts = ciphertext.split(".");
-  parts[3] = `${parts[3].slice(0, -1)}${parts[3].endsWith("a") ? "b" : "a"}`;
+  const tag = Buffer.from(parts[3], "base64url");
+  tag[0] ^= 1;
+  parts[3] = tag.toString("base64url");
   assert.throws(() => decryptCalendarSecret(parts.join("."), key));
 });
 
@@ -66,6 +72,35 @@ test("Selene assistant can read/request but cannot approve or manage connections
     allow: false,
     reason: "human_only",
   });
+});
+
+test("attributable owner agents can operate CRM while shared system tokens stay bounded", () => {
+  const ownerAgent: Principal = {
+    ...assistant,
+    agentScope: "owner",
+  };
+  const systemAgent: Principal = {
+    ...ownerAgent,
+    via: "system_token",
+    tokenId: null,
+  };
+  assert.equal(capabilitiesFor(ownerAgent).has("ops.write"), true);
+  assert.equal(capabilitiesFor(ownerAgent).has("kb.publish"), true);
+  assert.equal(capabilitiesFor(systemAgent).has("ops.write"), false);
+  assert.equal(capabilitiesFor(systemAgent).has("kb.publish"), false);
+});
+
+test("public screening slots require at least 24 hours notice by default", () => {
+  assert.equal(DEFAULT_BOOKING_NOTICE_MINUTES, 1440);
+  const now = new Date("2026-07-25T08:00:00.000Z");
+  assert.equal(
+    minimumBookableStartMs(now),
+    Date.parse("2026-07-26T08:00:00.000Z")
+  );
+  assert.equal(
+    minimumBookableStartMs(now, 30),
+    Date.parse("2026-07-25T08:30:00.000Z")
+  );
 });
 
 test("calendar risk model requires approval for changes, cancellations, or attendees", () => {

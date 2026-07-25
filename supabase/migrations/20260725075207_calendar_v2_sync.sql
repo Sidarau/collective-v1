@@ -14,7 +14,7 @@ ALTER TABLE public.agent_tokens
   CHECK (scope IN ('owner', 'assistant', 'staff', 'member'));
 
 CREATE TABLE public.google_calendar_connections (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   admin_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   google_email TEXT,
   refresh_token_ciphertext TEXT NOT NULL,
@@ -32,7 +32,7 @@ CREATE INDEX idx_google_calendar_connections_active
 ALTER TABLE public.google_calendar_connections ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE public.calendar_oauth_invites (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   admin_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
   token_hash TEXT NOT NULL UNIQUE,
@@ -46,7 +46,7 @@ CREATE INDEX idx_calendar_oauth_invites_active
 ALTER TABLE public.calendar_oauth_invites ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE public.google_calendar_sources (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   connection_id UUID NOT NULL REFERENCES public.google_calendar_connections(id) ON DELETE CASCADE,
   google_calendar_id TEXT NOT NULL,
   summary TEXT NOT NULL,
@@ -74,7 +74,7 @@ CREATE INDEX idx_google_calendar_sources_watch
 ALTER TABLE public.google_calendar_sources ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE public.calendar_event_links (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_id UUID NOT NULL REFERENCES public.google_calendar_sources(id) ON DELETE CASCADE,
   entity_type TEXT NOT NULL CHECK (entity_type IN ('screening_call', 'event')),
   entity_id UUID NOT NULL,
@@ -95,7 +95,7 @@ CREATE INDEX idx_calendar_event_links_entity
 ALTER TABLE public.calendar_event_links ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE public.agent_calendar_grants (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   agent_token_id UUID NOT NULL REFERENCES public.agent_tokens(id) ON DELETE CASCADE,
   source_id UUID NOT NULL REFERENCES public.google_calendar_sources(id) ON DELETE CASCADE,
   detail_level TEXT NOT NULL DEFAULT 'details'
@@ -114,7 +114,7 @@ CREATE INDEX idx_agent_calendar_grants_token
 ALTER TABLE public.agent_calendar_grants ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE public.calendar_action_requests (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   requested_by_token_id UUID REFERENCES public.agent_tokens(id) ON DELETE SET NULL,
   requested_by_admin_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
   source_id UUID NOT NULL REFERENCES public.google_calendar_sources(id) ON DELETE CASCADE,

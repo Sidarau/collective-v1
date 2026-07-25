@@ -73,9 +73,9 @@ const OPERATOR: Capability[] = [
   "calendar.read", "calendar.action.request", "calendar.action.approve", "calendar.connection.manage",
 ];
 const AGENT_OWNER: Capability[] = [
-  "kb.view", "kb.draft", "kb.render", "kb.publish", "ops.read",
+  "kb.view", "kb.draft", "kb.render", "kb.publish", "ops.read", "ops.write",
   "calendar.read", "calendar.action.request",
-]; // may post/edit; never share externally
+]; // Alex's attributable token may operate + publish; never share externally
 const AGENT_ASSISTANT: Capability[] = [
   "kb.view", "kb.draft", "kb.render", "ops.read",
   "calendar.read", "calendar.action.request",
@@ -95,7 +95,11 @@ export function capabilitiesFor(p: Principal): Set<Capability> {
     case "operator": caps = OPERATOR; break;
     case "agent":
       caps =
-        p.agentScope === "assistant"
+        // The legacy shared environment token is intentionally bounded. Broad
+        // writes require an attributable, individually revocable owner token.
+        p.via === "system_token"
+          ? AGENT_ASSISTANT
+          : p.agentScope === "assistant"
           ? AGENT_ASSISTANT
           : p.agentScope === "staff"
             ? AGENT_STAFF

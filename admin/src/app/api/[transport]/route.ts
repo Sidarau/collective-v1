@@ -1361,7 +1361,8 @@ const handler = createMcpHandler(
               scope: principal.agentScope ?? (principal.kind === "operator" ? "human" : null),
               audience: audienceFor(principal),
               capabilities: caps,
-              can_publish_or_share: false, // publish/share are human-only, done in the console
+              can_publish: caps.includes("kb.publish"),
+              can_share: caps.includes("kb.share"),
               tokenLabel: id?.tokenLabel ?? null,
             },
             null,

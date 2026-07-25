@@ -164,7 +164,8 @@ export default function SlotPicker({ token, days, existing }: Props) {
         {loading ? "Confirming…" : selected ? "Confirm this window" : "Choose a time"}
       </button>
       <p className="faint mt-4 text-center text-[12px] leading-relaxed">
-        Fifteen minutes, by phone. Times shown on the Ibiza clock.
+        Fifteen minutes, by phone. Times shown on the Ibiza clock with at least
+        24 hours&apos; notice.
       </p>
     </div>
   );

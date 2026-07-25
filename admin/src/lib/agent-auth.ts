@@ -100,7 +100,7 @@ export async function resolveAgent(req: Request): Promise<AgentIdentity | NextRe
           adminEmail: "system",
           tokenId: null,
           tokenLabel: "AGENT_API_TOKEN",
-          scope: "owner",
+          scope: "assistant",
         };
       }
     }
