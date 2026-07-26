@@ -61,7 +61,7 @@ test("one-click OAuth handoff is signed and rejects tampering", () => {
   assert.equal(verifyCalendarOAuthTargetValue(signed, "wrong-secret"), null);
 });
 
-test("Selene assistant can read/request but cannot approve or manage connections", () => {
+test("Collecta assistant can read/request but cannot self-approve or manage connections", () => {
   const caps = capabilitiesFor(assistant);
   assert.equal(caps.has("calendar.read"), true);
   assert.equal(caps.has("calendar.action.request"), true);

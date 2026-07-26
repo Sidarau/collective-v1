@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 export default async function CalendarConnectedPage({
   searchParams,
@@ -28,12 +29,16 @@ export default async function CalendarConnectedPage({
         ) : (
           <>
             <p className="mt-3 text-sm leading-relaxed text-muted">
-              That&apos;s it. Selene can now include your approved calendars in your daily update.
-              You can close this page.
+              That&apos;s it. Collecta can now include your approved calendars in your daily
+              update.
             </p>
             <p className="mt-5 text-[12px] text-faint">
-              Selene cannot approve sensitive calendar changes herself.
+              Collecta can carry out sensitive calendar changes after an authorized owner
+              explicitly approves them.
             </p>
+            <Link href="/" className="btn btn-gold mt-6 inline-flex">
+              Back to Open Collective
+            </Link>
           </>
         )}
       </section>

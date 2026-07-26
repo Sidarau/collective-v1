@@ -300,7 +300,7 @@ export default async function SchedulePage({
                 </p>
                 <form action={updateGoogleCalendarsAction} className="mt-4 space-y-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
-                    Calendars Selene may see
+                    Calendars Collecta may see
                   </p>
                   {googleSources.map((source) => (
                     <label
@@ -350,7 +350,7 @@ export default async function SchedulePage({
 
           {calendarRequests.length > 0 ? (
             <section className="panel p-5">
-              <p className="label">Selene needs your approval</p>
+              <p className="label">Collecta needs your approval</p>
               <p className="mb-3 text-[12px] leading-relaxed text-muted">
                 Nothing below changes your calendar until you approve it.
               </p>

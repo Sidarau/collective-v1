@@ -151,7 +151,7 @@ export default async function AgentsPage({
               <div className="border-b border-line px-4 pb-3 pt-4">
                 <p className="label mb-1">Connected operator calendars</p>
                 <p className="text-[12px] text-muted">
-                  Choose which calendars participate in availability and may be granted to Selene.
+                  Choose which calendars participate in availability and may be granted to Collecta.
                 </p>
               </div>
               {Array.from(new Set(calendarSources.map((source) => source.adminId))).map(
@@ -402,7 +402,7 @@ export default async function AgentsPage({
               <code>calendar_event_create</code> · <code>calendar_event_update</code> ·{" "}
               <code>calendar_event_cancel</code> · <code>calendar_action_status</code>
               <br />
-              Assistant tokens are the right choice for Selene. They see only granted calendars;
+              Assistant tokens are the right choice for Collecta. They see only granted calendars;
               every write request is attributable and high-risk changes require your approval.
             </p>
           </section>

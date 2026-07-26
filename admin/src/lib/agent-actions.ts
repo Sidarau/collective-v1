@@ -111,7 +111,7 @@ export async function updateAgentCalendarGrantsAction(formData: FormData) {
         sourceId,
         detailLevel: "details",
         canRequestWrites: true,
-        // Selene always asks before writes in the Don MVP.
+        // Collecta always asks before writes in the Don MVP.
         lowRiskAutoexecute: false,
       });
     }

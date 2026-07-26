@@ -19,14 +19,14 @@ export default async function CollectaPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <p className="text-sm text-neutral-500 mb-2">
-        The Collective's operator — works with your access level. Onboard members,
+        The Collective&apos;s operator — works with your access level. Onboard members,
         verify staff/vendor work, trigger invites and emails, draft KB updates.
       </p>
       {grant ? (
         <ClawpanelChat grant={grant} />
       ) : (
         <div className="rounded-md border border-neutral-800 bg-neutral-950 px-4 py-6 text-sm text-neutral-400">
-          Collecta isn't connected right now. (Chat backend not provisioned for
+          Collecta isn&apos;t connected right now. (Chat backend not provisioned for
           your account — ask Alex to enable it.)
         </div>
       )}

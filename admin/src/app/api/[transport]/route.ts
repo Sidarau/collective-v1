@@ -1130,7 +1130,7 @@ const handler = createMcpHandler(
       {
         title: "Request a calendar event",
         description:
-          "Request a new event on a granted calendar. Selene's Don-MVP grants require owner approval before execution. Reuse idempotencyKey when retrying.",
+          "Request a new event on a granted calendar. Collecta's Don-MVP grants require explicit owner approval before execution. Reuse idempotencyKey when retrying.",
         inputSchema: calendarEventSchema,
       },
       async (input) => {
