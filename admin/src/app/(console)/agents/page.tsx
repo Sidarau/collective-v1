@@ -1,12 +1,14 @@
 import PageHeader from "@/components/PageHeader";
 import ErrorBanner from "@/components/ErrorBanner";
 import StripQuery from "@/components/StripQuery";
+import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import { getAdminUser } from "@/lib/auth";
 import { getSupabaseAdmin } from "@core/supabase";
 import { config } from "@core/config";
 import {
   mintAgentTokenAction,
   mintCalendarSetupLinkAction,
+  disconnectOperatorCalendarAction,
   revokeAgentTokenAction,
   updateAgentCalendarGrantsAction,
   updateConnectedOperatorCalendarsAction,
@@ -17,7 +19,12 @@ import type {
   AuditLogRow,
 } from "@core/database.types";
 import { fmtDate } from "@/lib/format";
-import { listAllGoogleSources, listGoogleSources } from "@core/google-calendar";
+import {
+  getGoogleConnection,
+  listAllGoogleSources,
+  listGoogleConnections,
+  listGoogleSources,
+} from "@core/google-calendar";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +79,15 @@ export default async function AgentsPage({
   const activeMine = mine.filter((t) => !t.revoked_at);
   const calendarSources =
     admin.role === "admin" ? await listAllGoogleSources() : await listGoogleSources(admin.id);
+  const calendarConnections =
+    admin.role === "admin"
+      ? await listGoogleConnections()
+      : [await getGoogleConnection(admin.id)].filter(
+          (connection): connection is NonNullable<typeof connection> => Boolean(connection)
+        );
+  const connectionByAdminId = new Map(
+    calendarConnections.map((connection) => [connection.adminId, connection])
+  );
   const { data: operatorUsersRaw } = await supabase
     .from("users")
     .select("id, email, role")
@@ -126,30 +142,62 @@ export default async function AgentsPage({
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_360px]">
         <div className="space-y-5">
-          <section className="panel p-5">
-            <p className="label">One-click Google setup</p>
-            <p className="text-[12.5px] leading-relaxed text-muted">
-              Prepare a private link. The recipient taps it, chooses their Google account,
-              presses Allow, and sees “Calendar connected.” No console password or setup screen.
-            </p>
-            <form action={mintCalendarSetupLinkAction} className="mt-3 flex flex-wrap gap-2">
-              <select name="targetAdminId" className="input min-w-[240px] flex-1">
-                {operatorUsers.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.email}{user.id === admin.id ? " (you)" : ""}
-                  </option>
-                ))}
-              </select>
-              <button type="submit" className="btn btn-gold">
-                Create setup link
-              </button>
-            </form>
+          <section className="panel overflow-hidden">
+            <div className="border-b border-line px-4 pb-3 pt-4">
+              <p className="label mb-1">Operator Google Calendars</p>
+              <p className="text-[12.5px] leading-relaxed text-muted">
+                Create a private one-time link for the right person. They tap it, choose their
+                Google account, and press Allow.
+              </p>
+            </div>
+            <div className="divide-y divide-line">
+              {operatorUsers.map((user) => {
+                const connection = connectionByAdminId.get(user.id);
+                return (
+                  <div
+                    key={user.id}
+                    className="flex flex-wrap items-center justify-between gap-3 px-4 py-4"
+                  >
+                    <div>
+                      <p className="text-[13px] font-medium text-ink">
+                        {user.email}
+                        {user.id === admin.id ? " (you)" : ""}
+                      </p>
+                      <p className="mt-1 text-[11px] text-faint">
+                        {connection
+                          ? `Connected${connection.email ? ` to ${connection.email}` : ""}`
+                          : "Not connected"}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <form action={mintCalendarSetupLinkAction}>
+                        <input type="hidden" name="targetAdminId" value={user.id} />
+                        <button type="submit" className={`btn ${connection ? "" : "btn-gold"}`}>
+                          {connection ? "Create reconnect link" : "Create setup link"}
+                        </button>
+                      </form>
+                      {connection ? (
+                        <form action={disconnectOperatorCalendarAction}>
+                          <input type="hidden" name="targetAdminId" value={user.id} />
+                          <ConfirmSubmitButton
+                            className="btn btn-red"
+                            confirmation={`Disconnect ${user.email} from Open Collective? This removes the sync and stored connection. It does not delete any Google calendars or events.`}
+                          >
+                            Disconnect
+                          </ConfirmSubmitButton>
+                        </form>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </section>
 
           {calendarSources.length > 0 ? (
             <section className="panel overflow-hidden">
               <div className="border-b border-line px-4 pb-3 pt-4">
-                <p className="label mb-1">Connected operator calendars</p>
+                <p className="label mb-1">Connected calendar access</p>
                 <p className="text-[12px] text-muted">
                   Choose which calendars participate in availability and may be granted to Collecta.
                 </p>

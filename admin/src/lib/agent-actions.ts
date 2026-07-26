@@ -11,7 +11,10 @@ import { grantCalendarToAgent } from "@core/calendar-actions";
 import type { AgentTokenScope } from "@core/database.types";
 import { mintCalendarOAuthInvite } from "@core/calendar-onboarding";
 import { config } from "@core/config";
-import { updateGoogleSourceSelection } from "@core/google-calendar";
+import {
+  deleteGoogleConnection,
+  updateGoogleSourceSelection,
+} from "@core/google-calendar";
 
 const MAX_ACTIVE_TOKENS = 3;
 
@@ -191,6 +194,41 @@ export async function mintCalendarSetupLinkAction(formData: FormData) {
   redirect(
     `/agents?calendarSetup=${encodeURIComponent(link)}&target=${encodeURIComponent(target.email)}`
   );
+}
+
+/** Disconnect an operator's Google account without deleting anything in Google Calendar. */
+export async function disconnectOperatorCalendarAction(formData: FormData) {
+  const admin = await getAdminUser();
+  if (!admin) backTo("/login");
+  const targetAdminId = (formData.get("targetAdminId") as string | null) || "";
+  const { data: target } = await getSupabaseAdmin()
+    .from("users")
+    .select("id, email, role")
+    .eq("id", targetAdminId)
+    .maybeSingle();
+  if (!target || !["admin", "operator"].includes(target.role)) {
+    backTo("/agents", "Calendar connections are only available for operators");
+  }
+  if (admin.role !== "admin" && target.id !== admin.id) {
+    backTo("/agents", "Only an admin can disconnect another operator's calendar");
+  }
+
+  try {
+    await deleteGoogleConnection(target.id);
+  } catch (error) {
+    backTo("/agents", error instanceof Error ? error.message : "Could not disconnect calendar");
+  }
+  await writeAudit({
+    actorId: admin.id,
+    actorEmail: admin.email,
+    action: "calendar.operator_disconnected",
+    entityType: "user",
+    entityId: target.id,
+    summary: `Disconnected Google Calendar for ${target.email}`,
+  });
+  revalidatePath("/agents");
+  revalidatePath("/schedule");
+  backTo("/agents");
 }
 
 export async function revokeAgentTokenAction(formData: FormData) {
