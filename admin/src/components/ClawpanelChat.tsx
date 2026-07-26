@@ -26,10 +26,11 @@ export default function ClawpanelChat({ grant }: { grant: EmbedGrant }) {
     if (!el) return;
     el.innerHTML = "";
     const chat = document.createElement("clawpanel-chat");
-    chat.setAttribute("api-url", grant.apiUrl);
+    chat.setAttribute("base-url", grant.apiUrl);
     chat.setAttribute("agent-id", grant.agentId);
     chat.setAttribute("token", grant.token);
-    chat.setAttribute("label", "Collecta");
+    chat.setAttribute("agent-name", "Collecta");
+    chat.setAttribute("persona", "Open Collective operator");
     chat.style.display = "block";
     chat.style.minHeight = "480px";
     el.appendChild(chat);
