@@ -28,6 +28,11 @@ import {
   listCalendarGrantsForToken,
   requestCalendarAction,
 } from "@core/calendar-actions";
+import {
+  approveStayRequestLive,
+  getStayRequestAvailability,
+  searchStayRequests,
+} from "@/lib/stay-requests";
 
 /** Accept ISO-with-offset ("2026-07-20T19:00:00+02:00" / "…Z") or villa
  *  wall-clock ("2026-07-20T19:00") — wall clock is read as Europe/Madrid. */
@@ -437,10 +442,137 @@ const handler = createMcpHandler(
       }
     );
 
+    server.registerTool(
+      "stay_requests_search",
+      {
+        title: "Search stay requests",
+        description:
+          "Find stay requests by guest name and/or exact dates/status. Returns only the request id, guest name, window, status, room, and gate so an owner can preview the exact target before a decision.",
+        inputSchema: {
+          query: z.string().min(2).optional(),
+          checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          status: z
+            .enum([
+              "inquiry",
+              "requested",
+              "waitlisted",
+              "approved",
+              "deposit_paid",
+              "paid",
+              "confirmed",
+              "cancelled",
+              "completed",
+            ])
+            .optional(),
+          limit: z.number().int().min(1).max(50).optional(),
+        },
+      },
+      async (input) => {
+        const denied = await requireCapability("ops.read");
+        if (denied) return denied;
+        try {
+          const matches = await searchStayRequests(input);
+          return ok(
+            matches.length
+              ? JSON.stringify(matches, null, 2)
+              : "No stay requests matched."
+          );
+        } catch (error) {
+          return err(error instanceof Error ? error.message : "Search failed");
+        }
+      }
+    );
+
     // ---------------------------------------------------------------- Writes
     // Everything below mutates the live product with no redeploy. Each write
     // is validated, audited under the calling admin's token, and visible in
     // the console (Agents & MCP → activity).
+
+    server.registerTool(
+      "stay_request_availability",
+      {
+        title: "Preview rooms for a stay request",
+        description:
+          "Preview room ids, current assignment, guest capacity, same-price eligibility, and current availability immediately before approval or reassignment.",
+        inputSchema: { id: z.string().uuid() },
+      },
+      async ({ id }) => {
+        const denied = await requireCapability("ops.read");
+        if (denied) return denied;
+        try {
+          return ok(JSON.stringify(await getStayRequestAvailability(id), null, 2));
+        } catch (error) {
+          return err(error instanceof Error ? error.message : "Availability preview failed");
+        }
+      }
+    );
+
+    server.registerTool(
+      "stay_request_approve",
+      {
+        title: "Approve one stay request",
+        description:
+          "Approve exactly one requested/waitlisted stay after an explicit owner confirmation. Re-checks room commitments, date blocks, and house/room closures atomically. Owner-scope attributable tokens only. Notifications default OFF.",
+        inputSchema: {
+          id: z.string().uuid(),
+          expectedStatus: z.enum(["requested", "waitlisted"]),
+          targetRoomId: z.string().uuid().optional(),
+          confirmed: z.literal(true),
+          note: z.string().max(1000).optional(),
+          notify: z.boolean().optional(),
+        },
+      },
+      async ({ id, expectedStatus, targetRoomId, note, notify }) => {
+        const denied = await requireCapability("stay.approve", {
+          type: "booking",
+          id,
+        });
+        if (denied) return denied;
+        const identity = agentContext.getStore();
+        if (!identity?.adminId || !identity.adminEmail) {
+          return err(
+            "Denied: stay approval requires an attributable owner or operator identity"
+          );
+        }
+        try {
+          const result = await approveStayRequestLive({
+            id,
+            expectedStatus,
+            targetRoomId,
+            note,
+            notify: notify ?? false,
+            actor: {
+              id: identity.adminId,
+              email: identity.adminEmail,
+              label: identity.tokenLabel,
+              via: identity.kind === "session" ? "console" : "agent",
+            },
+          });
+          return ok(
+            JSON.stringify(
+              {
+                id: result.booking_id,
+                changed: result.changed,
+                status: result.status,
+                previousStatus: result.from_status,
+                checkIn: result.check_in,
+                checkOut: result.check_out,
+                notification: result.notification,
+                fromRoomId: result.from_room_id,
+                roomId: result.room_id,
+              },
+              null,
+              2
+            )
+          );
+        } catch (error) {
+          return err(
+            error instanceof Error ? error.message : "Stay approval failed"
+          );
+        }
+      }
+    );
 
     server.registerTool(
       "event_upsert",

@@ -74,6 +74,15 @@ The admin application exposes authenticated KB REST routes and the MCP
 transport. Every MCP tool checks the resolved principal's capability. KB access
 also checks tree grants; calendar access checks per-token calendar grants.
 
+Attributable `owner` tokens can use `stay_requests_search` to preview a narrow
+stay record, `stay_request_availability` to preview eligible rooms, and
+`stay_request_approve` after an explicit owner confirmation. Approval is
+atomic, rechecks room commitments/blocks/closures, and can explicitly move a
+waitlisted request only to a room with enough capacity and the same quoted
+price/currency. Member notification defaults off and every decision is
+audited. Assistant, staff, member, and shared system tokens cannot approve
+stays.
+
 For Selene, mint an `assistant` token on **Agents & MCP**, connect Google on
 **Schedule**, choose calendars, then grant those calendars to the token. Agent
 creates/updates/cancellations appear in Schedule as approval requests. Don

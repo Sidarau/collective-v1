@@ -8,7 +8,6 @@ import { sendTrackedEmail, sendMagicLinkEmail } from "@core/email";
 import { mintMagicLink } from "@core/invites";
 import { config } from "@core/config";
 import { mergeLabels } from "@core/labels";
-import { BLOCKING_STATUSES, fetchVillaClosures, isClosedFor, isRoomAvailable } from "@core/availability";
 import type {
   ApplicationRow,
   BookingRow,
@@ -17,6 +16,10 @@ import type {
   UserRole,
 } from "@core/database.types";
 import { getAdminUser } from "./auth";
+import {
+  approveStayRequestLive,
+  isApprovableStayStatus,
+} from "./stay-requests";
 
 const db = getSupabaseAdmin;
 
@@ -292,36 +295,32 @@ export async function requestTransitionAction(formData: FormData) {
   const booking = await loadBooking(id);
   if (!booking) backTo("/requests", "Request not found");
 
+  if (op === "approve") {
+    try {
+      await approveStayRequestLive({
+        id,
+        expectedStatus: isApprovableStayStatus(booking.status)
+          ? booking.status
+          : "requested",
+        note,
+        notify,
+        actor: {
+          id: admin.id,
+          email: admin.email,
+          label: null,
+          via: "console",
+        },
+      });
+    } catch (err) {
+      backTo(path, err instanceof Error ? err.message : "Approve failed");
+    }
+    revalidatePath(path);
+    revalidatePath("/requests");
+    backTo(path);
+  }
+
   try {
     const supabase = db();
-
-    // Approving claims the room — re-check the window against everyone else.
-    if (op === "approve") {
-      const [{ data: others }, { data: blocks }, closures] = await Promise.all([
-        supabase
-          .from("bookings")
-          .select("id, room_id, check_in, check_out, status")
-          .eq("room_id", booking.room_id)
-          .neq("id", booking.id)
-          .in("status", BLOCKING_STATUSES)
-          .lt("check_in", booking.check_out)
-          .gt("check_out", booking.check_in),
-        supabase
-          .from("availability_blocks")
-          .select("room_id, date, status")
-          .eq("room_id", booking.room_id)
-          .neq("status", "available")
-          .gte("date", booking.check_in)
-          .lt("date", booking.check_out),
-        fetchVillaClosures(supabase, booking.villa_id, booking.check_in, booking.check_out),
-      ]);
-      if (isClosedFor(booking.room_id, booking.check_in, booking.check_out, closures)) {
-        backTo(path, "The house is closed for part of this window — approve is blocked");
-      }
-      if (!isRoomAvailable(booking.room_id, booking.check_in, booking.check_out, others || [], blocks || [], closures)) {
-        backTo(path, "Conflict: that room is already committed for part of this window");
-      }
-    }
 
     await supabase
       .from("bookings")
