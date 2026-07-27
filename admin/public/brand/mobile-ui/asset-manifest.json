@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "productLanguage": {
+    "positioning": "community access and collective operations; never hospitality",
+    "primaryEntities": {
+      "gate": "a curated access pathway, program or offering",
+      "space": "any physical setting or asset, including residences, rooms, studios, land, venues, boats and berths",
+      "person": "a member, visitor, applicant, host, partner or vendor"
+    },
+    "preferredTerms": [
+      "access request",
+      "access period",
+      "arrival",
+      "departure",
+      "space reset",
+      "upkeep",
+      "supplies",
+      "utilization"
+    ],
+    "prohibitedGenericUiTerms": [
+      "booking",
+      "stay",
+      "guest",
+      "villa",
+      "check-in",
+      "checkout",
+      "housekeeping",
+      "occupancy"
+    ]
+  },
+  "assets": [
+    {
+      "file": "backgrounds/background-manifest.json",
+      "role": "ambient background route mapping and runtime contract",
+      "rules": [
+        "Use WebP at runtime and retain PNG as source",
+        "Backgrounds are decorative and aria-hidden",
+        "Follow backgrounds/BACKGROUND_SYSTEM.md for motion and contrast",
+        "Do not imply hospitality through imagery"
+      ]
+    },
+    {
+      "file": "keyhole-gold-alpha.png",
+      "role": "canonical standalone mobile mark",
+      "alphaRequired": true,
+      "rules": [
+        "Do not redraw or add a dial",
+        "Size by height and preserve aspect ratio",
+        "Use beside a text wordmark in the app header"
+      ]
+    },
+    {
+      "file": "collecta-avatar.png",
+      "role": "canonical Collecta portrait",
+      "alphaRequired": false,
+      "rules": [
+        "Use object-fit cover",
+        "Use object-position 50% 28%",
+        "Never replace the portrait with the keyhole when this asset loads"
+      ]
+    },
+    {
+      "file": "00-approved-home-reference.png",
+      "role": "approved Today composition",
+      "authoritativeFor": ["hierarchy", "density", "palette", "timeline layout"]
+    },
+    {
+      "file": "01-component-system-board.png",
+      "role": "component visual inventory",
+      "authoritativeFor": ["material", "control shape", "state appearance"]
+    },
+    {
+      "file": "02-operations-screen-family.png",
+      "role": "daily operations screen family",
+      "authoritativeFor": ["screen composition", "detail hierarchy"]
+    },
+    {
+      "file": "03-management-screen-family.png",
+      "role": "management screen family",
+      "authoritativeFor": ["screen composition", "Collecta open state"]
+    }
+  ]
+}

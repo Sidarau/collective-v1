@@ -1,0 +1,42 @@
+{
+  "host": "mobile.opencollective.app",
+  "versionedPathAllowed": false,
+  "bottomNavigation": [
+    { "label": "Today", "path": "/", "icon": "calendar-days" },
+    { "label": "People", "path": "/people", "icon": "users-round" },
+    { "label": "Spaces", "path": "/spaces", "icon": "landmark" },
+    { "label": "More", "path": "/more", "icon": "ellipsis" }
+  ],
+  "routes": [
+    { "path": "/", "screen": "today", "template": "stream" },
+    { "path": "/briefing", "screen": "daily-numbers", "template": "intelligence" },
+    { "path": "/requests", "screen": "requests", "template": "queue" },
+    { "path": "/requests/[id]", "screen": "request-detail", "template": "record-detail" },
+    { "path": "/spaces", "screen": "spaces", "template": "directory" },
+    { "path": "/spaces/[id]", "screen": "space-operations", "template": "record-detail" },
+    { "path": "/gates", "screen": "gates", "template": "directory" },
+    { "path": "/gates/[id]", "screen": "gate-detail", "template": "record-detail" },
+    { "path": "/dues", "screen": "dues-and-forecast", "template": "stream" },
+    { "path": "/dues/[id]", "screen": "transaction-detail", "template": "record-detail" },
+    { "path": "/experiences", "screen": "experiences", "template": "queue" },
+    { "path": "/experiences/[id]", "screen": "experience-detail", "template": "record-detail" },
+    { "path": "/people", "screen": "people", "template": "directory" },
+    { "path": "/people/[id]", "screen": "person-360", "template": "record-detail" },
+    { "path": "/vendors", "screen": "vendors", "template": "directory" },
+    { "path": "/vendors/[id]", "screen": "vendor-detail", "template": "record-detail" },
+    { "path": "/communications", "screen": "communications", "template": "queue" },
+    { "path": "/content", "screen": "content", "template": "settings-list" },
+    { "path": "/knowledge", "screen": "knowledge", "template": "directory" },
+    { "path": "/reports", "screen": "reports", "template": "intelligence" },
+    { "path": "/agents", "screen": "agents-and-mcp", "template": "settings-list" },
+    { "path": "/settings", "screen": "settings", "template": "settings-list" },
+    { "path": "/more", "screen": "more", "template": "settings-list" }
+  ],
+  "todayFilters": [
+    { "key": "all", "label": "All" },
+    { "key": "requests", "label": "Requests" },
+    { "key": "access", "label": "Access" },
+    { "key": "dues", "label": "Dues" },
+    { "key": "experiences", "label": "Experiences" }
+  ]
+}
