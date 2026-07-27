@@ -257,9 +257,9 @@ export async function getStayRequestAvailability(
     await Promise.all([
       supabase
         .from("rooms")
-        .select("id, name, max_guests, base_price_per_night, currency, sort_order")
+        .select("id, name, max_guests, base_price_per_night, currency")
         .eq("villa_id", booking.villa_id)
-        .order("sort_order"),
+        .order("name"),
       supabase
         .from("closure_periods")
         .select("room_id")
