@@ -32,14 +32,27 @@ export default defineConfig({
   projects: [
     {
       name: "phone-390",
-      use: { ...devices["iPhone 13"], viewport: VIEWPORTS["390x844"], isMobile: true },
+      use: {
+        ...devices["iPhone 13"],
+        // The iPhone descriptor defaults to webkit, which segfaults on some
+        // macOS hosts. Chromium runs everywhere; set PW_BROWSER=webkit to
+        // check Safari-specific rendering when the host supports it.
+        browserName: (process.env.PW_BROWSER as "chromium" | "webkit") ?? "chromium",
+        viewport: VIEWPORTS["390x844"],
+        isMobile: true,
+        // Evidence is captured at logical size; the device's 3x factor would
+        // put ~110 MB of PNGs in the repository for no extra information.
+        deviceScaleFactor: 1,
+      },
     },
     {
       name: "reduced-motion-390",
       use: {
         ...devices["iPhone 13"],
+        browserName: (process.env.PW_BROWSER as "chromium" | "webkit") ?? "chromium",
         viewport: VIEWPORTS["390x844"],
         isMobile: true,
+        deviceScaleFactor: 1,
         // Playwright 1.62 takes this through contextOptions, not `use` directly.
         contextOptions: { reducedMotion: "reduce" },
       },

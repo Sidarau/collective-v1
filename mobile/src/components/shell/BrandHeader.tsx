@@ -6,7 +6,8 @@
    preload and add an optimizer round trip for a 12 KB image. */
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { AccountSheet } from "@/components/sheets/AccountSheet";
 
 /**
  * The measured transparent top veil. Timeline content passes visibly beneath
@@ -15,6 +16,7 @@ import { useEffect, useRef } from "react";
  */
 export function BrandHeader({ operatorInitials = "AS" }: { operatorInitials?: string }) {
   const ref = useRef<HTMLElement>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   useEffect(() => {
     const node = ref.current;
@@ -46,11 +48,20 @@ export function BrandHeader({ operatorInitials = "AS" }: { operatorInitials?: st
         <span className="brand-lockup__word">Open Collective</span>
       </Link>
 
-      <button type="button" className="user-avatar" aria-label="Operator account">
+      <button
+        type="button"
+        className="user-avatar"
+        aria-label="Your account"
+        aria-haspopup="dialog"
+        onClick={() => setAccountOpen(true)}
+        data-testid="account-button"
+      >
         <span className="user-avatar__disc" aria-hidden="true">
           {operatorInitials}
         </span>
       </button>
+
+      <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} />
     </header>
   );
 }

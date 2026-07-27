@@ -352,6 +352,33 @@ export type SettingsGroup = {
   rows: SettingsRow[];
 };
 
+/**
+ * The signed-in operator, as shown in the account sheet behind the avatar.
+ *
+ * PHASE 2: `avatarUrl` should be synced from the member portal's profile
+ * image rather than re-uploaded here, and `email` is only changeable through a
+ * verification flow that does not exist yet — see PHASE_2_HANDOFF.md.
+ */
+export type OperatorAccount = {
+  id: string;
+  name: string;
+  initials: string;
+  email: string;
+  /** Whether the current address has completed verification. */
+  emailVerified: boolean;
+  roleLabel: string;
+  avatarUrl?: string;
+  /** Connected system surfaces, shown as status rather than settings. */
+  connections: {
+    id: string;
+    label: string;
+    detail: string;
+    icon: string;
+    href?: string;
+    state: RecordState;
+  }[];
+};
+
 export type MoreGroup = {
   id: string;
   label: string;
@@ -431,6 +458,40 @@ export type ComposerOption = {
   icon: string;
 };
 
+/**
+ * Anything a new item can be attached to. Nothing is created free-floating:
+ * an access period belongs to a Space, a due belongs to a Person or partner,
+ * an experience belongs to a Space, and so on.
+ */
+export type LinkTargetKind = "space" | "person" | "vendor" | "experience" | "gate";
+
+export type LinkTarget = {
+  id: string;
+  kind: LinkTargetKind;
+  label: string;
+  detail?: string;
+  /** Where the record itself lives, so the composer can deep-link to it. */
+  href: string;
+};
+
+export const LINK_TARGET_LABELS: Record<LinkTargetKind, string> = {
+  space: "Spaces",
+  person: "People",
+  vendor: "Partners & crew",
+  experience: "Experiences",
+  gate: "Gates",
+};
+
+/** Which kinds a composer type offers first. Search still spans everything. */
+export const LINK_KINDS_BY_COMPOSER: Record<ComposerKind, LinkTargetKind[]> = {
+  request: ["gate", "person", "space"],
+  access: ["space", "person", "gate"],
+  space_reset: ["space", "vendor"],
+  due: ["person", "vendor"],
+  experience: ["space", "vendor", "person"],
+  note: ["person", "space", "vendor", "experience", "gate"],
+};
+
 /* ------------------------------------------------------------------ *
  * Load states — every screen renders all five
  * ------------------------------------------------------------------ */
@@ -485,10 +546,19 @@ export interface MobileDataProvider {
   listReports(): Promise<Result<ReportSummary[]>>;
   listAgents(): Promise<Result<AgentEntry[]>>;
 
+  /** The signed-in operator. Phase 2 must read this from the session. */
+  getOperator(): Promise<Result<OperatorAccount>>;
+
   getSettings(): Promise<Result<SettingsGroup[]>>;
   getMoreGroups(): Promise<Result<MoreGroup[]>>;
 
   getComposerOptions(): ComposerOption[];
+
+  /**
+   * Records a new item can be linked to, filtered by a free-text query.
+   * Phase 2 must scope this to what the session is permitted to see.
+   */
+  searchLinkTargets(query: string, kinds?: LinkTargetKind[]): Promise<Result<LinkTarget[]>>;
 
   /**
    * Phase 1 returns a scripted turn. Phase 2 must re-fetch every referenced

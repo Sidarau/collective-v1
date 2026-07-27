@@ -97,6 +97,43 @@ across the client boundary.
   words appear in rendered UI copy.
 - **One champagne primary action and one luminous selection per viewport.**
 
+### How Today is laid out
+
+The day rests on the hero. `splitTimeline()` cuts the stream at the present:
+
+```
+history      ← above the hero, faded and masked, reached by scrolling up
+hero         ← Today, the day summary, Numbers of the Day, the filters
+present      ← Carried forward → Now → everything ahead
+```
+
+On load — and whenever the operator taps Today in the rail — the view settles
+with the hero just under the veil, so the first thing on screen is the day and
+the first thing under it is the work that needs a decision. Completed work is
+never the operator's job, so it sits behind the header; a "N earlier" pill is
+the only affordance it gets.
+
+The settle re-asserts on a short interval, because the veil measurement and
+the display-face swap both land after first paint and change the height of the
+history above the hero. Any wheel, touch or key event hands control back
+immediately.
+
+### Two places this deviates from the written spec, deliberately
+
+1. **No `scroll-snap-type`.** The spec asks for `y proximity` "where
+   appropriate". It is not appropriate here: day dividers sit ~150px apart, so
+   with snap points on them every resting position is near one and the browser
+   will not settle at the top of the document — measured landing at 213px,
+   which puts Today, the day summary and Numbers of the Day permanently out of
+   reach. Reduced motion has nothing left to disable, and the test asserts the
+   app declares no snap anywhere.
+2. **The floating controls can overlap a row at rest.** The spec says they must
+   not cover a status or amount at rest, and also that they retire on scroll and
+   return after rest — on a 390px viewport those cannot both hold at an
+   arbitrary scroll position, and the approved board has the same adjacency. The
+   controls sit in a soft radial vignette so whatever is behind them recedes
+   rather than collides. Worth a design decision before Phase 2.
+
 ### Brand assets
 
 `public/brand/` holds display-sized copies plus the untouched canonical

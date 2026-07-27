@@ -49,8 +49,10 @@ already renders all five states through `ResultBoundary`.
 | `listPeople(relationship)` / `getPerson(id)` | `Person` | Member, visitor, applicant, host, partner, vendor. |
 | `listVendors()` / `getVendor(id)` | `Vendor` | Partners and crew. |
 | `listCommunications()` / `listContent()` / `listKnowledge()` / `listReports()` / `listAgents()` | — | Straight list reads. |
+| `getOperator()` | `OperatorAccount` | Read from the session, never from a client hint. Drives the account sheet behind the avatar — see the section below for the three pieces of backend it still needs. |
 | `getSettings()` / `getMoreGroups()` | — | `badge` counts must be **actionable** counts only. |
 | `getComposerOptions()` | `ComposerOption[]` | Synchronous; the six add types from the spec. |
+| `searchLinkTargets(query, kinds?)` | `LinkTarget[]` | Everything a new item can attach to — Spaces, People, partners, experiences, Gates. **Must be scoped to what the session may see.** The composer's picker searches across all kinds regardless of the suggested ones, so this is a permission boundary, not just a filter. |
 | `askCollecta(context, prompt)` | `CollectaTurn` | See the Collecta rules below. |
 
 ## `getTimeline` — the contract that carries the product
@@ -116,6 +118,54 @@ Non-negotiable:
   must write an audit record on confirm.
 - `askCollecta` should become a server action or route handler. The UI calls it
   through the provider, so moving it off the client is a provider-side change.
+- **Return unique message ids per turn.** The conversation is accumulated in
+  the shell (`UiStateProvider.collectaThread`) and deduped on `id`; reusing ids
+  across turns silently drops later replies. The fixture learned this the hard
+  way — see `collectaTurnCounter` in `provider.ts`.
+- The thread deliberately lives in the client shell so it survives closing the
+  sheet and moving between routes. If Phase 2 persists conversations
+  server-side, keep that shape: the sheet should never be the owner.
+
+## The account sheet needs backend that does not exist yet
+
+`getOperator()` returns an `OperatorAccount` and the avatar opens a sheet with
+the operator's identity, the systems they are connected to, and sign-out. Three
+of those need work that has no implementation or documentation today.
+
+### 1. Profile image sync from the member portal — **to build**
+
+The mobile app must not become a second place to upload a profile picture.
+`OperatorAccount.avatarUrl` should resolve to the member portal's existing
+profile image for the same person.
+
+- Decide the source of truth (member profile record vs. auth provider) and
+  expose it on the session.
+- Serve a stable URL the mobile app can render at 56px without an upload path.
+- Until it exists the sheet falls back to initials, which is a legitimate
+  end state — do not add an uploader to close the gap.
+
+### 2. Changing the email address — **to build, needs a verification flow**
+
+The row is deliberately inert in Phase 1 and says so on screen. A real change
+of address is a security-sensitive operation and needs, at minimum:
+
+1. Operator enters the new address while authenticated.
+2. A signed, single-use, short-expiry token is sent **to the new address**.
+   Do not change anything on the account at this point.
+3. A notification goes to the **old** address saying a change was requested,
+   with a way to stop it — this is what makes account takeover recoverable.
+4. Only on the new address confirming the token does `email` change, and the
+   change is written to the audit trail with actor, timestamp and both values.
+5. Existing sessions are re-validated; sign out other devices.
+6. Rate-limit requests per account and per IP, and expire pending requests.
+
+The token flow does not exist in `packages/core` today. `magic-consume.ts` and
+`invites.ts` are the closest prior art and are the right place to look first.
+
+### 3. Sign-out — **to wire**
+
+The confirmation sheet is built and confirms before acting. It needs to clear
+the session server-side (not just locally) and land on the login route.
 
 ## Auth and security (not started in Phase 1)
 

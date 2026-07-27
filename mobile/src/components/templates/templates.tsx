@@ -9,7 +9,7 @@ import type {
   RecordState,
   SettingsGroup,
 } from "@/data/contracts";
-import { iconFor } from "@/lib/icons";
+import { Icon } from "@/lib/icons";
 import { displayTime, formatDayShort } from "@/lib/time";
 import { PageTitle } from "@/components/shell/MobileShell";
 import { SearchField, Toggle } from "@/components/ui/forms";
@@ -186,14 +186,13 @@ export function RecordDetailScreen({
       {facts?.length ? (
         <div className="metric-strip metric-strip--four" style={{ marginTop: 14 }}>
           {facts.map((f) => {
-            const Icon = f.icon ? iconFor(f.icon) : null;
             return (
               <div className="metric-tile" key={f.label} style={{ padding: "10px 8px" }}>
                 <span
                   className="metric-tile__label"
                   style={{ display: "flex", alignItems: "center", gap: 4 }}
                 >
-                  {Icon ? <Icon size={13} aria-hidden="true" /> : null}
+                  {f.icon ? <Icon name={f.icon} size={13} /> : null}
                   {f.label}
                 </span>
                 <span
@@ -297,7 +296,6 @@ export function ChecklistTimeline({ items }: { items: ChecklistItem[] }) {
               : item.state === "blocked"
                 ? "critical"
                 : "neutral";
-        const Icon = iconFor(item.state === "done" ? "check" : "circle");
         const time = item.at ? displayTime(item.at, "minute") : null;
 
         return (
@@ -310,7 +308,9 @@ export function ChecklistTimeline({ items }: { items: ChecklistItem[] }) {
               }}
             >
               <span className="op-row__node" aria-hidden="true">
-                {item.state === "done" ? <Icon size={14} strokeWidth={2.4} /> : null}
+                {item.state === "done" ? (
+                  <Icon name="check" size={14} strokeWidth={2.4} />
+                ) : null}
               </span>
               <span style={{ gridColumn: 2, minWidth: 0 }}>
                 <span className="op-row__title">{item.label}</span>

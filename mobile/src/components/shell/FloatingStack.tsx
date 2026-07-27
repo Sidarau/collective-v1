@@ -50,13 +50,9 @@ export function FloatingStack({
           </button>
         ) : null}
 
-        <div className="collecta-mount">
-          <CollectaOrb onOpen={() => setCollectaOpen(true)} />
-          <span className="collecta-label" aria-hidden="true">
-            Collecta
-            <span className="collecta-label__hint">⌘K</span>
-          </span>
-        </div>
+        {/* The portrait speaks for itself — a caption under it only adds noise
+            over the timeline. Her name lives on the sheet she opens. */}
+        <CollectaOrb onOpen={() => setCollectaOpen(true)} />
       </div>
 
       <ComposerSheet

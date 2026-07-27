@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BOTTOM_NAVIGATION, activeNavPath } from "@/lib/routes";
-import { iconFor } from "@/lib/icons";
+import { Icon } from "@/lib/icons";
 import { RETURN_TO_PRESENT_EVENT } from "@/components/timeline/TimelineStream";
 
 /** Four persistent destinations. Glass is limited to veil, rail and sheets. */
@@ -15,7 +15,6 @@ export function BottomRail() {
     <nav className="bottom-rail" aria-label="Primary">
       <div className="bottom-rail__inner">
         {BOTTOM_NAVIGATION.map((item) => {
-          const Icon = iconFor(item.icon);
           const isActive = item.path === active;
           // Tapping Today while on Today returns to the present, keeping filters.
           const returnsToPresent = item.path === "/" && pathname === "/";
@@ -33,7 +32,7 @@ export function BottomRail() {
                 window.dispatchEvent(new CustomEvent(RETURN_TO_PRESENT_EVENT));
               }}
             >
-              <Icon size={22} strokeWidth={1.6} aria-hidden="true" />
+              <Icon name={item.icon} size={22} />
               <span className="rail-item__label">{item.label}</span>
             </Link>
           );

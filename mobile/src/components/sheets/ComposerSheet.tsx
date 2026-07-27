@@ -2,20 +2,26 @@
 
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
-import type { ComposerKind, ComposerOption } from "@/data/contracts";
-import { iconFor } from "@/lib/icons";
+import {
+  LINK_KINDS_BY_COMPOSER,
+  LINK_TARGET_LABELS,
+  type ComposerKind,
+  type ComposerOption,
+  type LinkTarget,
+} from "@/data/contracts";
+import { Icon } from "@/lib/icons";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
 import {
   DateRangeField,
   DateTimeField,
   MoneyField,
   PeopleStepper,
-  SelectRow,
   TextArea,
   TextField,
 } from "@/components/ui/forms";
 import { Sheet } from "./Sheet";
 import { ConfirmSheet } from "./ConfirmSheet";
+import { LinkPickerSheet } from "./LinkPickerSheet";
 
 /**
  * The satin + opens a type chooser, then a type-aware form.
@@ -43,6 +49,8 @@ export function ComposerSheet({
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [reviewing, setReviewing] = useState(false);
+  const [link, setLink] = useState<LinkTarget | null>(null);
+  const [picking, setPicking] = useState(false);
 
   /* Re-seed the date each time the sheet opens so it tracks the timeline.
      Adjusted during render on the open transition — an effect would show the
@@ -60,6 +68,8 @@ export function ComposerSheet({
     setAmount("");
     setNote("");
     setReviewing(false);
+    setLink(null);
+    setPicking(false);
   };
 
   const close = () => {
@@ -85,9 +95,7 @@ export function ComposerSheet({
     return (
       <Sheet open={open} onClose={close} title="Add" testId="composer-sheet">
         <ul className="list">
-          {options.map((o) => {
-            const Icon = iconFor(o.icon);
-            return (
+          {options.map((o) => (
               <li key={o.kind}>
                 <button
                   type="button"
@@ -96,7 +104,7 @@ export function ComposerSheet({
                   data-testid={`composer-option-${o.kind}`}
                 >
                   <span className="row__icon" aria-hidden="true">
-                    <Icon size={18} strokeWidth={1.6} />
+                    <Icon name={o.icon} size={18} />
                   </span>
                   <span className="row__body">
                     <span className="row__title">{o.label}</span>
@@ -107,8 +115,7 @@ export function ComposerSheet({
                   </span>
                 </button>
               </li>
-            );
-          })}
+          ))}
         </ul>
       </Sheet>
     );
@@ -152,28 +159,35 @@ export function ComposerSheet({
             <MoneyField label="Amount" value={amount} onChange={setAmount} />
           ) : null}
 
-          {kind === "access" || kind === "space_reset" ? (
-            <SelectRow
-              label="Space"
-              options={[
-                { value: "space-roca-llisa", label: "Roca Llisa" },
-                { value: "space-can-verde", label: "Can Verde" },
-                { value: "space-marina", label: "North pontoon" },
-                { value: "space-studio", label: "Terrace studio" },
-              ]}
-            />
-          ) : null}
-
-          {kind === "request" ? (
-            <SelectRow
-              label="Gate"
-              options={[
-                { value: "gate-north", label: "North Gate" },
-                { value: "gate-founding", label: "Founding circle" },
-                { value: "gate-marina", label: "Marina programme" },
-              ]}
-            />
-          ) : null}
+          {/* Nothing is created free-floating: every item attaches to a
+              Space, Person, partner, experience or Gate. */}
+          <div className="field">
+            <span className="field__label" id="composer-link-label">
+              Link to
+            </span>
+            <button
+              type="button"
+              className="control link-row"
+              onClick={() => setPicking(true)}
+              aria-labelledby="composer-link-label"
+              data-testid="composer-link"
+            >
+              {link ? (
+                <span className="row__body">
+                  <span className="row__title">{link.label}</span>
+                  <span className="row__detail">
+                    {LINK_TARGET_LABELS[link.kind].replace(/s$/, "")}
+                    {link.detail ? ` · ${link.detail}` : ""}
+                  </span>
+                </span>
+              ) : (
+                <span style={{ color: "var(--color-ink-dim)" }}>
+                  Choose a Space, person, partner…
+                </span>
+              )}
+              <ChevronRight size={17} className="row__chev" aria-hidden="true" />
+            </button>
+          </div>
 
           <TextArea
             label="Note"
@@ -183,6 +197,14 @@ export function ComposerSheet({
           />
         </div>
       </Sheet>
+
+      <LinkPickerSheet
+        open={picking}
+        onClose={() => setPicking(false)}
+        onSelect={setLink}
+        selectedId={link?.id}
+        preferredKinds={LINK_KINDS_BY_COMPOSER[kind]}
+      />
 
       <ConfirmSheet
         open={reviewing}
@@ -196,6 +218,15 @@ export function ComposerSheet({
         facts={[
           { icon: "calendar-range", label: "Date", value: date },
           { icon: "pencil", label: "Title", value: title || chosen!.label },
+          ...(link
+            ? [
+                {
+                  icon: "landmark",
+                  label: LINK_TARGET_LABELS[link.kind].replace(/s$/, ""),
+                  value: link.label,
+                },
+              ]
+            : []),
           ...(kind === "due" && amount
             ? [{ icon: "euro", label: "Amount", value: `€${amount}` }]
             : []),

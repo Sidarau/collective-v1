@@ -15,7 +15,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
-    "verify:no-v2": "node scripts/assert-no-v2.mjs"
+    "verify:no-v2": "node scripts/assert-no-v2.mjs",
+    "axe:report": "node scripts/axe-report.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.27.0",

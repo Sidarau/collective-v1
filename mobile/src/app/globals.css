@@ -3,6 +3,11 @@
 /* ===========================================================================
    Open Collective — mobile operator UI
    ---------------------------------------------------------------------------
+   Do not hand-write `-webkit-backdrop-filter`. Lightning CSS (Tailwind v4's
+   bundler) prefixes from the browserslist targets, and a manual prefixed
+   declaration placed after the standard one wins deduplication — which silently
+   shipped a build where every glass surface tinted but never blurred.
+   ---------------------------------------------------------------------------
    Values below are transcribed from
    admin/public/brand/mobile-ui/mobile-ui-tokens.json. Class names are the API:
    components style themselves through these, so the token file stays the only
@@ -19,6 +24,9 @@
   --color-line-strong: #2a3a32;
   --color-ink: #f2f5f1;
   --color-ink-dim: #8a9a93;
+  /* Token value. Reaches only 3.47:1 on the field, so it is used for rails,
+     dots and hairlines — never for text. Micro-labels use --color-ink-dim,
+     which clears 4.5:1. */
   --color-ink-faint: #5a6b64;
   --color-champagne: #e8c87a;
   --color-champagne-high: #f6e4b2;
@@ -83,6 +91,15 @@
   --blur-sheet: 30px;
   --blur-row-edge: 2px;
 
+  /* Frosted-glass materials. Real frost needs three things working together:
+     blur (so the backdrop is genuinely diffused), a saturation lift (so colour
+     survives the blur instead of going grey), and a brightness cut (so text on
+     top keeps its contrast without painting the backdrop out with tint). Only
+     three of these layers may exist at once — veil, rail and the open sheet. */
+  --frost-veil: blur(24px) saturate(190%) brightness(0.82);
+  --frost-rail: blur(30px) saturate(195%) brightness(0.78);
+  --frost-sheet: blur(34px) saturate(195%) brightness(0.7);
+
   /* z-index */
   --z-field: 0;
   --z-timeline: 10;
@@ -105,8 +122,9 @@
   --node-size: 28px;
   --row-content-x: 72px;
 
-  /* measured by TopVeil at runtime; a static default prevents layout shift */
+  /* measured at runtime; static defaults prevent layout shift before hydration */
   --veil-height: 56px;
+  --hero-height: 228px;
 
   color-scheme: dark;
 }
@@ -125,9 +143,12 @@
 html {
   background: var(--color-void);
   -webkit-text-size-adjust: 100%;
-  /* Proximity snap settles the stream on a day boundary rather than making
-     every row sticky — the chronology has to stay continuous. */
-  scroll-snap-type: y proximity;
+  /* Deliberately NO scroll-snap. MOBILE_UI_SPEC.md asks for `y proximity`
+     "where appropriate"; it is not appropriate here. Day dividers sit ~150px
+     apart, so with snap points on them every resting position is near one and
+     the browser will not settle at the top of the document — measured landing
+     at 213px, which puts Today, the day summary and Numbers of the Day
+     permanently out of reach. */
 }
 
 body {
@@ -325,17 +346,40 @@ textarea {
   padding: max(env(safe-area-inset-top), 8px) var(--page-gutter) 10px;
   max-width: 520px;
   margin-inline: auto;
-  /* Transparent veil: timeline content visibly passes beneath it. */
+  /* The veil is a material, not a surface: a row scrolled beneath it must stay
+     tappable. Only the veil's own controls take pointer events. */
+  pointer-events: none;
   background: linear-gradient(
     180deg,
-    rgba(6, 13, 11, 0.94) 0%,
-    rgba(6, 13, 11, 0.74) 56%,
-    rgba(6, 13, 11, 0) 100%
+    rgba(6, 13, 11, 0.26) 0%,
+    rgba(6, 13, 11, 0.15) 58%,
+    rgba(6, 13, 11, 0.03) 100%
   );
-  backdrop-filter: blur(var(--blur-veil)) saturate(1.1);
-  -webkit-backdrop-filter: blur(var(--blur-veil)) saturate(1.1);
-  mask-image: linear-gradient(180deg, #000 0%, #000 68%, transparent 100%);
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 68%, transparent 100%);
+  backdrop-filter: var(--frost-veil);
+}
+
+
+
+.top-veil > * {
+  pointer-events: auto;
+}
+
+/* Today paints its own pane from y=0; the veil must not double-tint it. */
+.app-shell[data-hero="true"] .top-veil {
+  background: none;
+  backdrop-filter: none;
+}
+
+/* Anything scrolled into view programmatically must clear the veil and the
+   rail rather than land underneath them. */
+.op-row,
+.row,
+.filter-tab,
+.summary-term,
+.numbers-toggle,
+.btn {
+  scroll-margin-top: calc(var(--veil-height) + 12px);
+  scroll-margin-bottom: calc(var(--bottom-rail) + 32px);
 }
 
 .brand-lockup {
@@ -447,7 +491,8 @@ textarea {
   z-index: var(--z-bottom-rail);
   max-width: 520px;
   margin-inline: auto;
-  padding: 0 var(--page-gutter) env(safe-area-inset-bottom);
+  /* The rail floats clear of the screen edge rather than sitting on it. */
+  padding: 0 var(--page-gutter) calc(env(safe-area-inset-bottom) + 16px);
 }
 
 .bottom-rail__inner {
@@ -455,14 +500,15 @@ textarea {
   grid-template-columns: repeat(4, 1fr);
   height: var(--bottom-rail);
   border-radius: var(--radius-glass);
-  /* Glass, but weighted enough that labels never fight the wallpaper. */
-  background: rgba(9, 17, 14, 0.88);
-  border: 1px solid rgba(42, 58, 50, 0.8);
-  backdrop-filter: blur(var(--blur-rail)) saturate(1.15);
-  -webkit-backdrop-filter: blur(var(--blur-rail)) saturate(1.15);
+  /* Frosted: a light tint over a blurred, saturated backdrop. The blur is what
+     turns rows passing underneath into texture — tint would only darken. */
+  background: rgba(9, 17, 14, 0.18);
+  border: 1px solid rgba(122, 146, 134, 0.22);
+  backdrop-filter: var(--frost-rail);
   box-shadow:
-    inset 0 1px 0 rgba(242, 245, 241, 0.05),
-    0 10px 30px rgba(4, 8, 7, 0.5);
+    inset 0 1px 0 rgba(242, 245, 241, 0.09),
+    inset 0 -1px 0 rgba(4, 8, 7, 0.4),
+    0 14px 34px rgba(4, 8, 7, 0.55);
   overflow: hidden;
 }
 
@@ -474,7 +520,7 @@ textarea {
   gap: 4px;
   min-height: var(--min-target);
   text-decoration: none;
-  color: var(--color-ink-faint);
+  color: var(--color-ink-dim);
   position: relative;
   transition: color var(--press-out) var(--ease-standard);
 }
@@ -539,7 +585,7 @@ textarea {
 .day-summary__line {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
   flex-wrap: wrap;
   font-size: var(--text-body);
   line-height: 23px;
@@ -575,7 +621,8 @@ textarea {
   appearance: none;
   background: none;
   border: 0;
-  padding: 0;
+  padding: 6px 7px;
+  margin: -4px -3px;
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -585,11 +632,11 @@ textarea {
   text-decoration: none;
 }
 
+/* Reaches the 44px preferred target without opening the line rhythm. */
 .summary-term::after {
   content: "";
   position: absolute;
-  inset: -9px -6px;
-  min-height: var(--min-target);
+  inset: -6px 0;
 }
 
 .summary-term--flow {
@@ -603,7 +650,7 @@ textarea {
 }
 
 .summary-sep {
-  color: var(--color-ink-faint);
+  color: var(--color-ink-dim);
   font-size: var(--text-body);
 }
 
@@ -669,7 +716,7 @@ textarea {
 .metric-tile__label {
   font-size: var(--text-caption);
   line-height: var(--text-caption--line-height);
-  color: var(--color-ink-faint);
+  color: var(--color-ink-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -810,6 +857,109 @@ textarea {
   padding: 0;
 }
 
+/* ---- History: above the hero, receding ----
+   Completed work is not the operator's job, so it sits behind the header and
+   fades as it climbs away. It stays fully readable once scrolled to. */
+.history-band {
+  position: relative;
+  padding-bottom: 4px;
+}
+
+.timeline--history {
+  /* Held above the contrast floor: at 0.55 the dim detail text fell to 2.6:1.
+     The mask, not the opacity, is what makes history recede. */
+  opacity: 0.82;
+  transition: opacity var(--floating-return) var(--ease-standard);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 26%, #000 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 26%, #000 100%);
+}
+
+.history-band:hover .timeline--history,
+.history-band:focus-within .timeline--history {
+  opacity: 1;
+}
+
+/* ---- Hero: pinned under the veil, never scrolled away ----
+   Today, the day summary, Numbers of the Day and the filters are the operator's
+   orientation, so they hold position while the chronology moves underneath
+   them. The timeline is the only thing that scrolls. */
+/* One pane of glass from the very top of the screen down past the filters —
+   the brand lockup sits on it, not above a second surface. Real frost does the
+   occluding: at this blur radius the rows passing underneath dissolve into
+   texture, so the wallpaper still reads through without any text competing. */
+.today-hero {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: calc(var(--z-veil) - 1);
+  max-width: 520px;
+  margin-inline: auto;
+  padding: calc(var(--veil-height) + 2px) var(--page-gutter) 0;
+  /* The material sits on the element, not a pseudo-layer: the hero scrolls
+     internally, and an absolutely-positioned layer would scroll away with it.
+     Never add `mask-image` here — Chromium drops backdrop-filter when both are
+     present, which ships a build that tints but never blurs. */
+  background: linear-gradient(
+    180deg,
+    rgba(6, 13, 11, 0.2) 0%,
+    rgba(6, 13, 11, 0.15) 78%,
+    rgba(6, 13, 11, 0.06) 100%
+  );
+  backdrop-filter: blur(42px) saturate(190%) brightness(0.7);
+}
+
+/* Expanding Numbers of the Day must not push the hero off-screen. The scroll
+   lives on an inner wrapper so the top padding — which holds the pane clear of
+   the brand lockup — cannot scroll away underneath it. */
+.today-hero__inner {
+  max-height: calc(
+    100dvh - var(--veil-height) - var(--bottom-rail) - env(safe-area-inset-bottom) - 34px
+  );
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.today-hero__inner::-webkit-scrollbar {
+  display: none;
+}
+
+
+
+.page-body--hero {
+  padding-top: 0;
+}
+
+/* The scrolling chronology clears the fixed hero above it. */
+.today-scroll {
+  padding-top: calc(var(--hero-height) + 6px);
+}
+
+/* Quiet affordance that there is more above. */
+.history-peek {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 5px 9px 5px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--color-line-strong);
+  background: rgba(8, 16, 13, 0.5);
+  backdrop-filter: blur(14px) saturate(160%) brightness(0.7);
+  color: var(--color-ink-dim);
+  font-size: var(--text-caption);
+  line-height: 14px;
+  cursor: pointer;
+  position: relative;
+}
+
+.history-peek::after {
+  content: "";
+  position: absolute;
+  inset: -11px -8px;
+}
+
 /* One continuous rail per scroll container. */
 .timeline::before {
   content: "";
@@ -858,7 +1008,7 @@ textarea {
   text-align: right;
   font-size: var(--text-caption);
   line-height: var(--text-caption--line-height);
-  color: var(--color-ink-faint);
+  color: var(--color-ink-dim);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
 }
@@ -1071,6 +1221,11 @@ textarea {
   animation: return-pulse var(--return-pulse) var(--ease-standard) 1;
 }
 
+/* Carried-forward work is a decision queue, not a date — it earns the accent. */
+.day-divider--carried {
+  color: var(--color-champagne);
+}
+
 .day-divider {
   position: relative;
   padding: 16px 0 6px var(--row-content-x);
@@ -1078,8 +1233,7 @@ textarea {
   line-height: 13px;
   letter-spacing: 0.17em;
   text-transform: uppercase;
-  color: var(--color-ink-faint);
-  scroll-snap-align: start;
+  color: var(--color-ink-dim);
   scroll-margin-top: calc(var(--veil-height) + 8px);
 }
 
@@ -1475,13 +1629,51 @@ textarea {
   display: none;
   font-size: 9px;
   line-height: 11px;
-  color: var(--color-ink-faint);
+  color: var(--color-ink-dim);
 }
 
 @media (pointer: fine) and (min-width: 560px) {
   .collecta-label__hint {
     display: block;
   }
+}
+
+/* ---- Account sheet ---- */
+
+.account-identity {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 4px 0 2px;
+}
+
+.account-identity__avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  flex: none;
+  object-fit: cover;
+  border: 1px solid var(--color-line-strong);
+}
+
+.account-identity__avatar--initials {
+  display: grid;
+  place-items: center;
+  background: rgba(16, 28, 23, 0.85);
+  color: var(--color-ink-dim);
+  font-size: var(--text-row);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.account-identity__name {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--text-sheet);
+  line-height: 27px;
+  font-weight: 400;
+  letter-spacing: -0.018em;
+  color: var(--color-ink);
 }
 
 /* ===========================================================================
@@ -1527,10 +1719,10 @@ textarea {
   gap: 12px;
   padding: 12px 8px 12px 16px;
   border-radius: var(--radius-control);
-  background: rgba(10, 19, 16, 0.92);
-  border: 1px solid var(--color-line-strong);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  background: rgba(10, 19, 16, 0.4);
+  border: 1px solid rgba(122, 146, 134, 0.24);
+  backdrop-filter: blur(20px) saturate(180%) brightness(0.55);
+  box-shadow: inset 0 1px 0 rgba(242, 245, 241, 0.09);
   font-size: var(--text-meta);
 }
 
@@ -1547,7 +1739,7 @@ textarea {
 .field__label {
   font-size: var(--text-caption);
   line-height: var(--text-caption--line-height);
-  color: var(--color-ink-faint);
+  color: var(--color-ink-dim);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -1565,7 +1757,7 @@ textarea {
 }
 
 .control::placeholder {
-  color: var(--color-ink-faint);
+  color: var(--color-ink-dim);
 }
 
 .control:focus-visible {
@@ -1593,7 +1785,22 @@ textarea {
 
 .field__hint {
   font-size: var(--text-caption);
-  color: var(--color-ink-faint);
+  color: var(--color-ink-dim);
+}
+
+/* A control that opens a picker rather than holding a value directly. */
+.link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+  min-height: 58px;
+}
+
+.link-row .row__body {
+  min-width: 0;
 }
 
 .select-wrap {
@@ -1756,7 +1963,9 @@ textarea {
   position: fixed;
   inset: 0;
   z-index: var(--z-sheet);
-  background: rgba(4, 8, 7, 0.5);
+  /* Also separates a stacked sheet from the one it opened from. */
+  background: rgba(4, 8, 7, 0.62);
+  backdrop-filter: blur(2px);
   animation: scrim-in 200ms var(--ease-standard);
 }
 
@@ -1781,14 +1990,17 @@ textarea {
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
-  /* An open sheet is a reading surface first: the wallpaper may show through,
-     but never at the cost of contrast. */
-  background: rgba(9, 17, 14, 0.95);
-  border: 1px solid rgba(42, 58, 50, 0.85);
+  /* An open sheet is a reading surface first. What makes it read as glass is
+     the blur, the saturation lift and the lit top edge — not thinness. The
+     tint stays heavy enough that a form behind a stacked sheet does not
+     compete with the one in front. */
+  background: rgba(9, 17, 14, 0.32);
+  border: 1px solid rgba(122, 146, 134, 0.24);
   border-bottom: 0;
-  backdrop-filter: blur(var(--blur-sheet)) saturate(1.2);
-  -webkit-backdrop-filter: blur(var(--blur-sheet)) saturate(1.2);
-  box-shadow: 0 -18px 50px rgba(4, 8, 7, 0.55);
+  backdrop-filter: var(--frost-sheet);
+  box-shadow:
+    inset 0 1px 0 rgba(242, 245, 241, 0.1),
+    0 -18px 50px rgba(4, 8, 7, 0.55);
   animation: sheet-in var(--sheet-ms) var(--ease-sheet);
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -1900,12 +2112,79 @@ textarea {
 
 /* ---- Collecta conversation ---- */
 
+/* ---- Collecta conversation ---- */
+
+.collecta-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: var(--text-caption);
+  line-height: 15px;
+  color: var(--color-ink-dim);
+}
+
+.collecta-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  position: relative;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--color-line-strong);
+  background: rgba(8, 16, 13, 0.5);
+  color: var(--color-ink-dim);
+  font-size: var(--text-caption);
+  cursor: pointer;
+}
+
+.collecta-clear::after {
+  content: "";
+  position: absolute;
+  inset: -11px -6px;
+}
+
+.collecta-thread {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
 .collecta-msg {
   max-width: 84%;
-  padding: 12px 14px;
+  padding: 11px 14px 9px;
   border-radius: 18px;
   font-size: var(--text-body);
   line-height: var(--text-body--line-height);
+}
+
+.collecta-msg__at {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 12px;
+  color: var(--color-ink-dim);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* An ongoing conversation is worth signalling on the orb itself. */
+.collecta-orb__dot {
+  position: absolute;
+  right: 2px;
+  bottom: 4px;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: var(--color-healthy);
+  border: 2px solid var(--color-void);
+}
+
+.collecta-orb {
+  position: relative;
 }
 
 .collecta-msg--assistant {
@@ -2029,7 +2308,7 @@ textarea {
   line-height: 13px;
   letter-spacing: 0.17em;
   text-transform: uppercase;
-  color: var(--color-ink-faint);
+  color: var(--color-ink-dim);
   margin-bottom: 6px;
 }
 
@@ -2109,7 +2388,7 @@ textarea {
 
 .ds-item__label {
   font-size: var(--text-caption);
-  color: var(--color-ink-faint);
+  color: var(--color-ink-dim);
   margin-bottom: 7px;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
 }

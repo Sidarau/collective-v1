@@ -17,19 +17,30 @@ export function MobileShell({
   showAdd = false,
   filter,
   flush = false,
+  hero = false,
 }: {
   children: React.ReactNode;
   /** AddFab belongs on Today, Experiences and Space detail. */
   showAdd?: boolean;
   filter?: string;
   flush?: boolean;
+  /**
+   * Today pins its own glass pane from the very top of the screen, so the
+   * shell's veil must not paint a second surface over the same pixels.
+   */
+  hero?: boolean;
 }) {
   return (
     <UiStateProvider>
       <AmbientScene />
-      <div className="app-shell">
+      <div className="app-shell" data-hero={hero ? "true" : undefined}>
         <BrandHeader />
-        <main className={`page-body${flush ? " page-body--flush" : ""}`} id="main">
+        <main
+          className={`page-body${flush ? " page-body--flush" : ""}${
+            hero ? " page-body--hero" : ""
+          }`}
+          id="main"
+        >
           {children}
         </main>
         <FloatingStack showAdd={showAdd} filter={filter} />

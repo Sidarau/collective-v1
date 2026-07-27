@@ -33,7 +33,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Search
   };
 
   return (
-    <MobileShell showAdd filter={filter}>
+    <MobileShell showAdd hero filter={filter}>
       <TodayClient
         summary={summary}
         numbers={numbers}

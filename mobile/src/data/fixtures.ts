@@ -24,6 +24,7 @@ import type {
   NumbersOfTheDay,
   NumbersPeriod,
   OperationEvent,
+  OperatorAccount,
   Person,
   ReportSummary,
   SettingsGroup,
@@ -1474,6 +1475,49 @@ export const MORE_GROUPS: MoreGroup[] = [
     ],
   },
 ];
+
+/* The signed-in operator. No real contact details — the address below is a
+   documentation domain reserved by RFC 2606. */
+export const OPERATOR: OperatorAccount = {
+  id: "operator-alex",
+  name: "Alex Sidarau",
+  initials: "AS",
+  email: "alex@example.org",
+  emailVerified: true,
+  roleLabel: "Operator · full access",
+  connections: [
+    {
+      id: "calendar",
+      label: "Calendar",
+      detail: "Arrivals, departures and experiences",
+      icon: "calendar-days",
+      state: { label: "Connected", tone: "healthy" },
+    },
+    {
+      id: "email",
+      label: "Email",
+      detail: "alex@example.org",
+      icon: "message-square",
+      state: { label: "Verified", tone: "healthy" },
+    },
+    {
+      id: "agents",
+      label: "Agents & MCP",
+      detail: "Collecta and tool access",
+      icon: "terminal",
+      href: "/agents",
+      state: { label: "Restricted", tone: "attention" },
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      detail: "Preferences, currency, timezone",
+      icon: "settings",
+      href: "/settings",
+      state: { label: "", tone: "neutral" },
+    },
+  ],
+};
 
 export const COMPOSER_OPTIONS: ComposerOption[] = [
   { kind: "request", label: "Request or follow-up", detail: "Access request, application or follow-up", icon: "inbox" },

@@ -23,9 +23,12 @@ import type {
   ForecastSeries,
   Gate,
   KnowledgeNode,
+  LinkTarget,
+  LinkTargetKind,
   MobileDataProvider,
   MoreGroup,
   NumbersOfTheDay,
+  OperatorAccount,
   NumbersPeriod,
   OperationCategory,
   OperationEvent,
@@ -53,6 +56,7 @@ import {
   GATES,
   KNOWLEDGE,
   MORE_GROUPS,
+  OPERATOR,
   PEOPLE,
   REPORTS,
   REQUESTS,
@@ -65,6 +69,9 @@ import {
 } from "./fixtures";
 
 const ok = <T,>(data: T): Result<T> => ({ status: "ok", data });
+
+/** Keeps scripted Collecta message ids unique across turns in a session. */
+let collectaTurnCounter = 0;
 
 /**
  * Non-healthy scenarios short-circuit every read so each screen can be seen
@@ -286,6 +293,10 @@ export function createFixtureProvider(scenario: Scenario = "healthy"): MobileDat
       return guardList(AGENTS);
     },
 
+    async getOperator(): Promise<Result<OperatorAccount>> {
+      return guard(OPERATOR);
+    },
+
     async getSettings(): Promise<Result<SettingsGroup[]>> {
       return guardList(SETTINGS);
     },
@@ -297,19 +308,79 @@ export function createFixtureProvider(scenario: Scenario = "healthy"): MobileDat
       return COMPOSER_OPTIONS;
     },
 
+    async searchLinkTargets(
+      query: string,
+      kinds?: LinkTargetKind[],
+    ): Promise<Result<LinkTarget[]>> {
+      const short = scenarioShortCircuit<LinkTarget[]>(scenario);
+      if (short) return short;
+
+      const all: LinkTarget[] = [
+        ...SPACES.map((s) => ({
+          id: s.id,
+          kind: "space" as const,
+          label: s.name,
+          detail: s.summary,
+          href: `/spaces/${s.id}`,
+        })),
+        ...PEOPLE.map((p) => ({
+          id: p.id,
+          kind: "person" as const,
+          label: p.name,
+          detail: p.relationshipLabel,
+          href: `/people/${p.id}`,
+        })),
+        ...VENDORS.map((v) => ({
+          id: v.id,
+          kind: "vendor" as const,
+          label: v.name,
+          detail: `${v.contactLabel} · ${v.category}`,
+          href: `/vendors/${v.id}`,
+        })),
+        ...EXPERIENCES.map((e) => ({
+          id: e.id,
+          kind: "experience" as const,
+          label: e.title,
+          detail: e.spaceName,
+          href: `/experiences/${e.id}`,
+        })),
+        ...GATES.map((g) => ({
+          id: g.id,
+          kind: "gate" as const,
+          label: g.name,
+          detail: g.summary,
+          href: `/gates/${g.id}`,
+        })),
+      ];
+
+      const q = query.trim().toLowerCase();
+      const rows = all
+        .filter((t) => !kinds?.length || kinds.includes(t.kind))
+        .filter(
+          (t) =>
+            !q ||
+            t.label.toLowerCase().includes(q) ||
+            (t.detail ?? "").toLowerCase().includes(q),
+        );
+
+      return rows.length ? ok(rows) : { status: "empty" };
+    },
+
     async askCollecta(context: CollectaContext, prompt: string): Promise<CollectaTurn> {
       // Phase 1 is scripted. Phase 2 must re-fetch every id in `context`
       // server-side and never trust client-supplied record content.
       const wantsPublish = /publish/i.test(prompt);
       const now = FIXTURE_NOW;
+      // Ids must be unique per turn — the thread appends and dedupes on them.
+      const turn = `t${(collectaTurnCounter += 1)}`;
 
       if (wantsPublish) {
         return {
           state: "draft",
           messages: [
-            { id: "m1", role: "operator", body: prompt, at: now },
+            { id: `${turn}-operator`, role: "operator", body: prompt, at: now },
             {
-              id: "m2",
+              id: `${turn}-collecta`,
               role: "collecta",
               body: "I can publish Founders’ dinner. Review the details before I do.",
               at: now,
@@ -334,9 +405,9 @@ export function createFixtureProvider(scenario: Scenario = "healthy"): MobileDat
       return {
         state: "answer",
         messages: [
-          { id: "m1", role: "operator", body: prompt, at: now },
+          { id: `${turn}-operator`, role: "operator", body: prompt, at: now },
           {
-            id: "m2",
+            id: `${turn}-collecta`,
             role: "collecta",
             body:
               context.selectedEventId

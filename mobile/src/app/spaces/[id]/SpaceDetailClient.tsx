@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import type { Space } from "@/data/contracts";
-import { iconFor } from "@/lib/icons";
+import { Icon } from "@/lib/icons";
 import { trailingFor } from "@/lib/presentation";
 import { RecordDetailScreen, Section } from "@/components/templates/templates";
 import { AreaRow } from "@/components/rows/rows";
@@ -54,13 +54,12 @@ export function SpaceDetailClient({ space }: { space: Space }) {
           {space.upkeep.length ? (
             <ul className="list">
               {space.upkeep.map((e) => {
-                const Icon = iconFor(e.kind);
                 const trailing = trailingFor(e);
                 return (
                   <li key={e.id}>
                     <Link href={e.href} className="row">
                       <span className="row__icon" aria-hidden="true">
-                        <Icon size={18} strokeWidth={1.6} />
+                        <Icon name={e.kind} size={18} />
                       </span>
                       <span className="row__body">
                         <span className="row__title">{e.title}</span>

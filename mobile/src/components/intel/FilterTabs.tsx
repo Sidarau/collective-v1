@@ -16,6 +16,7 @@ export function FilterTabs<T extends string>({
   onChange,
   resultCount,
   resultNoun = "items",
+  controlsPanel = false,
 }: {
   label: string;
   options: TabOption<T>[];
@@ -24,6 +25,12 @@ export function FilterTabs<T extends string>({
   /** Announced politely so a filter change is perceivable without sight. */
   resultCount?: number;
   resultNoun?: string;
+  /**
+   * Only set when the screen actually renders `<div id="panel-<key>"
+   * role="tabpanel">`. An aria-controls pointing at an element that does not
+   * exist is an invalid ARIA reference, not a harmless extra.
+   */
+  controlsPanel?: boolean;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const [rule, setRule] = useState({ left: 0, width: 0 });
@@ -79,7 +86,7 @@ export function FilterTabs<T extends string>({
             id={`tab-${o.key}`}
             className="filter-tab"
             aria-selected={o.key === value}
-            aria-controls={`panel-${o.key}`}
+            aria-controls={controlsPanel ? `panel-${o.key}` : undefined}
             tabIndex={o.key === value ? 0 : -1}
             onClick={() => onChange(o.key)}
             data-testid={`filter-tab-${o.key}`}

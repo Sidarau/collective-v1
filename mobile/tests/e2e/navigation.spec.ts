@@ -91,17 +91,48 @@ test.describe("navigation has no dead ends", () => {
 });
 
 test.describe("Today behaviour", () => {
-  test("lands near the present", async ({ page }) => {
+  test("opens on the hero with Carried forward and Now beneath it", async ({ page }) => {
     await page.goto("/");
-    await page.waitForTimeout(400);
-    const pct = await page.evaluate(() => {
-      const m = document.querySelector("[data-testid=now-marker]");
-      if (!m) return null;
-      return (m.getBoundingClientRect().top / window.innerHeight) * 100;
+    await page.waitForTimeout(600);
+
+    const layout = await page.evaluate(() => {
+      const vh = window.innerHeight;
+      const box = (sel: string) => {
+        const el = document.querySelector(sel);
+        return el ? el.getBoundingClientRect().top : null;
+      };
+      return {
+        hero: box("[data-testid=today-hero]"),
+        carried: box(".day-divider--carried"),
+        now: box("[data-testid=now-marker]"),
+        vh,
+      };
     });
-    expect(pct, "present should land at roughly 35–42% of the viewport").not.toBeNull();
-    expect(pct!).toBeGreaterThan(25);
-    expect(pct!).toBeLessThan(50);
+
+    // The hero rests just under the veil, not scrolled past.
+    expect(layout.hero, "hero must be on screen").not.toBeNull();
+    expect(layout.hero!).toBeGreaterThan(0);
+    expect(layout.hero!).toBeLessThan(layout.vh * 0.25);
+
+    // Carried forward and Now follow it, both within the first screen.
+    expect(layout.carried!).toBeGreaterThan(layout.hero!);
+    expect(layout.now!).toBeGreaterThan(layout.carried!);
+    expect(layout.now!).toBeLessThan(layout.vh);
+  });
+
+  test("earlier work sits above the hero and can be scrolled to", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForTimeout(600);
+
+    // History is rendered, but above the resting position.
+    const historyRows = page.locator("[data-testid=timeline-history] [data-event-id]");
+    expect(await historyRows.count()).toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+
+    await page.getByTestId("history-peek").click();
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => window.scrollY)).toBeLessThan(20);
+    await expect(historyRows.first()).toBeInViewport();
   });
 
   test("filters persist in URL state and change the stream", async ({ page }) => {
@@ -148,9 +179,14 @@ test.describe("Today behaviour", () => {
 
   test("overdue work is carried forward above the present", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("Carried forward")).toBeVisible();
+    // The row labels also mention carrying forward, so target the divider.
+    await expect(page.locator("li.day-divider--carried")).toBeVisible();
     const order = await page.evaluate(() => {
-      const nodes = [...document.querySelectorAll("[data-event-id], [data-testid=now-marker]")];
+      const nodes = [
+        ...document.querySelectorAll(
+          "[data-testid=timeline] [data-event-id], [data-testid=now-marker]",
+        ),
+      ];
       return nodes.map((n) => (n as HTMLElement).dataset.eventId ?? "NOW");
     });
     expect(order.indexOf("ev-c-002")).toBeLessThan(order.indexOf("NOW"));
@@ -162,8 +198,10 @@ test.describe("Today behaviour", () => {
     const initial = await page.getByTestId("add-fab").getAttribute("data-default-date");
     expect(initial).toBeTruthy();
 
+    // Release the initial anchor before driving the scroll ourselves.
+    await page.mouse.wheel(0, 40);
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(700);
     const later = await page.getByTestId("add-fab").getAttribute("data-default-date");
     expect(later).toBeTruthy();
     expect(Date.parse(later!)).toBeGreaterThan(Date.parse("2026-07-26"));
@@ -216,6 +254,73 @@ test.describe("sheets and confirmation", () => {
 
     await page.getByTestId("collecta-review").click();
     await expect(page.getByTestId("confirm-sheet")).toBeVisible();
+  });
+});
+
+test.describe("composer links to a record", () => {
+  test("offers a searchable picker across every record type", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("add-fab").click();
+    await page.getByTestId("composer-option-access").click();
+
+    await page.getByTestId("composer-link").click();
+    const picker = page.getByTestId("link-picker-sheet");
+    await expect(picker).toBeVisible();
+
+    // Spaces lead for an access period, but people and partners are there too.
+    await expect(picker.getByRole("option").first()).toBeVisible();
+    await expect(picker).toContainText("Spaces");
+    await expect(picker).toContainText("People");
+
+    // Search spans record types.
+    await picker.getByRole("searchbox").fill("sol");
+    await page.waitForTimeout(400);
+    await expect(picker).toContainText("Sol Provisions");
+
+    await picker.getByRole("searchbox").fill("roca");
+    await page.waitForTimeout(400);
+    await picker.getByTestId("link-target-space-roca-llisa").click();
+
+    await expect(picker).toBeHidden();
+    await expect(page.getByTestId("composer-link")).toContainText("Roca Llisa");
+  });
+
+  test("carries the linked record into the confirmation", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("add-fab").click();
+    await page.getByTestId("composer-option-due").click();
+    await page.getByTestId("composer-link").click();
+    await page.getByTestId("link-target-person-ana-martins").click();
+    await page.getByTestId("composer-submit").click();
+
+    const confirm = page.getByTestId("confirm-sheet");
+    await expect(confirm).toBeVisible();
+    await expect(confirm).toContainText("Ana Martins");
+  });
+});
+
+test.describe("Collecta keeps the conversation", () => {
+  test("accumulates turns and survives closing the sheet", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("collecta-orb").click();
+
+    await page.getByTestId("collecta-input").fill("what needs me today?");
+    await page.getByRole("button", { name: "Send" }).click();
+    await expect(page.getByTestId("collecta-thread").locator("li")).toHaveCount(2);
+
+    await page.getByTestId("collecta-input").fill("and the pool upkeep?");
+    await page.getByRole("button", { name: "Send" }).click();
+    await expect(page.getByTestId("collecta-thread").locator("li")).toHaveCount(4);
+
+    // Close and reopen — the thread is still there.
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("collecta-sheet")).toBeHidden();
+    await page.getByTestId("collecta-orb").click();
+    await expect(page.getByTestId("collecta-thread").locator("li")).toHaveCount(4);
+
+    // And can be cleared deliberately.
+    await page.getByTestId("collecta-clear").click();
+    await expect(page.getByTestId("collecta-open")).toBeVisible();
   });
 });
 

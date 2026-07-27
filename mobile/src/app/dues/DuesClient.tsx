@@ -80,6 +80,7 @@ export function DuesClient({
         onChange={setFilter}
         resultCount={rows.length}
         resultNoun="entries"
+        controlsPanel
       />
 
       <div id={`panel-${filter}`} role="tabpanel" aria-labelledby={`tab-${filter}`}>

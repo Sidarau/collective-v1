@@ -4,11 +4,12 @@
    84px orb, already display-sized, and is preloaded at this exact URL in
    <head>. See BrandHeader for the same reasoning. */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Send } from "lucide-react";
-import type { CollectaContext, CollectaTurn } from "@/data/contracts";
+import { Send, Trash2 } from "lucide-react";
+import type { CollectaContext, CollectaDraft } from "@/data/contracts";
 import { getProvider } from "@/data/provider";
+import { displayTime } from "@/lib/time";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
 import { useUiState } from "@/components/shell/UiStateProvider";
 import { Sheet } from "./Sheet";
@@ -17,9 +18,10 @@ import { ConfirmSheet } from "./ConfirmSheet";
 /**
  * Contextual assistant sheet.
  *
- * The page context carries route, filter, visible date and record ids —
- * never record bodies. Phase 2 must re-fetch every id server-side.
- * Material changes are presented as drafts and always require confirmation.
+ * The conversation is kept in the shell, so closing the sheet or moving to
+ * another screen does not lose it. The page context carries route, filter,
+ * visible date and record ids — never record bodies; Phase 2 must re-fetch
+ * every id server-side. Material changes are drafts and always confirmed.
  */
 export function CollectaSheet({
   open,
@@ -31,12 +33,19 @@ export function CollectaSheet({
   filter?: string;
 }) {
   const pathname = usePathname();
-  const { visibleDate, visibleEventIds } = useUiState();
-  const [turn, setTurn] = useState<CollectaTurn | null>(null);
+  const {
+    visibleDate,
+    visibleEventIds,
+    collectaThread,
+    appendCollecta,
+    clearCollecta,
+  } = useUiState();
+
+  const [draft, setDraft] = useState<CollectaDraft | null>(null);
   const [prompt, setPrompt] = useState("");
   const [thinking, setThinking] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [confirmed, setConfirmed] = useState<string | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   const context: CollectaContext = {
     route: pathname,
@@ -46,28 +55,29 @@ export function CollectaSheet({
     selectedEventId: visibleEventIds[0],
   };
 
+  /* Keep the newest turn in view as the thread grows. */
+  useEffect(() => {
+    if (!open) return;
+    const el = bodyRef.current ?? document.querySelector(".sheet__body");
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [open, collectaThread.length, thinking]);
+
   const ask = async (text: string) => {
     if (!text.trim()) return;
-    setThinking(true);
     setPrompt("");
+    setThinking(true);
     // Phase 2: replace with a server action that re-reads every referenced id.
     const next = await getProvider().askCollecta(context, text);
     setThinking(false);
-    setTurn(next);
-  };
-
-  const close = () => {
-    setTurn(null);
-    setThinking(false);
-    setConfirmed(null);
-    onClose();
+    appendCollecta(next.messages);
+    setDraft(next.draft ?? null);
   };
 
   return (
     <>
       <Sheet
         open={open && !confirming}
-        onClose={close}
+        onClose={onClose}
         title="Collecta"
         variant="collecta"
         testId="collecta-sheet"
@@ -96,19 +106,53 @@ export function CollectaSheet({
           </form>
         }
       >
-        <div style={{ display: "grid", gap: 14, paddingTop: 4 }}>
-          <p className="row__detail" data-testid="collecta-context">
-            Operator context · {pathname}
-            {filter && filter !== "all" ? ` · ${filter}` : ""}
-            {visibleDate ? ` · ${visibleDate}` : ""}
-          </p>
+        <div ref={bodyRef} style={{ display: "grid", gap: 12, paddingTop: 2 }}>
+          <div className="collecta-meta">
+            <span data-testid="collecta-context">
+              Operator context · {pathname}
+              {filter && filter !== "all" ? ` · ${filter}` : ""}
+              {visibleDate ? ` · ${visibleDate}` : ""}
+            </span>
+            {collectaThread.length ? (
+              <button
+                type="button"
+                className="collecta-clear"
+                onClick={() => {
+                  clearCollecta();
+                  setDraft(null);
+                }}
+                data-testid="collecta-clear"
+              >
+                <Trash2 size={12} aria-hidden="true" />
+                New conversation
+              </button>
+            ) : null}
+          </div>
 
-          {!turn && !thinking ? (
+          {!collectaThread.length && !thinking ? (
             <div className="collecta-msg collecta-msg--assistant" data-testid="collecta-open">
               Three decisions need you today: one access request, one supplies list and
               one overdue invoice.
             </div>
           ) : null}
+
+          {/* The whole conversation, oldest first. */}
+          <ol className="collecta-thread" data-testid="collecta-thread">
+            {collectaThread.map((m) => (
+              <li
+                key={m.id}
+                className={`collecta-msg collecta-msg--${
+                  m.role === "operator" ? "operator" : "assistant"
+                }`}
+                data-testid={`collecta-${m.role}`}
+              >
+                {m.body}
+                <span className="collecta-msg__at">
+                  {displayTime(m.at, "minute") ?? ""}
+                </span>
+              </li>
+            ))}
+          </ol>
 
           {thinking ? (
             <div
@@ -125,29 +169,25 @@ export function CollectaSheet({
             </div>
           ) : null}
 
-          {turn?.messages.map((m) => (
-            <div
-              key={m.id}
-              className={`collecta-msg collecta-msg--${m.role === "operator" ? "operator" : "assistant"}`}
-              data-testid={`collecta-${m.role}`}
-            >
-              {m.body}
-            </div>
-          ))}
-
-          {turn?.draft ? (
+          {draft ? (
             <div className="draft-card" data-testid="collecta-draft">
               <div>
-                <p style={{ margin: 0, fontSize: "var(--text-row)" }}>{turn.draft.title}</p>
-                <p style={{ margin: "2px 0 0", fontSize: "var(--text-meta)", color: "var(--color-ink-dim)" }}>
-                  {turn.draft.detail}
+                <p style={{ margin: 0, fontSize: "var(--text-row)" }}>{draft.title}</p>
+                <p
+                  style={{
+                    margin: "2px 0 0",
+                    fontSize: "var(--text-meta)",
+                    color: "var(--color-ink-dim)",
+                  }}
+                >
+                  {draft.detail}
                 </p>
               </div>
               <p className="field__hint" style={{ margin: 0 }}>
                 Draft — nothing changes until you confirm.
               </p>
               <div style={{ display: "flex", gap: 8 }}>
-                <SecondaryButton style={{ flex: 1 }} onClick={() => setTurn(null)}>
+                <SecondaryButton style={{ flex: 1 }} onClick={() => setDraft(null)}>
                   Discard
                 </SecondaryButton>
                 <PrimaryButton
@@ -160,27 +200,28 @@ export function CollectaSheet({
               </div>
             </div>
           ) : null}
-
-          {confirmed ? (
-            <div className="banner banner--success" role="status" data-testid="collecta-confirmed">
-              {confirmed}
-            </div>
-          ) : null}
         </div>
       </Sheet>
 
-      {turn?.draft ? (
+      {draft ? (
         <ConfirmSheet
           open={confirming}
           onClose={() => setConfirming(false)}
           onConfirm={() => {
             setConfirming(false);
-            setConfirmed(`${turn.draft!.confirmLabel} recorded. An audit entry was created.`);
-            setTurn({ ...turn, state: "confirmation", draft: undefined });
+            appendCollecta([
+              {
+                id: `confirm-${draft.id}`,
+                role: "collecta",
+                body: `${draft.confirmLabel} recorded. An audit entry was created.`,
+                at: new Date().toISOString(),
+              },
+            ]);
+            setDraft(null);
           }}
-          title={turn.draft.title}
-          confirmLabel={turn.draft.confirmLabel}
-          facts={turn.draft.facts.map((f) => ({ label: f.label, value: f.value }))}
+          title={draft.title}
+          confirmLabel={draft.confirmLabel}
+          facts={draft.facts.map((f) => ({ label: f.label, value: f.value }))}
         />
       ) : null}
     </>
@@ -189,13 +230,19 @@ export function CollectaSheet({
 
 /** The portrait orb. Never replaced by the keyhole while the portrait loads. */
 export function CollectaOrb({ onOpen }: { onOpen: () => void }) {
+  const { collectaThread } = useUiState();
   return (
     <button
       type="button"
       className="collecta-orb"
       onClick={onOpen}
-      aria-label="Open Collecta"
+      aria-label={
+        collectaThread.length
+          ? `Open Collecta — ${collectaThread.length} messages in this conversation`
+          : "Open Collecta"
+      }
       data-testid="collecta-orb"
+      data-thread-length={collectaThread.length}
     >
       <img
         className="collecta-orb__img"
@@ -205,6 +252,9 @@ export function CollectaOrb({ onOpen }: { onOpen: () => void }) {
         height={84}
         decoding="async"
       />
+      {collectaThread.length ? (
+        <span className="collecta-orb__dot" aria-hidden="true" />
+      ) : null}
     </button>
   );
 }

@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { CollectaMessage } from "@/data/contracts";
 
 type UiState = {
   /** > 0 while any sheet, detail overlay or Collecta is open. */
@@ -24,6 +25,15 @@ type UiState = {
   visibleEventIds: string[];
   setVisibleEventIds: (ids: string[]) => void;
   prefersReducedMotion: boolean;
+
+  /**
+   * Collecta's conversation. Lives in the shell rather than the sheet so the
+   * thread survives closing the sheet and moving between routes — an operator
+   * asking a follow-up should not have to restate the question.
+   */
+  collectaThread: CollectaMessage[];
+  appendCollecta: (messages: CollectaMessage[]) => void;
+  clearCollecta: () => void;
 };
 
 const Ctx = createContext<UiState | null>(null);
@@ -51,11 +61,22 @@ export function UiStateProvider({ children }: { children: React.ReactNode }) {
   const [isScrolling, setIsScrolling] = useState(false);
   const [visibleDate, setVisibleDate] = useState<string | null>(null);
   const [visibleEventIds, setVisibleEventIds] = useState<string[]>([]);
+  const [collectaThread, setCollectaThread] = useState<CollectaMessage[]>([]);
   const prefersReducedMotion = usePrefersReducedMotion();
   const restTimer = useRef<number | undefined>(undefined);
 
   const pushFocus = useCallback(() => setFocusDepth((d) => d + 1), []);
   const popFocus = useCallback(() => setFocusDepth((d) => Math.max(0, d - 1)), []);
+
+  const appendCollecta = useCallback(
+    (messages: CollectaMessage[]) =>
+      setCollectaThread((thread) => {
+        const seen = new Set(thread.map((m) => m.id));
+        return [...thread, ...messages.filter((m) => !seen.has(m.id))];
+      }),
+    [],
+  );
+  const clearCollecta = useCallback(() => setCollectaThread([]), []);
 
   /* Floating controls retire while scrolling and return after rest. */
   useEffect(() => {
@@ -94,6 +115,9 @@ export function UiStateProvider({ children }: { children: React.ReactNode }) {
       visibleEventIds,
       setVisibleEventIds,
       prefersReducedMotion,
+      collectaThread,
+      appendCollecta,
+      clearCollecta,
     }),
     [
       focusDepth,
@@ -103,6 +127,9 @@ export function UiStateProvider({ children }: { children: React.ReactNode }) {
       visibleDate,
       visibleEventIds,
       prefersReducedMotion,
+      collectaThread,
+      appendCollecta,
+      clearCollecta,
     ],
   );
 

@@ -174,8 +174,11 @@ export function GalleryClient({
           <p style={{ fontSize: 17, lineHeight: "23px", margin: "6px 0 0" }}>Row 17/23</p>
           <p style={{ fontSize: 15, lineHeight: "21px", margin: "4px 0 0" }}>Body 15/21</p>
           <p style={{ fontSize: 13, color: "var(--color-ink-dim)", margin: "4px 0 0" }}>Meta 13/18</p>
-          <p style={{ fontSize: 11, color: "var(--color-ink-faint)", margin: "4px 0 0" }}>
+          <p style={{ fontSize: 11, color: "var(--color-ink-dim)", margin: "4px 0 0" }}>
             Caption 11/14
+          </p>
+          <p className="ds-item__label" style={{ marginTop: 8 }}>
+            inkFaint is a rail/dot/hairline colour — it does not clear 4.5:1 as text
           </p>
           <p className="tnum" style={{ margin: "6px 0 0" }}>
             Tabular numerals 0123456789
@@ -246,7 +249,7 @@ export function GalleryClient({
           </ol>
         </Item>
         <Item label="TimelineStream — day dividers, present marker, continuous rail">
-          <TimelineStream events={events.slice(0, 8)} nowIso={nowIso} bidirectional={false} />
+          <TimelineStream events={events.slice(0, 8)} nowIso={nowIso} mode="present" />
         </Item>
         <Item label="ChecklistTimeline — access handoff">
           <ChecklistTimeline items={request.checklist} />
