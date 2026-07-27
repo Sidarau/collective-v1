@@ -17,9 +17,12 @@ type Term = { text: string; filter: TodayFilterKey };
 export function DaySummary({
   summary,
   onFilter,
+  action,
 }: {
   summary: DaySummaryData;
   onFilter: (filter: TodayFilterKey) => void;
+  /** Sits on the day line — currently the "N earlier" affordance. */
+  action?: React.ReactNode;
 }) {
   const flow: Term[] = [
     { text: plural(summary.arrivals, "arrival"), filter: "access" },
@@ -74,10 +77,13 @@ export function DaySummary({
   return (
     <section aria-labelledby="today-heading">
       <div className="today-head">
-        <h1 id="today-heading" className="today-head__title">
-          Today
-        </h1>
-        <p className="today-head__date">{formatDayLong(summary.isoDate)}</p>
+        <span className="today-head__day">
+          <h1 id="today-heading" className="today-head__title">
+            Today
+          </h1>
+          <p className="today-head__date">{formatDayLong(summary.isoDate)}</p>
+        </span>
+        {action}
       </div>
 
       <ul className="day-summary" data-testid="day-summary">

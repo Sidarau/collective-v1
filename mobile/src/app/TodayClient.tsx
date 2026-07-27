@@ -170,23 +170,28 @@ export function TodayClient({
           >
           {(data) => (
             <>
-              {history.length ? (
-                <button
-                  type="button"
-                  className="history-peek"
-                  onClick={() =>
-                    window.scrollTo({
-                      top: 0,
-                      behavior: prefersReducedMotion ? "auto" : "smooth",
-                    })
-                  }
-                  data-testid="history-peek"
-                >
-                  <ChevronUp size={13} aria-hidden="true" />
-                  {history.length} earlier
-                </button>
-              ) : null}
-              <DaySummary summary={data} onFilter={setFilter} />
+              <DaySummary
+                summary={data}
+                onFilter={setFilter}
+                action={
+                  history.length ? (
+                    <button
+                      type="button"
+                      className="history-peek"
+                      onClick={() =>
+                        window.scrollTo({
+                          top: 0,
+                          behavior: prefersReducedMotion ? "auto" : "smooth",
+                        })
+                      }
+                      data-testid="history-peek"
+                    >
+                      <ChevronUp size={13} aria-hidden="true" />
+                      {history.length} earlier
+                    </button>
+                  ) : null
+                }
+              />
               <NumbersDisclosure numbers={numbers} />
             </>
           )}

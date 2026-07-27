@@ -4,9 +4,26 @@ Phase 1 delivered the complete UI template for `mobile.opencollective.app`
 behind one interface. This document is the contract for replacing fixtures with
 real, permission-checked data.
 
-**The whole job is: implement `MobileDataProvider` and return it from
+**Most of the job is: implement `MobileDataProvider` and return it from
 `getProvider()`.** If anything else has to change to make real data work, the
 seam is in the wrong place — say so rather than reaching around it.
+
+## Read this first: three things need backend that does not exist yet
+
+Everything else on this page is wiring an existing capability to a typed
+interface. These three are **new backend work** with no implementation and no
+prior documentation anywhere in the repo. They are approved to build.
+
+| # | What | Why it is not just wiring | Detail |
+|---|---|---|---|
+| 1 | **Server-side auth guard** | Phase 1 serves fixtures to anyone. There is no route guard at all. Nothing else on this list matters until this exists. | [Auth and security](#auth-and-security-not-started-in-phase-1) |
+| 2 | **Profile image sync from the member portal** | The mobile app must not become a second place to upload a picture. Needs a decision on the source of truth and a stable URL on the session. | [§1](#1-profile-image-sync-from-the-member-portal--to-build) |
+| 3 | **Email change with verification** | Security-sensitive. Needs a token round trip, a warning to the old address, an audit entry and session invalidation. No such flow exists in `packages/core`. | [§2](#2-changing-the-email-address--to-build-needs-a-verification-flow) |
+
+Items 2 and 3 sit behind the avatar in the account sheet. Both are built in the
+UI and deliberately inert — the email row says on screen that changing it is not
+available yet, and the avatar falls back to initials. **Do not close those gaps
+by adding an uploader or by letting the field save without verification.**
 
 ## The seam
 
