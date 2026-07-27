@@ -4,9 +4,9 @@
   "private": true,
   "description": "Operator surface for mobile.opencollective.app",
   "scripts": {
-    "predev": "node ../scripts/sync-vendor-core.mjs mobile || true",
+    "predev": "test -f ../scripts/sync-vendor-core.mjs && node ../scripts/sync-vendor-core.mjs mobile || true",
     "dev": "next dev --port 3002",
-    "prebuild": "node ../scripts/sync-vendor-core.mjs mobile || true",
+    "prebuild": "test -f ../scripts/sync-vendor-core.mjs && node ../scripts/sync-vendor-core.mjs mobile || true",
     "build": "next build",
     "start": "next start --port 3002",
     "lint": "eslint .",
