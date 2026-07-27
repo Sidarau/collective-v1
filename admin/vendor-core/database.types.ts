@@ -850,6 +850,15 @@ export interface Database {
         };
         Returns: Json;
       };
+      approve_stay_request_with_room: {
+        Args: {
+          p_booking_id: string;
+          p_expected_status: string;
+          p_target_room_id: string | null;
+          p_note?: string | null;
+        };
+        Returns: Json;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

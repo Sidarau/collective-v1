@@ -30,6 +30,7 @@ import {
 } from "@core/calendar-actions";
 import {
   approveStayRequestLive,
+  getStayRequestAvailability,
   searchStayRequests,
 } from "@/lib/stay-requests";
 
@@ -489,6 +490,25 @@ const handler = createMcpHandler(
     // the console (Agents & MCP → activity).
 
     server.registerTool(
+      "stay_request_availability",
+      {
+        title: "Preview rooms for a stay request",
+        description:
+          "Preview room ids, current assignment, guest capacity, same-price eligibility, and current availability immediately before approval or reassignment.",
+        inputSchema: { id: z.string().uuid() },
+      },
+      async ({ id }) => {
+        const denied = await requireCapability("ops.read");
+        if (denied) return denied;
+        try {
+          return ok(JSON.stringify(await getStayRequestAvailability(id), null, 2));
+        } catch (error) {
+          return err(error instanceof Error ? error.message : "Availability preview failed");
+        }
+      }
+    );
+
+    server.registerTool(
       "stay_request_approve",
       {
         title: "Approve one stay request",
@@ -497,12 +517,13 @@ const handler = createMcpHandler(
         inputSchema: {
           id: z.string().uuid(),
           expectedStatus: z.enum(["requested", "waitlisted"]),
+          targetRoomId: z.string().uuid().optional(),
           confirmed: z.literal(true),
           note: z.string().max(1000).optional(),
           notify: z.boolean().optional(),
         },
       },
-      async ({ id, expectedStatus, note, notify }) => {
+      async ({ id, expectedStatus, targetRoomId, note, notify }) => {
         const denied = await requireCapability("stay.approve", {
           type: "booking",
           id,
@@ -518,6 +539,7 @@ const handler = createMcpHandler(
           const result = await approveStayRequestLive({
             id,
             expectedStatus,
+            targetRoomId,
             note,
             notify: notify ?? false,
             actor: {
@@ -537,6 +559,8 @@ const handler = createMcpHandler(
                 checkIn: result.check_in,
                 checkOut: result.check_out,
                 notification: result.notification,
+                fromRoomId: result.from_room_id,
+                roomId: result.room_id,
               },
               null,
               2

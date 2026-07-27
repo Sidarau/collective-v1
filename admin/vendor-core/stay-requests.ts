@@ -15,11 +15,14 @@ export interface AtomicStayApproval {
   check_in: string;
   check_out: string;
   user_id: string | null;
+  from_room_id: string;
+  room_id: string;
 }
 
 export interface StayApprovalInput {
   id: string;
   expectedStatus: ApprovableStayStatus;
+  targetRoomId?: string;
   note?: string;
   notify?: boolean;
   actor: StayApprovalActor;
@@ -49,6 +52,7 @@ export interface StayApprovalDependencies {
   approveAtomic(input: {
     id: string;
     expectedStatus: ApprovableStayStatus;
+    targetRoomId: string | null;
     note: string | null;
   }): Promise<AtomicStayApproval>;
   resolveRecipient(userId: string): Promise<string | null>;
@@ -94,6 +98,7 @@ export async function approveStayRequest(
     approval = await dependencies.approveAtomic({
       id: input.id,
       expectedStatus: input.expectedStatus,
+      targetRoomId: input.targetRoomId || null,
       note: input.note?.trim() || null,
     });
   } catch (error) {
@@ -105,6 +110,7 @@ export async function approveStayRequest(
       summary: "Stay approval blocked",
       meta: {
         expected_status: input.expectedStatus,
+        target_room_id: input.targetRoomId || null,
         reason: reason.slice(0, 240),
       },
     });
@@ -121,6 +127,8 @@ export async function approveStayRequest(
         from_status: approval.from_status,
         to_status: approval.status,
         notification_requested: Boolean(input.notify),
+        from_room_id: approval.from_room_id,
+        room_id: approval.room_id,
       },
     });
     return { ...approval, notification: "skipped" };
@@ -160,6 +168,8 @@ export async function approveStayRequest(
       to_status: approval.status,
       notification_requested: Boolean(input.notify),
       notification,
+      from_room_id: approval.from_room_id,
+      room_id: approval.room_id,
     },
   });
 

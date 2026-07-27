@@ -46,7 +46,9 @@ function atomicApproval(value: Json): AtomicStayApproval {
     row.status !== "approved" ||
     typeof row.check_in !== "string" ||
     typeof row.check_out !== "string" ||
-    !(typeof row.user_id === "string" || row.user_id === null)
+    !(typeof row.user_id === "string" || row.user_id === null) ||
+    typeof row.from_room_id !== "string" ||
+    typeof row.room_id !== "string"
   ) {
     throw new Error("Approval returned an incomplete receipt");
   }
@@ -58,6 +60,8 @@ function atomicApproval(value: Json): AtomicStayApproval {
     check_in: row.check_in,
     check_out: row.check_out,
     user_id: row.user_id,
+    from_room_id: row.from_room_id,
+    room_id: row.room_id,
   };
 }
 
@@ -66,10 +70,11 @@ export async function approveStayRequestLive(
 ): Promise<StayApprovalResult> {
   const supabase = getSupabaseAdmin();
   return approveStayRequest(input, {
-    async approveAtomic({ id, expectedStatus, note }) {
-      const { data, error } = await supabase.rpc("approve_stay_request", {
+    async approveAtomic({ id, expectedStatus, targetRoomId, note }) {
+      const { data, error } = await supabase.rpc("approve_stay_request_with_room", {
         p_booking_id: id,
         p_expected_status: expectedStatus,
+        p_target_room_id: targetRoomId,
         p_note: note,
       });
       if (error) throw new Error(error.message);
@@ -207,4 +212,99 @@ export function isApprovableStayStatus(
   status: string
 ): status is ApprovableStayStatus {
   return status === "requested" || status === "waitlisted";
+}
+
+export interface StayRoomAvailability {
+  id: string;
+  name: string;
+  current: boolean;
+  available: boolean;
+  samePrice: boolean;
+  maxGuests: number;
+}
+
+export async function getStayRequestAvailability(
+  id: string
+): Promise<{
+  requestId: string;
+  checkIn: string;
+  checkOut: string;
+  status: string;
+  rooms: StayRoomAvailability[];
+}> {
+  const supabase = getSupabaseAdmin();
+  const { data: booking, error } = await supabase
+    .from("bookings")
+    .select("id, villa_id, room_id, check_in, check_out, status, guests")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!booking) throw new Error("Stay request not found");
+
+  const { data: currentRoom } = await supabase
+    .from("rooms")
+    .select("base_price_per_night, currency")
+    .eq("id", booking.room_id)
+    .single();
+  if (!currentRoom) throw new Error("Current room not found");
+
+  const [{ data: rooms }, { data: closures }, { data: blocks }, { data: committed }] =
+    await Promise.all([
+      supabase
+        .from("rooms")
+        .select("id, name, max_guests, base_price_per_night, currency")
+        .eq("villa_id", booking.villa_id)
+        .order("sort_order"),
+      supabase
+        .from("closure_periods")
+        .select("room_id")
+        .eq("villa_id", booking.villa_id)
+        .lt("starts_on", booking.check_out)
+        .or(`ends_on.is.null,ends_on.gte.${booking.check_in}`),
+      supabase
+        .from("availability_blocks")
+        .select("room_id")
+        .neq("status", "available")
+        .gte("date", booking.check_in)
+        .lt("date", booking.check_out),
+      supabase
+        .from("bookings")
+        .select("room_id")
+        .neq("id", booking.id)
+        .in("status", ["approved", "deposit_paid", "paid", "confirmed"])
+        .lt("check_in", booking.check_out)
+        .gt("check_out", booking.check_in),
+    ]);
+
+  const wholeGateClosed = (closures || []).some((row) => row.room_id === null);
+  const closedRooms = new Set(
+    (closures || []).map((row) => row.room_id).filter((roomId): roomId is string => Boolean(roomId))
+  );
+  const blockedRooms = new Set((blocks || []).map((row) => row.room_id));
+  const committedRooms = new Set((committed || []).map((row) => row.room_id));
+
+  return {
+    requestId: booking.id,
+    checkIn: booking.check_in,
+    checkOut: booking.check_out,
+    status: booking.status,
+    rooms: (rooms || []).map((room) => {
+      const samePrice =
+        room.base_price_per_night === currentRoom.base_price_per_night &&
+        room.currency === currentRoom.currency;
+      return {
+        id: room.id,
+        name: room.name,
+        current: room.id === booking.room_id,
+        available:
+          !wholeGateClosed &&
+          !closedRooms.has(room.id) &&
+          !blockedRooms.has(room.id) &&
+          !committedRooms.has(room.id) &&
+          room.max_guests >= booking.guests,
+        samePrice,
+        maxGuests: room.max_guests,
+      };
+    }),
+  };
 }

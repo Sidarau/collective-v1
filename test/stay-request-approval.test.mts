@@ -27,6 +27,8 @@ const approved: AtomicStayApproval = {
   check_in: "2026-08-08",
   check_out: "2026-08-12",
   user_id: "user-id",
+  from_room_id: "room-2",
+  room_id: "room-2",
 };
 
 function dependencies(
@@ -212,6 +214,24 @@ test("database approval is serialized, conflict-aware, and service-role only", a
   assert.match(migration, /availability_blocks/);
   assert.match(migration, /closure_periods/);
   assert.match(migration, /other\.status in \('approved', 'deposit_paid', 'paid', 'confirmed'\)/);
+  assert.match(migration, /security invoker/);
+  assert.match(migration, /revoke execute[\s\S]*from public, anon, authenticated/);
+  assert.match(migration, /grant execute[\s\S]*to service_role/);
+});
+
+test("room reassignment approval is same-price, conflict-aware, and service-role only", async () => {
+  const migration = await readFile(
+    new URL(
+      "../supabase/migrations/20260727222924_atomic_stay_room_assignment.sql",
+      import.meta.url
+    ),
+    "utf8"
+  );
+  assert.match(migration, /base_price_per_night <> v_original_room\.base_price_per_night/);
+  assert.match(migration, /currency <> v_original_room\.currency/);
+  assert.match(migration, /pg_advisory_xact_lock/);
+  assert.match(migration, /closure_periods/);
+  assert.match(migration, /availability_blocks/);
   assert.match(migration, /security invoker/);
   assert.match(migration, /revoke execute[\s\S]*from public, anon, authenticated/);
   assert.match(migration, /grant execute[\s\S]*to service_role/);
