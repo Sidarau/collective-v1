@@ -248,11 +248,16 @@ export async function getStayRequestAvailability(
     .single();
   if (!currentRoom) throw new Error("Current room not found");
 
-  const [{ data: rooms }, { data: closures }, { data: blocks }, { data: committed }] =
+  const [
+    { data: rooms, error: roomsError },
+    { data: closures, error: closuresError },
+    { data: blocks, error: blocksError },
+    { data: committed, error: committedError },
+  ] =
     await Promise.all([
       supabase
         .from("rooms")
-        .select("id, name, max_guests, base_price_per_night, currency")
+        .select("id, name, max_guests, base_price_per_night, currency, sort_order")
         .eq("villa_id", booking.villa_id)
         .order("sort_order"),
       supabase
@@ -275,6 +280,9 @@ export async function getStayRequestAvailability(
         .lt("check_in", booking.check_out)
         .gt("check_out", booking.check_in),
     ]);
+  const availabilityError =
+    roomsError || closuresError || blocksError || committedError;
+  if (availabilityError) throw new Error(availabilityError.message);
 
   const wholeGateClosed = (closures || []).some((row) => row.room_id === null);
   const closedRooms = new Set(
