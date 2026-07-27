@@ -15,6 +15,7 @@ export type Capability =
   | "kb.archive"
   | "ops.read"
   | "ops.write"
+  | "stay.approve"
   | "calendar.read"
   | "calendar.action.request"
   | "calendar.action.approve"
@@ -66,14 +67,17 @@ export interface Principal {
 const OWNER: Capability[] = [
   "kb.view", "kb.draft", "kb.render", "kb.publish", "kb.share", "kb.grant", "kb.archive",
   "ops.read", "ops.write", "comms.campaign.send", "admin.tokens.manage", "admin.grants.manage",
+  "stay.approve",
   "calendar.read", "calendar.action.request", "calendar.action.approve", "calendar.connection.manage",
 ];
 const OPERATOR: Capability[] = [
   "kb.view", "kb.draft", "kb.render", "kb.publish", "kb.share", "kb.archive", "ops.read", "ops.write",
+  "stay.approve",
   "calendar.read", "calendar.action.request", "calendar.action.approve", "calendar.connection.manage",
 ];
 const AGENT_OWNER: Capability[] = [
   "kb.view", "kb.draft", "kb.render", "kb.publish", "ops.read", "ops.write",
+  "stay.approve",
   "calendar.read", "calendar.action.request",
 ]; // Alex's attributable token may operate + publish; never share externally
 const AGENT_ASSISTANT: Capability[] = [
