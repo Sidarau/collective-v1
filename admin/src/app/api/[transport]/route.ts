@@ -7,13 +7,32 @@ import { getSupabaseAdmin } from "@core/supabase";
 import { DEFAULT_TIMEZONE, zonedToUtc } from "@core/scheduling";
 import { config } from "@core/config";
 import { mergeLabels, removeLabels } from "@core/labels";
-import type { CrmEntityType, Json } from "@core/database.types";
+import type { CalendarDetailLevel, CrmEntityType, Json } from "@core/database.types";
 import { agentContext, resolveAgent, toPrincipal } from "@/lib/agent-auth";
-import { authorize, audienceFor, capabilitiesFor } from "@core/policy";
+import {
+  authorize,
+  audienceFor,
+  capabilitiesFor,
+  type Capability,
+  type ResourceFacts,
+} from "@core/policy";
 import { renderRevision, KB_TEMPLATES, type KbTemplate } from "@core/kb-render";
 import { createRevision, publishRevision, getRevision } from "@core/kb-revisions";
 import { resolveTreeGrant, recordAccessEvent } from "@core/kb-access";
 import { doorPath } from "@/lib/format";
+import {
+  listGoogleSources,
+  listCalendarAgenda,
+} from "@core/google-calendar";
+import {
+  listCalendarGrantsForToken,
+  requestCalendarAction,
+} from "@core/calendar-actions";
+import {
+  approveStayRequestLive,
+  getStayRequestAvailability,
+  searchStayRequests,
+} from "@/lib/stay-requests";
 
 /** Accept ISO-with-offset ("2026-07-20T19:00:00+02:00" / "…Z") or villa
  *  wall-clock ("2026-07-20T19:00") — wall clock is read as Europe/Madrid. */
@@ -66,6 +85,62 @@ async function auditAgent(
 const err = (text: string) => ({ content: [{ type: "text" as const, text }], isError: true });
 const ok = (text: string) => ({ content: [{ type: "text" as const, text }] });
 
+async function requireCapability(
+  capability: Capability,
+  resource?: ResourceFacts & { type?: string; id?: string }
+) {
+  const identity = agentContext.getStore();
+  const principal = identity ? toPrincipal(identity) : null;
+  if (!principal) return err("No identity");
+  const decision = authorize(principal, capability, resource);
+  await recordAccessEvent({
+    principal,
+    capability,
+    resourceType: resource?.type || null,
+    resourceId: resource?.id || null,
+    decision: decision.allow ? "allow" : "deny",
+    reason: decision.reason,
+  });
+  return decision.allow ? null : err(`Denied (${decision.reason})`);
+}
+
+async function requireKbCapability(nodeId: string, capability: Capability) {
+  const identity = agentContext.getStore();
+  const principal = identity ? toPrincipal(identity) : null;
+  if (!principal) return err("No identity");
+  const audience = audienceFor(principal);
+  const treeGranted = audience ? await resolveTreeGrant(nodeId, audience) : false;
+  return requireCapability(capability, { treeGranted, type: "kb_node", id: nodeId });
+}
+
+async function calendarAccess(sourceId: string): Promise<{
+  allowed: boolean;
+  detailLevel: CalendarDetailLevel;
+  canRequestWrites: boolean;
+}> {
+  const identity = agentContext.getStore();
+  if (!identity) return { allowed: false, detailLevel: "busy", canRequestWrites: false };
+  if (identity.kind === "session" && identity.adminId) {
+    const source = (await listGoogleSources(identity.adminId)).find((item) => item.id === sourceId);
+    return {
+      allowed: Boolean(source?.selected),
+      detailLevel: "private",
+      canRequestWrites: Boolean(source?.selected),
+    };
+  }
+  if (!identity.tokenId) {
+    return { allowed: false, detailLevel: "busy", canRequestWrites: false };
+  }
+  const grant = (await listCalendarGrantsForToken(identity.tokenId)).find(
+    (item) => item.sourceId === sourceId
+  );
+  return {
+    allowed: Boolean(grant?.canRead),
+    detailLevel: grant?.detailLevel || "busy",
+    canRequestWrites: Boolean(grant?.canRequestWrites),
+  };
+}
+
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -85,7 +160,18 @@ const handler = createMcpHandler(
         inputSchema: {},
       },
       async () => {
-        const nodes = await listKbNodes();
+        const denied = await requireCapability("kb.view");
+        if (denied) return denied;
+        const identity = agentContext.getStore()!;
+        const audience = audienceFor(toPrincipal(identity));
+        const allNodes = await listKbNodes();
+        const allowed = await Promise.all(
+          allNodes.map(async (node) => ({
+            node,
+            allow: audience ? await resolveTreeGrant(node.id, audience) : false,
+          }))
+        );
+        const nodes = allowed.filter((item) => item.allow).map((item) => item.node);
         const strip = (list: ReturnType<typeof buildKbTree>): unknown[] =>
           list.map((n) => ({
             id: n.id,
@@ -108,6 +194,8 @@ const handler = createMcpHandler(
         inputSchema: { id: z.string().uuid() },
       },
       async ({ id }) => {
+        const denied = await requireKbCapability(id, "kb.view");
+        if (denied) return denied;
         const node = await getKbNode(id);
         if (!node) return { content: [{ type: "text", text: "Not found" }], isError: true };
         return {
@@ -129,7 +217,18 @@ const handler = createMcpHandler(
         inputSchema: { query: z.string().min(2) },
       },
       async ({ query }) => {
-        const nodes = await searchKb(query);
+        const denied = await requireCapability("kb.view");
+        if (denied) return denied;
+        const identity = agentContext.getStore()!;
+        const audience = audienceFor(toPrincipal(identity));
+        const matches = await searchKb(query);
+        const allowed = await Promise.all(
+          matches.map(async (node) => ({
+            node,
+            allow: audience ? await resolveTreeGrant(node.id, audience) : false,
+          }))
+        );
+        const nodes = allowed.filter((item) => item.allow).map((item) => item.node);
         return {
           content: [
             {
@@ -159,6 +258,10 @@ const handler = createMcpHandler(
         },
       },
       async (input) => {
+        const scopeId = input.id || input.parentId;
+        if (!scopeId) return err("Creating a root node is console-only");
+        const denied = await requireKbCapability(scopeId, "kb.publish");
+        if (denied) return denied;
         const node = await upsertKbNode(input);
         // Attribution: every agent write lands in the audit trail under the
         // admin whose token performed it (see Agents & MCP in the console).
@@ -191,6 +294,8 @@ const handler = createMcpHandler(
         },
       },
       async ({ query, status, limit }) => {
+        const denied = await requireCapability("ops.read");
+        if (denied) return denied;
         const supabase = getSupabaseAdmin();
         let request = supabase
           .from("leads")
@@ -250,6 +355,8 @@ const handler = createMcpHandler(
         },
       },
       async ({ daysAhead }) => {
+        const denied = await requireCapability("ops.read");
+        if (denied) return denied;
         const supabase = getSupabaseAdmin();
         const now = new Date();
         const today = now.toISOString().slice(0, 10);
@@ -335,10 +442,137 @@ const handler = createMcpHandler(
       }
     );
 
+    server.registerTool(
+      "stay_requests_search",
+      {
+        title: "Search stay requests",
+        description:
+          "Find stay requests by guest name and/or exact dates/status. Returns only the request id, guest name, window, status, room, and gate so an owner can preview the exact target before a decision.",
+        inputSchema: {
+          query: z.string().min(2).optional(),
+          checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          status: z
+            .enum([
+              "inquiry",
+              "requested",
+              "waitlisted",
+              "approved",
+              "deposit_paid",
+              "paid",
+              "confirmed",
+              "cancelled",
+              "completed",
+            ])
+            .optional(),
+          limit: z.number().int().min(1).max(50).optional(),
+        },
+      },
+      async (input) => {
+        const denied = await requireCapability("ops.read");
+        if (denied) return denied;
+        try {
+          const matches = await searchStayRequests(input);
+          return ok(
+            matches.length
+              ? JSON.stringify(matches, null, 2)
+              : "No stay requests matched."
+          );
+        } catch (error) {
+          return err(error instanceof Error ? error.message : "Search failed");
+        }
+      }
+    );
+
     // ---------------------------------------------------------------- Writes
     // Everything below mutates the live product with no redeploy. Each write
     // is validated, audited under the calling admin's token, and visible in
     // the console (Agents & MCP → activity).
+
+    server.registerTool(
+      "stay_request_availability",
+      {
+        title: "Preview rooms for a stay request",
+        description:
+          "Preview room ids, current assignment, guest capacity, same-price eligibility, and current availability immediately before approval or reassignment.",
+        inputSchema: { id: z.string().uuid() },
+      },
+      async ({ id }) => {
+        const denied = await requireCapability("ops.read");
+        if (denied) return denied;
+        try {
+          return ok(JSON.stringify(await getStayRequestAvailability(id), null, 2));
+        } catch (error) {
+          return err(error instanceof Error ? error.message : "Availability preview failed");
+        }
+      }
+    );
+
+    server.registerTool(
+      "stay_request_approve",
+      {
+        title: "Approve one stay request",
+        description:
+          "Approve exactly one requested/waitlisted stay after an explicit owner confirmation. Re-checks room commitments, date blocks, and house/room closures atomically. Owner-scope attributable tokens only. Notifications default OFF.",
+        inputSchema: {
+          id: z.string().uuid(),
+          expectedStatus: z.enum(["requested", "waitlisted"]),
+          targetRoomId: z.string().uuid().optional(),
+          confirmed: z.literal(true),
+          note: z.string().max(1000).optional(),
+          notify: z.boolean().optional(),
+        },
+      },
+      async ({ id, expectedStatus, targetRoomId, note, notify }) => {
+        const denied = await requireCapability("stay.approve", {
+          type: "booking",
+          id,
+        });
+        if (denied) return denied;
+        const identity = agentContext.getStore();
+        if (!identity?.adminId || !identity.adminEmail) {
+          return err(
+            "Denied: stay approval requires an attributable owner or operator identity"
+          );
+        }
+        try {
+          const result = await approveStayRequestLive({
+            id,
+            expectedStatus,
+            targetRoomId,
+            note,
+            notify: notify ?? false,
+            actor: {
+              id: identity.adminId,
+              email: identity.adminEmail,
+              label: identity.tokenLabel,
+              via: identity.kind === "session" ? "console" : "agent",
+            },
+          });
+          return ok(
+            JSON.stringify(
+              {
+                id: result.booking_id,
+                changed: result.changed,
+                status: result.status,
+                previousStatus: result.from_status,
+                checkIn: result.check_in,
+                checkOut: result.check_out,
+                notification: result.notification,
+                fromRoomId: result.from_room_id,
+                roomId: result.room_id,
+              },
+              null,
+              2
+            )
+          );
+        } catch (error) {
+          return err(
+            error instanceof Error ? error.message : "Stay approval failed"
+          );
+        }
+      }
+    );
 
     server.registerTool(
       "event_upsert",
@@ -363,6 +597,8 @@ const handler = createMcpHandler(
         },
       },
       async (input) => {
+        const denied = await requireCapability("ops.write");
+        if (denied) return denied;
         const supabase = getSupabaseAdmin();
         const startAt = input.startAt !== undefined ? parseWhen(input.startAt) : undefined;
         if (input.startAt !== undefined && !startAt) return err("Could not parse startAt");
@@ -454,6 +690,8 @@ const handler = createMcpHandler(
         },
       },
       async (input) => {
+        const denied = await requireCapability("ops.write");
+        if (denied) return denied;
         const supabase = getSupabaseAdmin();
         const { data: gate } = await supabase.from("villas").select("id, name").eq("slug", input.gateSlug).maybeSingle();
         if (!gate) return err(`No gate with slug "${input.gateSlug}"`);
@@ -495,6 +733,8 @@ const handler = createMcpHandler(
         },
       },
       async (input) => {
+        const denied = await requireCapability("ops.write");
+        if (denied) return denied;
         const supabase = getSupabaseAdmin();
         const { data: gate } = await supabase.from("villas").select("id").eq("slug", input.gateSlug).maybeSingle();
         if (!gate) return err(`No gate with slug "${input.gateSlug}"`);
@@ -535,6 +775,8 @@ const handler = createMcpHandler(
         },
       },
       async ({ id, status, note }) => {
+        const denied = await requireCapability("ops.write");
+        if (denied) return denied;
         const supabase = getSupabaseAdmin();
         const { data: app } = await supabase
           .from("applications")
@@ -581,6 +823,8 @@ const handler = createMcpHandler(
         },
       },
       async ({ email, status, note }) => {
+        const denied = await requireCapability("ops.write");
+        if (denied) return denied;
         const supabase = getSupabaseAdmin();
         const normalized = email.toLowerCase().trim();
         const { data: lead } = await supabase
@@ -624,6 +868,8 @@ const handler = createMcpHandler(
         },
       },
       async (input) => {
+        const denied = await requireCapability("ops.write");
+        if (denied) return denied;
         const supabase = getSupabaseAdmin();
         const base = slugify(input.code || input.label) || "door";
         let code = base;
@@ -677,6 +923,8 @@ const handler = createMcpHandler(
         },
       },
       async (input) => {
+        const denied = await requireCapability("ops.write");
+        if (denied) return denied;
         const supabase = getSupabaseAdmin();
         const code = input.code.toLowerCase().trim();
         const { data: link } = await supabase
@@ -713,6 +961,8 @@ const handler = createMcpHandler(
         },
       },
       async (input) => {
+        const denied = await requireCapability("ops.read");
+        if (denied) return denied;
         const supabase = getSupabaseAdmin();
         let query = supabase
           .from("referral_links")
@@ -748,6 +998,8 @@ const handler = createMcpHandler(
         },
       },
       async (input) => {
+        const denied = await requireCapability("ops.write");
+        if (denied) return denied;
         const supabase = getSupabaseAdmin();
         const email = input.email.toLowerCase().trim();
         const { data: user } = await supabase
@@ -795,6 +1047,8 @@ const handler = createMcpHandler(
         },
       },
       async (input) => {
+        const denied = await requireCapability("ops.write");
+        if (denied) return denied;
         const supabase = getSupabaseAdmin();
         const { data: gate } = await supabase
           .from("villas")
@@ -850,6 +1104,8 @@ const handler = createMcpHandler(
         },
       },
       async (input) => {
+        const denied = await requireCapability("ops.read");
+        if (denied) return denied;
         const supabase = getSupabaseAdmin();
         const today = new Date().toISOString().slice(0, 10);
         let query = supabase
@@ -907,6 +1163,8 @@ const handler = createMcpHandler(
         },
       },
       async ({ id }) => {
+        const denied = await requireCapability("ops.write");
+        if (denied) return denied;
         const supabase = getSupabaseAdmin();
         const { data: closure } = await supabase
           .from("closure_periods")
@@ -924,6 +1182,292 @@ const handler = createMcpHandler(
           `reopened ${closure.starts_on} → ${closure.ends_on || "∞"} (closure ${id})`
         );
         return ok(`Reopened — closure ${id} deleted.`);
+      }
+    );
+
+    // ---------------------------------------------------------------- Calendar v2
+
+    server.registerTool(
+      "calendar_list",
+      {
+        title: "List granted calendars",
+        description:
+          "Calendars this token may read, including the sourceId needed by other calendar tools. The list is explicitly granted by the calendar owner.",
+        inputSchema: {},
+      },
+      async () => {
+        const denied = await requireCapability("calendar.read");
+        if (denied) return denied;
+        const identity = agentContext.getStore();
+        if (!identity) return err("No identity");
+        if (identity.kind === "session" && identity.adminId) {
+          const sources = (await listGoogleSources(identity.adminId))
+            .filter((source) => source.selected)
+            .map((source) => ({
+              sourceId: source.id,
+              name: source.summary,
+              primary: source.is_primary,
+              detailLevel: "private",
+              canRequestWrites: true,
+            }));
+          return ok(JSON.stringify(sources, null, 2));
+        }
+        if (!identity.tokenId) return err("Calendar access requires a personal agent token");
+        return ok(JSON.stringify(await listCalendarGrantsForToken(identity.tokenId), null, 2));
+      }
+    );
+
+    server.registerTool(
+      "calendar_events",
+      {
+        title: "Read calendar events",
+        description:
+          "Read a granted calendar between two ISO timestamps. Event detail is automatically redacted to the grant's detail level.",
+        inputSchema: {
+          sourceId: z.string().uuid(),
+          timeMin: z.string().datetime({ offset: true }),
+          timeMax: z.string().datetime({ offset: true }),
+        },
+      },
+      async ({ sourceId, timeMin, timeMax }) => {
+        const denied = await requireCapability("calendar.read");
+        if (denied) return denied;
+        if (new Date(timeMax) <= new Date(timeMin)) return err("timeMax must be after timeMin");
+        const access = await calendarAccess(sourceId);
+        if (!access.allowed) return err("Denied: this calendar was not granted to this token");
+        const events = await listCalendarAgenda(
+          sourceId,
+          new Date(timeMin).toISOString(),
+          new Date(timeMax).toISOString(),
+          access.detailLevel
+        );
+        return ok(JSON.stringify(events, null, 2));
+      }
+    );
+
+    const calendarEventSchema = {
+      sourceId: z.string().uuid(),
+      summary: z.string().min(1),
+      description: z.string().optional(),
+      location: z.string().optional(),
+      startIso: z.string().datetime({ offset: true }),
+      endIso: z.string().datetime({ offset: true }),
+      attendees: z.array(z.string().email()).max(25).optional(),
+      timezone: z.string().optional(),
+      idempotencyKey: z.string().min(8).max(160),
+    };
+
+    server.registerTool(
+      "calendar_event_create",
+      {
+        title: "Request a calendar event",
+        description:
+          "Request a new event on a granted calendar. Collecta's Don-MVP grants require explicit owner approval before execution. Reuse idempotencyKey when retrying.",
+        inputSchema: calendarEventSchema,
+      },
+      async (input) => {
+        const denied = await requireCapability("calendar.action.request");
+        if (denied) return denied;
+        const access = await calendarAccess(input.sourceId);
+        if (!access.canRequestWrites) return err("Denied: write requests are not granted");
+        const identity = agentContext.getStore()!;
+        const request = await requestCalendarAction(
+          {
+            sourceId: input.sourceId,
+            operation: "create",
+            event: {
+              summary: input.summary,
+              description: input.description,
+              location: input.location,
+              startIso: new Date(input.startIso).toISOString(),
+              endIso: new Date(input.endIso).toISOString(),
+              attendees: input.attendees,
+              timezone: input.timezone,
+            },
+            idempotencyKey: input.idempotencyKey,
+          },
+          {
+            tokenId: identity.tokenId,
+            adminId: identity.adminId,
+            adminEmail: identity.adminEmail,
+            tokenLabel: identity.tokenLabel,
+            human: identity.kind === "session",
+          }
+        );
+        return ok(
+          JSON.stringify(
+            {
+              requestId: request.id,
+              status: request.status,
+              risk: request.risk,
+              approvalRequired: request.status === "pending",
+              preview: request.preview,
+              result: request.result,
+            },
+            null,
+            2
+          )
+        );
+      }
+    );
+
+    server.registerTool(
+      "calendar_event_update",
+      {
+        title: "Request a calendar event change",
+        description:
+          "Request changes to an event. Updating an existing appointment always requires human approval for agent tokens.",
+        inputSchema: {
+          sourceId: z.string().uuid(),
+          eventId: z.string().min(1),
+          summary: z.string().min(1).optional(),
+          description: z.string().optional(),
+          location: z.string().optional(),
+          startIso: z.string().datetime({ offset: true }).optional(),
+          endIso: z.string().datetime({ offset: true }).optional(),
+          attendees: z.array(z.string().email()).max(25).optional(),
+          timezone: z.string().optional(),
+          idempotencyKey: z.string().min(8).max(160),
+        },
+      },
+      async (input) => {
+        const denied = await requireCapability("calendar.action.request");
+        if (denied) return denied;
+        const access = await calendarAccess(input.sourceId);
+        if (!access.canRequestWrites) return err("Denied: write requests are not granted");
+        const identity = agentContext.getStore()!;
+        const request = await requestCalendarAction(
+          {
+            sourceId: input.sourceId,
+            operation: "update",
+            eventId: input.eventId,
+            event: {
+              summary: input.summary,
+              description: input.description,
+              location: input.location,
+              startIso: input.startIso ? new Date(input.startIso).toISOString() : undefined,
+              endIso: input.endIso ? new Date(input.endIso).toISOString() : undefined,
+              attendees: input.attendees,
+              timezone: input.timezone,
+            },
+            idempotencyKey: input.idempotencyKey,
+          },
+          {
+            tokenId: identity.tokenId,
+            adminId: identity.adminId,
+            adminEmail: identity.adminEmail,
+            tokenLabel: identity.tokenLabel,
+            human: identity.kind === "session",
+          }
+        );
+        return ok(
+          JSON.stringify(
+            {
+              requestId: request.id,
+              status: request.status,
+              risk: request.risk,
+              approvalRequired: request.status === "pending",
+              preview: request.preview,
+              result: request.result,
+            },
+            null,
+            2
+          )
+        );
+      }
+    );
+
+    server.registerTool(
+      "calendar_event_cancel",
+      {
+        title: "Request event cancellation",
+        description:
+          "Request cancellation of an event. Cancellations always require human approval for agent tokens.",
+        inputSchema: {
+          sourceId: z.string().uuid(),
+          eventId: z.string().min(1),
+          summary: z.string().optional(),
+          idempotencyKey: z.string().min(8).max(160),
+        },
+      },
+      async ({ sourceId, eventId, summary, idempotencyKey }) => {
+        const denied = await requireCapability("calendar.action.request");
+        if (denied) return denied;
+        const access = await calendarAccess(sourceId);
+        if (!access.canRequestWrites) return err("Denied: write requests are not granted");
+        const identity = agentContext.getStore()!;
+        const request = await requestCalendarAction(
+          {
+            sourceId,
+            operation: "cancel",
+            eventId,
+            event: { summary },
+            idempotencyKey,
+          },
+          {
+            tokenId: identity.tokenId,
+            adminId: identity.adminId,
+            adminEmail: identity.adminEmail,
+            tokenLabel: identity.tokenLabel,
+            human: identity.kind === "session",
+          }
+        );
+        return ok(
+          JSON.stringify(
+            {
+              requestId: request.id,
+              status: request.status,
+              risk: request.risk,
+              approvalRequired: request.status === "pending",
+              preview: request.preview,
+            },
+            null,
+            2
+          )
+        );
+      }
+    );
+
+    server.registerTool(
+      "calendar_action_status",
+      {
+        title: "Check calendar request",
+        description: "Check the approval/execution status of one calendar action request.",
+        inputSchema: { requestId: z.string().uuid() },
+      },
+      async ({ requestId }) => {
+        const denied = await requireCapability("calendar.read");
+        if (denied) return denied;
+        const identity = agentContext.getStore();
+        if (!identity) return err("No identity");
+        const { data: request } = await getSupabaseAdmin()
+          .from("calendar_action_requests")
+          .select("*")
+          .eq("id", requestId)
+          .maybeSingle();
+        if (!request) return err("Calendar request not found");
+        const access = await calendarAccess(request.source_id);
+        if (!access.allowed) return err("Denied: request belongs to another calendar");
+        if (
+          identity.kind !== "session" &&
+          (!identity.tokenId || request.requested_by_token_id !== identity.tokenId)
+        ) {
+          return err("Denied: request belongs to another agent token");
+        }
+        return ok(
+          JSON.stringify(
+            {
+              requestId: request.id,
+              status: request.status,
+              risk: request.risk,
+              preview: request.preview,
+              result: request.result,
+              error: request.error,
+            },
+            null,
+            2
+          )
+        );
       }
     );
 
@@ -949,7 +1493,8 @@ const handler = createMcpHandler(
               scope: principal.agentScope ?? (principal.kind === "operator" ? "human" : null),
               audience: audienceFor(principal),
               capabilities: caps,
-              can_publish_or_share: false, // publish/share are human-only, done in the console
+              can_publish: caps.includes("kb.publish"),
+              can_share: caps.includes("kb.share"),
               tokenLabel: id?.tokenLabel ?? null,
             },
             null,

@@ -1,5 +1,10 @@
 import Image from "next/image";
-import { computeOpenSlots, loadSlotInputs, fmtMinute } from "@core/scheduling";
+import {
+  computeOpenSlots,
+  getDefaultScreeningHost,
+  loadSlotInputs,
+  fmtMinute,
+} from "@core/scheduling";
 import { fetchContentBlock } from "@/lib/data";
 import { fmtCallTime, resolveScreeningToken } from "@/lib/screening";
 import SlotPicker, { type SlotDay } from "./SlotPicker";
@@ -43,8 +48,9 @@ export default async function ScreeningPage({ params }: { params: Promise<{ toke
     );
   }
 
+  const host = context.existingCall?.admin_id || (await getDefaultScreeningHost());
   const [slots, intro] = await Promise.all([
-    loadSlotInputs(context.kind).then(computeOpenSlots),
+    loadSlotInputs(context.kind, host).then(computeOpenSlots),
     fetchContentBlock("screening.intro"),
   ]);
 

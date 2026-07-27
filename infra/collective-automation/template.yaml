@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Collective Calendar v2 webhook queue, worker, and reconciliation schedule
+
+Parameters:
+  AppWebhookUrl:
+    Type: String
+    Description: https://opencollective.app/api/google/calendar/webhook
+  AppReconcileUrl:
+    Type: String
+    Description: https://opencollective.app/api/google/calendar/reconcile
+  CalendarCronSecret:
+    Type: String
+    NoEcho: true
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures: [arm64]
+    MemorySize: 256
+    Timeout: 30
+    Tracing: Active
+    Environment:
+      Variables:
+        APP_WEBHOOK_URL: !Ref AppWebhookUrl
+        APP_RECONCILE_URL: !Ref AppReconcileUrl
+        CALENDAR_CRON_SECRET: !Ref CalendarCronSecret
+
+Resources:
+  CalendarDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      KmsMasterKeyId: alias/aws/sqs
+      MessageRetentionPeriod: 1209600
+
+  CalendarQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      KmsMasterKeyId: alias/aws/sqs
+      VisibilityTimeout: 120
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt CalendarDeadLetterQueue.Arn
+        maxReceiveCount: 5
+
+  CalendarWebhookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handler.webhook
+      Environment:
+        Variables:
+          CALENDAR_QUEUE_URL: !Ref CalendarQueue
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt CalendarQueue.QueueName
+      Events:
+        GoogleWebhook:
+          Type: HttpApi
+          Properties:
+            Path: /google/calendar/webhook
+            Method: POST
+
+  CalendarWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handler.worker
+      Timeout: 60
+      Policies:
+        - SQSPollerPolicy:
+            QueueName: !GetAtt CalendarQueue.QueueName
+      Events:
+        CalendarQueue:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt CalendarQueue.Arn
+            BatchSize: 5
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+
+  CalendarReconcileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handler.reconcile
+      Events:
+        DailyReconciliation:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(15 4 * * ? *)
+            ScheduleExpressionTimezone: Europe/Madrid
+            RetryPolicy:
+              MaximumRetryAttempts: 3
+              MaximumEventAgeInSeconds: 3600
+            DeadLetterConfig:
+              Type: SQS
+              TargetArn: !GetAtt CalendarDeadLetterQueue.Arn
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt CalendarDeadLetterQueue.QueueName
+
+Outputs:
+  GoogleWebhookUrl:
+    Description: Set GOOGLE_CALENDAR_WEBHOOK_URL to this endpoint after deployment
+    Value: !Sub https://${ServerlessHttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/google/calendar/webhook
+  CalendarQueueUrl:
+    Value: !Ref CalendarQueue
+  DeadLetterQueueUrl:
+    Value: !Ref CalendarDeadLetterQueue

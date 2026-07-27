@@ -2,6 +2,10 @@ import { getSupabaseAdmin } from "./supabase";
 import { fetchGoogleBusy } from "./google-calendar";
 import { getSettingValue } from "./settings";
 import type { ScreeningCallRow, ScreeningWindowRow } from "./database.types";
+import {
+  DEFAULT_BOOKING_NOTICE_MINUTES,
+  minimumBookableStartMs,
+} from "./scheduling-policy";
 
 /**
  * Screening-call slot engine. Windows are wall-clock ranges in the villa's
@@ -11,6 +15,7 @@ import type { ScreeningCallRow, ScreeningWindowRow } from "./database.types";
  */
 
 export const DEFAULT_TIMEZONE = "Europe/Madrid";
+export { DEFAULT_BOOKING_NOTICE_MINUTES };
 
 /** Offset (ms) between a timezone's wall clock and UTC at a given instant. */
 function tzOffsetMs(timeZone: string, utc: Date): number {
@@ -77,7 +82,7 @@ export interface SlotQuery {
   calls: Pick<ScreeningCallRow, "scheduled_at" | "duration_minutes" | "status">[];
   /** Horizon in days (default 21). */
   days?: number;
-  /** Minimum notice in minutes (default 120). */
+  /** Minimum notice in minutes (default 24 hours). */
   leadMinutes?: number;
   now?: Date;
 }
@@ -86,7 +91,10 @@ export interface SlotQuery {
 export function computeOpenSlots(query: SlotQuery): OpenSlot[] {
   const now = query.now || new Date();
   const days = query.days ?? 21;
-  const minStart = now.getTime() + (query.leadMinutes ?? 120) * 60_000;
+  const minStart = minimumBookableStartMs(
+    now,
+    query.leadMinutes ?? DEFAULT_BOOKING_NOTICE_MINUTES
+  );
 
   const windows = query.windows.filter(
     (w) => w.active && (w.kind === "both" || w.kind === query.kind)

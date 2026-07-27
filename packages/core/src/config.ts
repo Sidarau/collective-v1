@@ -59,6 +59,18 @@ export const config = {
   // <adminUrl>/api/google/oauth/callback as an authorized redirect URI.
   googleClientId: getEnv("GOOGLE_OAUTH_CLIENT_ID") || "",
   googleClientSecret: getEnv("GOOGLE_OAUTH_CLIENT_SECRET") || "",
+  // 32-byte base64 or 64-character hex key used to encrypt Google refresh
+  // tokens before they are persisted. It is intentionally separate from
+  // NEXTAUTH_SECRET so either secret can rotate independently.
+  googleTokenEncryptionKey: getEnv("GOOGLE_TOKEN_ENCRYPTION_KEY") || "",
+  // Public HTTPS callback used by Google Calendar push channels.
+  googleCalendarWebhookUrl:
+    getEnv("GOOGLE_CALENDAR_WEBHOOK_URL") ||
+    (process.env.NEXT_PUBLIC_ADMIN_URL
+      ? `${process.env.NEXT_PUBLIC_ADMIN_URL}/api/google/calendar/webhook`
+      : ""),
+  // Authenticates the reconciliation/renewal endpoint (Vercel or AWS).
+  calendarCronSecret: getEnv("CALENDAR_CRON_SECRET") || getEnv("CRON_SECRET") || "",
 };
 
 export function requireConfig(key: keyof typeof config): string {

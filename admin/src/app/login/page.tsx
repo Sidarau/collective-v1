@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -232,6 +233,17 @@ function LoginForm() {
             </form>
           )}
         </div>
+        <nav className="mt-5 flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11.5px] text-faint">
+          <Link href="/oauth" className="hover:text-gold">
+            Google Calendar
+          </Link>
+          <Link href="/privacy" className="hover:text-gold">
+            Privacy
+          </Link>
+          <Link href="/terms" className="hover:text-gold">
+            Terms
+          </Link>
+        </nav>
       </div>
     </main>
   );

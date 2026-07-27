@@ -15,6 +15,11 @@ export type Capability =
   | "kb.archive"
   | "ops.read"
   | "ops.write"
+  | "stay.approve"
+  | "calendar.read"
+  | "calendar.action.request"
+  | "calendar.action.approve"
+  | "calendar.connection.manage"
   | "comms.campaign.send"
   | "admin.tokens.manage"
   | "admin.grants.manage";
@@ -30,6 +35,8 @@ export const HUMAN_ONLY: ReadonlySet<Capability> = new Set<Capability>([
   "kb.share",
   "kb.grant",
   "comms.campaign.send",
+  "calendar.action.approve",
+  "calendar.connection.manage",
   "admin.tokens.manage",
   "admin.grants.manage",
 ]);
@@ -43,7 +50,7 @@ export type PrincipalKind =
   | "external_share"
   | "public";
 
-export type AgentScope = "owner" | "staff" | "member";
+export type AgentScope = "owner" | "assistant" | "staff" | "member";
 
 /** Audience tags used for KB tree grants (kb_grants.audience). */
 export type Audience = "operator" | "staff" | "member" | "vendor";
@@ -60,11 +67,23 @@ export interface Principal {
 const OWNER: Capability[] = [
   "kb.view", "kb.draft", "kb.render", "kb.publish", "kb.share", "kb.grant", "kb.archive",
   "ops.read", "ops.write", "comms.campaign.send", "admin.tokens.manage", "admin.grants.manage",
+  "stay.approve",
+  "calendar.read", "calendar.action.request", "calendar.action.approve", "calendar.connection.manage",
 ];
 const OPERATOR: Capability[] = [
   "kb.view", "kb.draft", "kb.render", "kb.publish", "kb.share", "kb.archive", "ops.read", "ops.write",
+  "stay.approve",
+  "calendar.read", "calendar.action.request", "calendar.action.approve", "calendar.connection.manage",
 ];
-const AGENT_OWNER: Capability[] = ["kb.view", "kb.draft", "kb.render", "kb.publish", "ops.read"]; // may post/edit; never share externally
+const AGENT_OWNER: Capability[] = [
+  "kb.view", "kb.draft", "kb.render", "kb.publish", "ops.read", "ops.write",
+  "stay.approve",
+  "calendar.read", "calendar.action.request",
+]; // Alex's attributable token may operate + publish; never share externally
+const AGENT_ASSISTANT: Capability[] = [
+  "kb.view", "kb.draft", "kb.render", "ops.read",
+  "calendar.read", "calendar.action.request",
+];
 const AGENT_STAFF: Capability[] = ["kb.view", "kb.draft", "kb.render"]; // draft only
 const AGENT_MEMBER: Capability[] = ["kb.view"]; // read member-audience KB (events/gates) only
 const MEMBER: Capability[] = ["kb.view"];
@@ -79,7 +98,18 @@ export function capabilitiesFor(p: Principal): Set<Capability> {
     case "owner": caps = OWNER; break;
     case "operator": caps = OPERATOR; break;
     case "agent":
-      caps = p.agentScope === "staff" ? AGENT_STAFF : p.agentScope === "member" ? AGENT_MEMBER : AGENT_OWNER;
+      caps =
+        // The legacy shared environment token is intentionally bounded. Broad
+        // writes require an attributable, individually revocable owner token.
+        p.via === "system_token"
+          ? AGENT_ASSISTANT
+          : p.agentScope === "assistant"
+          ? AGENT_ASSISTANT
+          : p.agentScope === "staff"
+            ? AGENT_STAFF
+            : p.agentScope === "member"
+              ? AGENT_MEMBER
+              : AGENT_OWNER;
       break;
     case "member": caps = MEMBER; break;
     case "vendor": caps = VENDOR; break;
@@ -100,7 +130,11 @@ export function audienceFor(p: Principal): Audience | null {
     case "owner":
     case "operator": return "operator";
     case "agent":
-      return p.agentScope === "staff" ? "staff" : p.agentScope === "member" ? "member" : "operator";
+      return p.agentScope === "staff"
+        ? "staff"
+        : p.agentScope === "member"
+          ? "member"
+          : "operator";
     case "member": return "member";
     case "vendor": return "vendor";
     default: return null; // external_share and public do not traverse the tree

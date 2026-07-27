@@ -21,7 +21,7 @@ export interface AgentIdentity {
   adminEmail: string | null;
   tokenId: string | null;
   tokenLabel: string | null;
-  scope: AgentTokenScope; // owner (default) | staff — tier of the token
+  scope: AgentTokenScope;
 }
 
 /**
@@ -80,7 +80,10 @@ export async function resolveAgent(req: Request): Promise<AgentIdentity | NextRe
           adminEmail: owner?.email || null,
           tokenId: row.id,
           tokenLabel: row.label,
-          scope: row.scope === "staff" || row.scope === "member" ? row.scope : "owner",
+          scope:
+            row.scope === "assistant" || row.scope === "staff" || row.scope === "member"
+              ? row.scope
+              : "owner",
         };
       }
       return NextResponse.json({ error: "Invalid or revoked token" }, { status: 401 });
@@ -97,7 +100,7 @@ export async function resolveAgent(req: Request): Promise<AgentIdentity | NextRe
           adminEmail: "system",
           tokenId: null,
           tokenLabel: "AGENT_API_TOKEN",
-          scope: "owner",
+          scope: "assistant",
         };
       }
     }
