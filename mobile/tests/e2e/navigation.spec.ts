@@ -96,28 +96,36 @@ test.describe("Today behaviour", () => {
     await page.waitForTimeout(600);
 
     const layout = await page.evaluate(() => {
-      const vh = window.innerHeight;
-      const box = (sel: string) => {
+      const rect = (sel: string) => {
         const el = document.querySelector(sel);
-        return el ? el.getBoundingClientRect().top : null;
+        return el ? el.getBoundingClientRect() : null;
       };
+      const hero = rect("[data-testid=today-hero]");
       return {
-        hero: box("[data-testid=today-hero]"),
-        carried: box(".day-divider--carried"),
-        now: box("[data-testid=now-marker]"),
-        vh,
+        heroTop: hero?.top ?? null,
+        heroBottom: hero?.bottom ?? null,
+        carried: rect(".day-divider--carried")?.top ?? null,
+        now: rect("[data-testid=now-marker]")?.top ?? null,
+        vh: window.innerHeight,
       };
     });
 
-    // The hero rests just under the veil, not scrolled past.
-    expect(layout.hero, "hero must be on screen").not.toBeNull();
-    expect(layout.hero!).toBeGreaterThan(0);
-    expect(layout.hero!).toBeLessThan(layout.vh * 0.25);
+    // The hero is pinned to the top of the screen and does not scroll away.
+    expect(layout.heroTop, "hero must be on screen").not.toBeNull();
+    expect(layout.heroTop!).toBe(0);
 
-    // Carried forward and Now follow it, both within the first screen.
-    expect(layout.carried!).toBeGreaterThan(layout.hero!);
+    // Carried forward and Now sit directly beneath it, on the first screen.
+    expect(layout.carried!).toBeGreaterThanOrEqual(layout.heroBottom! - 1);
     expect(layout.now!).toBeGreaterThan(layout.carried!);
     expect(layout.now!).toBeLessThan(layout.vh);
+
+    // And the hero stays put once the chronology is scrolled.
+    await page.mouse.wheel(0, 600);
+    await page.waitForTimeout(300);
+    const heroAfter = await page.evaluate(
+      () => document.querySelector("[data-testid=today-hero]")!.getBoundingClientRect().top,
+    );
+    expect(heroAfter).toBe(0);
   });
 
   test("earlier work sits above the hero and can be scrolled to", async ({ page }) => {
