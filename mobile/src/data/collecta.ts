@@ -8,9 +8,11 @@ import "server-only";
  * Material changes return as drafts — approval, money, access and publishing
  * always need an explicit confirm, and the confirm writes an audit row.
  *
- * This is the rule-based v1: intent matching over the live schema, with the
- * draft/confirm/audit spine the LLM-backed version will reuse. Nothing here
- * mutates without going through `confirmDraft`.
+ * The rule layer owns material drafts (publish, complete) — those intents are
+ * matched first and never reach the model. Read intents go to Kimi with a
+ * compact snapshot of live records; the model answers, it never mutates.
+ * If no API key is configured (preview deploys) or the call fails, the rule
+ * answers below are the fallback — the orb never goes silent.
  */
 
 import { getSupabaseAdmin } from "@core/supabase";
@@ -26,6 +28,115 @@ import { dayOf } from "./mappers";
 
 let turnCounter = 0;
 const nextTurnId = () => `live-${Date.now()}-${(turnCounter += 1)}`;
+
+/* ------------------------------------------------------------------ *
+ * Kimi — the reasoning layer behind read answers. The Selene key lives on
+ * Kimi's coding endpoint (api.kimi.com/coding) and exposes the thinking
+ * model `kimi-for-coding` — answers may arrive in `content` or, when the
+ * token budget is tight, trail off into `reasoning_content`; we request
+ * enough headroom and accept only real content.
+ * ------------------------------------------------------------------ */
+
+const KIMI_ENDPOINT = "https://api.kimi.com/coding/v1/chat/completions";
+const KIMI_MODEL = "kimi-for-coding";
+
+function kimiKey(): string | null {
+  const key = process.env.KIMI_SELENE_API_KEY;
+  return key && key.length > 10 ? key : null;
+}
+
+/**
+ * The model sees a compact, pre-aggregated snapshot — never raw tables, and
+ * nothing the operator couldn't read themselves. Emails, notes bodies and
+ * payment references stay out of the prompt.
+ */
+function buildSnapshot(core: Awaited<ReturnType<typeof live.fetchCoreData>>, now: string): string {
+  const today = dayOf(now);
+  const active = (s: string) => !["inquiry", "cancelled", "completed"].includes(s);
+  const arrivals = core.bookings.filter((b) => dayOf(b.check_in) === today && active(b.status)).length;
+  const departures = core.bookings.filter((b) => dayOf(b.check_out) === today && active(b.status)).length;
+  const openRequests = core.bookings.filter((b) => b.status === "requested");
+  const newApplications = core.applications.filter((a) => a.status === "submitted").length;
+  const paid = live.paidByBooking(core.payments);
+  const outstandingRows = core.bookings
+    .filter((b) => active(b.status))
+    .map((b) => ({ b, owed: Math.max(0, Math.round((b.total_price ?? 0) * 100) - (paid.get(b.id) ?? 0)) }))
+    .filter((r) => r.owed > 0);
+  const outstandingTotal = outstandingRows.reduce((n, r) => n + r.owed, 0);
+  const openFollowUps = core.followUps.filter((f) => f.status === "open");
+  const draftEvents = core.events.filter((e) => e.status === "draft");
+  const upcoming = core.events
+    .filter((e) => e.status === "published" && e.start_at >= now)
+    .sort((a, b) => (a.start_at < b.start_at ? -1 : 1))
+    .slice(0, 8);
+  const villas = live.villaMap(core.villas);
+  const profiles = new Map(core.profiles.map((p) => [p.user_id, p]));
+  const userName = (id: string | null) => {
+    if (!id) return null;
+    const user = core.users.find((u) => u.id === id);
+    if (!user) return null;
+    const profile = profiles.get(id);
+    const full = profile ? `${profile.first_name} ${profile.last_name}`.trim() : "";
+    return full || user.email.split("@")[0];
+  };
+
+  const lines: string[] = [
+    `Today: ${today}. Arrivals ${arrivals}, departures ${departures}.`,
+    `Open access requests (${openRequests.length}): ${openRequests
+      .slice(0, 8)
+      .map((b) => `${userName(b.user_id) ?? b.lead_id} · ${villas.get(b.villa_id)?.name ?? "?"} · ${b.check_in}→${b.check_out} · ${b.guests} guests`)
+      .join(" | ") || "none"}`,
+    `New applications: ${newApplications}.`,
+    `Outstanding: €${Math.round(outstandingTotal / 100)} across ${outstandingRows.length} stays.`,
+    `Open follow-ups (${openFollowUps.length}): ${openFollowUps.slice(0, 8).map((f) => f.title).join(" | ") || "none"}`,
+    `Draft experiences (${draftEvents.length}): ${draftEvents.map((e) => e.title).join(" | ") || "none"}`,
+    `Upcoming published: ${upcoming.map((e) => `${e.title} · ${dayOf(e.start_at)} · ${villas.get(e.villa_id ?? "")?.name ?? "Network"}`).join(" | ") || "none"}`,
+    `Spaces: ${core.villas.map((v) => `${v.name} (${core.rooms.filter((r) => r.villa_id === v.id).length} areas)`).join(" | ")}`,
+    `People on record: ${core.users.length} users, ${core.leads.length} leads, ${core.staff.length} partners.`,
+  ];
+  return lines.join("\n");
+}
+
+const SYSTEM_PROMPT = `You are Collecta, the operator assistant of a private members' collective.
+You answer from the live snapshot provided — never invent records, amounts or dates.
+Style: short, plain, warm. Lead with the answer. Euros as €X, no cents unless they matter.
+If the snapshot cannot answer, say what you can see instead of guessing.
+You cannot change anything — for requests to publish, complete, approve or pay, tell the operator to ask in those words and you will draft it for their confirmation.`;
+
+async function askKimi(snapshot: string, prompt: string, selectedLine: string | null): Promise<string | null> {
+  const key = kimiKey();
+  if (!key) return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const res = await fetch(KIMI_ENDPOINT, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: KIMI_MODEL,
+        temperature: 1, // the thinking model rejects anything else
+        max_tokens: 900,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: `Live snapshot:\n${snapshot}${selectedLine ? `\n\nSelected item: ${selectedLine}` : ""}\n\nOperator asks: ${prompt}` },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      console.error(`[collecta] kimi ${res.status}`);
+      return null;
+    }
+    const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    const content = json.choices?.[0]?.message?.content?.trim();
+    return content || null;
+  } catch (e) {
+    console.error("[collecta] kimi call failed:", e instanceof Error ? e.message : e);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 const msg = (turn: string, role: "operator" | "collecta", body: string, at: string): CollectaMessage => ({
   id: `${turn}-${role}`,
@@ -140,18 +251,24 @@ export async function answerCollecta(
       };
     }
 
-    // --- Read intents → answers -----------------------------------------
+    // --- Read intents → Kimi first, rules as fallback --------------------
 
-    if (/selected|this item|this one/.test(text) && context.selectedEventId) {
-      const selected = live
-        .buildTimelineEvents(core, now)
-        .find((e) => e.id === context.selectedEventId);
-      if (selected) {
-        const body = [selected.title, selected.detail, selected.status.replace("_", " ")]
-          .filter(Boolean)
-          .join(" — ");
-        return { state: "answer", messages: [operator, msg(turn, "collecta", body, now)] };
-      }
+    const selectedEvent = context.selectedEventId
+      ? live.buildTimelineEvents(core, now).find((e) => e.id === context.selectedEventId)
+      : undefined;
+    const selectedLine = selectedEvent
+      ? [selectedEvent.title, selectedEvent.detail, selectedEvent.status.replace("_", " ")].filter(Boolean).join(" — ")
+      : null;
+
+    const llmAnswer = await askKimi(buildSnapshot(core, now), prompt, selectedLine);
+    if (llmAnswer) {
+      return { state: "answer", messages: [operator, msg(turn, "collecta", llmAnswer, now)] };
+    }
+
+    // --- Read intents → rule answers (no key configured, or call failed) --
+
+    if (/selected|this item|this one/.test(text) && selectedEvent) {
+      return { state: "answer", messages: [operator, msg(turn, "collecta", selectedLine!, now)] };
     }
 
     if (/summary|today|what.*(need|decision)|briefing/.test(text)) {

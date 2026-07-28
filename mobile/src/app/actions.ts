@@ -12,6 +12,7 @@ import { getOperatorPrincipal, requireOperator } from "@/lib/guard";
 import { isGuarded } from "@/lib/page-params";
 import { createLiveProvider } from "@/data/live-provider";
 import { confirmDraft } from "@/data/collecta";
+import { createFromComposer, type ComposerInput, type ComposerOutcome } from "@/data/composer-actions";
 import type {
   CollectaContext,
   CollectaTurn,
@@ -75,6 +76,21 @@ export async function searchLinkTargetsAction(
     return createFixtureProvider().searchLinkTargets(query, kinds);
   }
   return createLiveProvider().searchLinkTargets(query, kinds);
+}
+
+export async function createFromComposerAction(
+  input: ComposerInput,
+): Promise<ComposerOutcome> {
+  if (typeof input?.kind !== "string" || typeof input?.title !== "string") {
+    return { ok: false, message: "Nothing to create." };
+  }
+  if (input.title.length > 200 || (input.note?.length ?? 0) > 400) {
+    return { ok: false, message: "Keep it shorter." };
+  }
+  // Preview mode has no backend to write to — the demo creates nothing.
+  const principal = await getOperatorPrincipal();
+  if (!principal) return { ok: false, message: "Preview mode — nothing is created here." };
+  return createFromComposer(input);
 }
 
 export async function signOutAction(): Promise<void> {

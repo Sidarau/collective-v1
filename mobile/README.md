@@ -78,7 +78,9 @@ the flag is ignored so an edge-state can never mask real data.
 
 Guarded env vars: `MOBILE_AUTH_GUARD`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`,
 `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `RESEND_API_KEY`, `EMAIL_FROM` (names match
-`admin/.env.local`).
+`admin/.env.local`), plus `KIMI_SELENE_API_KEY` for Collecta answers (optional —
+without it, Collecta falls back to rule-based answers and still drafts
+publishes/completions for confirmation).
 
 ### Components
 
