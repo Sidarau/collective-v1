@@ -669,6 +669,22 @@ export interface PaymentRecordRow {
   created_at: string;
 }
 
+/** Email change with verification (migration 011) — see email-change.ts. */
+export interface EmailChangeRequestRow {
+  id: string;
+  user_id: string;
+  old_email: string;
+  new_email: string;
+  token: string;
+  cancel_token: string;
+  status: "pending" | "confirmed" | "cancelled" | "expired";
+  requested_ip: string | null;
+  expires_at: string;
+  created_at: string;
+  confirmed_at: string | null;
+  cancelled_at: string | null;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -698,6 +714,7 @@ export interface Database {
       email_suppressions: Tbl<EmailSuppressionRow>;
       referral_credits: Tbl<ReferralCreditRow>;
       payment_records: Tbl<PaymentRecordRow>;
+      email_change_requests: Tbl<EmailChangeRequestRow>;
       referral_links: Tbl<ReferralLinkRow>;
       screening_windows: Tbl<ScreeningWindowRow>;
       screening_calls: Tbl<ScreeningCallRow>;

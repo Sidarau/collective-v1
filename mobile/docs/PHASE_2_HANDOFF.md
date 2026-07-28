@@ -1,5 +1,15 @@
 # Phase 2 handoff — provider interfaces reserved for backend integration
 
+> **Phase 2 status (feat/mobile-phase2-backend): COMPLETE.** All three "new
+> backend" items are built: the guard (`MOBILE_AUTH_GUARD=enforced`,
+> middleware + per-page `requireOperator()`), avatar sync (`profiles.avatar_url`
+> from the member portal, initials fallback, no uploader), and email change
+> with verification (migration 011, `@core/email-change`, token round trip,
+> old-address cancel, audit row, `token_version` session invalidation). The
+> seam is live: `getProvider()` returns the Supabase provider on guarded
+> deploys, fixtures on the public preview. See `mobile/README.md` §Deployment
+> shapes.
+
 Phase 1 delivered the complete UI template for `mobile.opencollective.app`
 behind one interface. This document is the contract for replacing fixtures with
 real, permission-checked data.

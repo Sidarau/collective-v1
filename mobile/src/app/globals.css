@@ -2492,3 +2492,61 @@ textarea {
     animation: none;
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * Login — Phase 2 (guarded deploys only)
+ * ------------------------------------------------------------------ */
+
+.login-shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(228, 190, 109, 0.08), transparent 60%),
+    var(--color-ground, #060d0b);
+}
+
+.login-card {
+  width: min(360px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+  padding: 36px 28px;
+  border-radius: 24px;
+  border: 1px solid rgba(228, 190, 109, 0.22);
+  background: rgba(255, 255, 255, 0.045);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+
+.login-card__mark {
+  border-radius: 12px;
+}
+
+.login-card__title {
+  margin: 4px 0 0;
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.login-card__subtitle {
+  margin: 0 0 12px;
+  font-size: var(--text-meta, 13px);
+  color: var(--color-ink-dim, rgba(247, 251, 248, 0.55));
+}
+
+.login-form {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+}
+
+.login-form__error {
+  margin: 0;
+  font-size: var(--text-meta, 13px);
+  color: #e8a29a;
+}

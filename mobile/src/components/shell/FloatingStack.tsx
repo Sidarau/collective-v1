@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { Plus } from "lucide-react";
-import { getProvider } from "@/data/provider";
-import { FIXTURE_TODAY } from "@/data/fixtures";
+import { COMPOSER_OPTIONS } from "@/data/composer-options";
 import { ComposerSheet } from "@/components/sheets/ComposerSheet";
 import { CollectaOrb, CollectaSheet } from "@/components/sheets/CollectaSheet";
 import { UndoToast } from "@/components/ui/primitives";
@@ -28,7 +27,7 @@ export function FloatingStack({
   const [toast, setToast] = useState<string | null>(null);
 
   // The add flow defaults to the date currently visible in the timeline.
-  const defaultDate = visibleDate ?? FIXTURE_TODAY;
+  const defaultDate = visibleDate ?? new Date().toISOString().slice(0, 10);
 
   return (
     <>
@@ -58,7 +57,7 @@ export function FloatingStack({
       <ComposerSheet
         open={composerOpen}
         onClose={() => setComposerOpen(false)}
-        options={getProvider().getComposerOptions()}
+        options={COMPOSER_OPTIONS}
         defaultDate={defaultDate}
         onCreated={(_, title) => setToast(`${title} added`)}
       />

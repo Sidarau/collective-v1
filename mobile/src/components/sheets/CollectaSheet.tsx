@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Send, Trash2 } from "lucide-react";
 import type { CollectaContext, CollectaDraft } from "@/data/contracts";
-import { getProvider } from "@/data/provider";
+import { askCollectaAction, confirmDraftAction } from "@/app/actions";
 import { displayTime } from "@/lib/time";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
 import { useUiState } from "@/components/shell/UiStateProvider";
@@ -66,8 +66,8 @@ export function CollectaSheet({
     if (!text.trim()) return;
     setPrompt("");
     setThinking(true);
-    // Phase 2: replace with a server action that re-reads every referenced id.
-    const next = await getProvider().askCollecta(context, text);
+    // Server action: re-reads every referenced id and re-checks the session.
+    const next = await askCollectaAction(context, text);
     setThinking(false);
     appendCollecta(next.messages);
     setDraft(next.draft ?? null);
@@ -208,16 +208,20 @@ export function CollectaSheet({
           open={confirming}
           onClose={() => setConfirming(false)}
           onConfirm={() => {
-            setConfirming(false);
-            appendCollecta([
-              {
-                id: `confirm-${draft.id}`,
-                role: "collecta",
-                body: `${draft.confirmLabel} recorded. An audit entry was created.`,
-                at: new Date().toISOString(),
-              },
-            ]);
-            setDraft(null);
+            // The draft id carries the machine action; the server re-validates,
+            // executes and audits. Preview mode (fixture drafts) just reports.
+            void confirmDraftAction(draft.id).then((result) => {
+              setConfirming(false);
+              appendCollecta([
+                {
+                  id: `confirm-${Date.now()}`,
+                  role: "collecta",
+                  body: result.message || `${draft.confirmLabel} recorded.`,
+                  at: new Date().toISOString(),
+                },
+              ]);
+              setDraft(null);
+            });
           }}
           title={draft.title}
           confirmLabel={draft.confirmLabel}

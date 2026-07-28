@@ -1,4 +1,5 @@
 import { MobileShell, PageTitle } from "@/components/shell/MobileShell";
+import { requireOperator } from "@/lib/guard";
 import { getProvider, parseScenario } from "@/data/provider";
 import type { PageArgs } from "@/lib/page-params";
 import { ResultBoundary } from "@/components/templates/ResultBoundary";
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 /** Every remaining operator module. No module is reachable only from desktop. */
 export default async function MorePage({ searchParams }: PageArgs) {
+  await requireOperator();
   const sp = await searchParams;
   const groups = await getProvider(parseScenario(sp.scenario)).getMoreGroups();
 

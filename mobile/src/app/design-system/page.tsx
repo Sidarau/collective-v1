@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { MobileShell } from "@/components/shell/MobileShell";
-import { getProvider } from "@/data/provider";
+import { createFixtureProvider } from "@/data/fixture-provider";
 import { FIXTURE_NOW } from "@/data/fixtures";
 import type { NumbersOfTheDay, NumbersPeriod } from "@/data/contracts";
 import { GalleryClient } from "./GalleryClient";
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 export default async function DesignSystemPage() {
-  const provider = getProvider();
+  const provider = createFixtureProvider();
 
   const [summary, timeline, nToday, n7, n30, forecast, request, person, space, transaction, experience] =
     await Promise.all([

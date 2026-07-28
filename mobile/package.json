@@ -19,10 +19,15 @@
     "axe:report": "node scripts/axe-report.mjs"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.0",
+    "@supabase/supabase-js": "^2.108.2",
+    "bcrypt": "^6.0.0",
     "lucide-react": "^1.27.0",
     "next": "16.2.9",
+    "next-auth": "^4.24.14",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "resend": "^6.16.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.1",

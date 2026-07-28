@@ -1,4 +1,5 @@
 import { MobileShell } from "@/components/shell/MobileShell";
+import { requireOperator } from "@/lib/guard";
 import { getProvider, parseScenario } from "@/data/provider";
 import type { PageArgs } from "@/lib/page-params";
 import { MetricStrip } from "@/components/intel/Metrics";
@@ -8,6 +9,7 @@ import { ResultBoundary } from "@/components/templates/ResultBoundary";
 export const dynamic = "force-dynamic";
 
 export default async function ReportsPage({ searchParams }: PageArgs) {
+  await requireOperator();
   const sp = await searchParams;
   const reports = await getProvider(parseScenario(sp.scenario)).listReports();
 

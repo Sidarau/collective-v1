@@ -142,6 +142,19 @@ export function buildAuthOptions(): AuthOptions {
           token.name = appUser.name;
           token.role = appUser.role;
           token.leadId = appUser.leadId;
+          token.tokenVersion = (appUser as AppUser & { tokenVersion?: number }).tokenVersion ?? 1;
+        }
+        // Session re-validation: a confirmed email change (or any future
+        // forced sign-out) bumps users.token_version, and every JWT minted
+        // before that dies here instead of living out its 30 days.
+        if (token.id && typeof token.tokenVersion === "number") {
+          const { data: row } = await getSupabaseAdmin()
+            .from("users")
+            .select("token_version")
+            .eq("id", token.id as string)
+            .maybeSingle();
+          const live = (row as { token_version?: number } | null)?.token_version ?? 1;
+          if (live !== token.tokenVersion) return {};
         }
         return token;
       },

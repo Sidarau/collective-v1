@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { requireOperator } from "@/lib/guard";
 import Link from "next/link";
 import { MobileShell } from "@/components/shell/MobileShell";
 import { getProvider, parseScenario } from "@/data/provider";
@@ -13,6 +14,7 @@ import { PrimaryButton, SecondaryButton, StatusText } from "@/components/ui/prim
 export const dynamic = "force-dynamic";
 
 export default async function PersonDetailPage({ params, searchParams }: DetailPageArgs) {
+  await requireOperator();
   const [{ id }, sp] = await Promise.all([params, searchParams]);
   const result = await getProvider(parseScenario(sp.scenario)).getPerson(id);
 
