@@ -148,6 +148,92 @@ export function afterDismiss(state: InstallState, now: number): InstallState {
   };
 }
 
+/* ------------------------------------------------------------------ *
+ * Shareable install links
+ *
+ * The prompt normally waits for the platform and the snooze ladder to agree.
+ * A link is an explicit invitation instead — someone sent this to a member on
+ * purpose — so `invite` overrides the ladder. It never overrides `installed`:
+ * an operator already running the app has nothing to be taught.
+ * ------------------------------------------------------------------ */
+
+export const INSTALL_PARAM = "a2hs";
+export const INVITER_PARAM = "from";
+
+export type InstallIntent = {
+  /** null when the URL says nothing about installing. */
+  mode: "show" | "reset" | "invite" | null;
+  /** Sanitised display name of whoever shared the link. */
+  from: string | null;
+};
+
+const MAX_INVITER = 24;
+
+/**
+ * `from` arrives from a URL anyone can compose, and it is rendered inside the
+ * app's own chrome, so it is held to something that can only read as a name:
+ * starts with a letter, then letters, marks, spaces and the punctuation names
+ * actually contain. No digits, no colons — nothing that lets a crafted link
+ * build a sentence of its own inside the card.
+ */
+const INVITER_SHAPE = /^[\p{L}\p{M}][\p{L}\p{M} '’.\-]*$/u;
+
+export function sanitizeInviter(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const collapsed = raw.replace(/\s+/g, " ").trim();
+  if (!collapsed || collapsed.length > MAX_INVITER) return null;
+  return INVITER_SHAPE.test(collapsed) ? collapsed : null;
+}
+
+export function parseInstallIntent(search: string): InstallIntent {
+  const params = new URLSearchParams(search);
+  const raw = params.get(INSTALL_PARAM);
+  const mode =
+    raw === "show" || raw === "reset" || raw === "invite" ? raw : null;
+  return {
+    mode,
+    // A name without an install mode is not an invitation, just a stray param.
+    from: mode === "invite" ? sanitizeInviter(params.get(INVITER_PARAM)) : null,
+  };
+}
+
+/**
+ * Builds a link that opens the app and raises the prompt. `path` may be any
+ * route, so an invitation can point at the thing being discussed and still
+ * teach the gesture.
+ */
+export function buildInstallLink({
+  origin,
+  path = "/",
+  from,
+}: {
+  origin: string;
+  path?: string;
+  from?: string | null;
+}): string {
+  const url = new URL(path, origin);
+  url.searchParams.set(INSTALL_PARAM, "invite");
+  const inviter = sanitizeInviter(from);
+  if (inviter) url.searchParams.set(INVITER_PARAM, inviter);
+  return url.toString();
+}
+
+/**
+ * The same URL with every install param removed.
+ *
+ * Called once the intent has been read. Three reasons: a refresh should not
+ * re-fire the prompt, a member forwarding the link should not pass on someone
+ * else's name, and on iOS below 16.4 the home-screen bookmark stores the URL
+ * that was open — which would relaunch the installed app straight into an
+ * invitation to install it.
+ */
+export function urlWithoutInstallParams(href: string): string {
+  const url = new URL(href);
+  url.searchParams.delete(INSTALL_PARAM);
+  url.searchParams.delete(INVITER_PARAM);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
 export function parseInstallState(raw: string | null): InstallState {
   if (!raw) return EMPTY_INSTALL_STATE;
   try {

@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY_INSTALL_STATE,
   afterDismiss,
+  buildInstallLink,
   detectPlatform,
   isRetired,
+  parseInstallIntent,
   parseInstallState,
+  sanitizeInviter,
   shouldPrompt,
+  urlWithoutInstallParams,
   type InstallState,
   type PlatformReading,
 } from "@/lib/install";
@@ -128,6 +132,103 @@ describe("prompt policy", () => {
 /* ------------------------------------------------------------------ *
  * Stored state
  * ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ *
+ * Shareable links
+ * ------------------------------------------------------------------ */
+
+describe("sanitizeInviter", () => {
+  it("accepts the shapes real names come in", () => {
+    expect(sanitizeInviter("Don")).toBe("Don");
+    expect(sanitizeInviter("Ana Martins")).toBe("Ana Martins");
+    expect(sanitizeInviter("Renée O'Brien-Smith")).toBe("Renée O'Brien-Smith");
+    expect(sanitizeInviter("  Don   Vitale ")).toBe("Don Vitale");
+  });
+
+  it("refuses anything that could compose its own sentence", () => {
+    // The value lands inside the app's chrome, so a crafted link must not be
+    // able to write an instruction there.
+    expect(sanitizeInviter("Security: enter your password")).toBeNull();
+    expect(sanitizeInviter("Verify at evil.example/login")).toBeNull();
+    expect(sanitizeInviter("<script>alert(1)</script>")).toBeNull();
+    expect(sanitizeInviter("Call 555-0100 now")).toBeNull();
+    expect(sanitizeInviter("'; DROP TABLE")).toBeNull();
+  });
+
+  it("refuses empty and overlong values", () => {
+    expect(sanitizeInviter(null)).toBeNull();
+    expect(sanitizeInviter("   ")).toBeNull();
+    expect(sanitizeInviter("A".repeat(25))).toBeNull();
+    expect(sanitizeInviter("A".repeat(24))).toBe("A".repeat(24));
+  });
+});
+
+describe("parseInstallIntent", () => {
+  it("reads the three modes and ignores anything else", () => {
+    expect(parseInstallIntent("?a2hs=invite").mode).toBe("invite");
+    expect(parseInstallIntent("?a2hs=show").mode).toBe("show");
+    expect(parseInstallIntent("?a2hs=reset").mode).toBe("reset");
+    expect(parseInstallIntent("?a2hs=yes").mode).toBeNull();
+    expect(parseInstallIntent("").mode).toBeNull();
+  });
+
+  it("carries the inviter only on a real invitation", () => {
+    expect(parseInstallIntent("?a2hs=invite&from=Don").from).toBe("Don");
+    // A name with no install mode is a stray param, not an invitation.
+    expect(parseInstallIntent("?from=Don").from).toBeNull();
+    expect(parseInstallIntent("?a2hs=show&from=Don").from).toBeNull();
+    expect(parseInstallIntent("?a2hs=invite&from=Call%20555-0100").from).toBeNull();
+  });
+});
+
+describe("buildInstallLink", () => {
+  const origin = "https://mobile.opencollective.app";
+
+  it("builds a home-page invitation", () => {
+    expect(buildInstallLink({ origin })).toBe(`${origin}/?a2hs=invite`);
+  });
+
+  it("attributes the sender and encodes the name", () => {
+    expect(buildInstallLink({ origin, from: "Ana Martins" })).toBe(
+      `${origin}/?a2hs=invite&from=Ana+Martins`,
+    );
+  });
+
+  it("can point at any route, so the invitation lands on the subject", () => {
+    expect(buildInstallLink({ origin, path: "/requests/req-301", from: "Don" })).toBe(
+      `${origin}/requests/req-301?a2hs=invite&from=Don`,
+    );
+  });
+
+  it("drops a name that would not survive sanitising", () => {
+    expect(buildInstallLink({ origin, from: "Security: reset now" })).toBe(
+      `${origin}/?a2hs=invite`,
+    );
+  });
+
+  it("round-trips through the parser", () => {
+    const link = buildInstallLink({ origin, from: "Don" });
+    const intent = parseInstallIntent(new URL(link).search);
+    expect(intent).toEqual({ mode: "invite", from: "Don" });
+  });
+});
+
+describe("urlWithoutInstallParams", () => {
+  it("strips the install params and keeps everything else", () => {
+    expect(
+      urlWithoutInstallParams("https://x.app/requests?a2hs=invite&from=Don&filter=open"),
+    ).toBe("/requests?filter=open");
+  });
+
+  it("leaves a clean path clean", () => {
+    expect(urlWithoutInstallParams("https://x.app/?a2hs=invite&from=Don")).toBe("/");
+    expect(urlWithoutInstallParams("https://x.app/more")).toBe("/more");
+  });
+
+  it("preserves the hash", () => {
+    expect(urlWithoutInstallParams("https://x.app/more?a2hs=show#section")).toBe("/more#section");
+  });
+});
 
 describe("parseInstallState", () => {
   it("treats missing and corrupt values as a first visit", () => {

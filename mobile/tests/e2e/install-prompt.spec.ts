@@ -99,6 +99,53 @@ test.describe("add to home screen", () => {
 });
 
 /**
+ * Shared links. These are the ones an operator sends to a member, so the URL
+ * has to survive a real browser: the params fire the prompt once and then
+ * leave nothing behind.
+ */
+test.describe("add to home screen — shared link", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("an invitation names the sender and cleans up after itself", async ({
+    page,
+  }, testInfo) => {
+    await page.goto("/?a2hs=invite&from=Don");
+    const card = page.getByTestId("add-to-home-screen");
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Don shared this with you")).toBeVisible();
+
+    // The address bar is clean, so a refresh does not re-fire and a member
+    // forwarding the link does not pass on someone else's name.
+    expect(new URL(page.url()).search).toBe("");
+
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: `${DIR}/${testInfo.project.name}__add-to-home-screen-invite.png` });
+  });
+
+  test("an invitation reaches a member who already dismissed the prompt", async ({ page }) => {
+    await page.goto("/");
+    const card = page.getByTestId("add-to-home-screen");
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Not now" }).click();
+
+    // Snoozed for a week — an ordinary visit stays quiet.
+    await page.reload();
+    await page.waitForTimeout(5_000);
+    await expect(card).toBeHidden();
+
+    await page.goto("/?a2hs=invite");
+    await expect(card).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("carries the prompt onto a deep link", async ({ page }) => {
+    await page.goto("/requests/req-301?a2hs=invite&from=Ana%20Martins");
+    await expect(page.getByTestId("add-to-home-screen")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Ana Martins shared this with you")).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe("/requests/req-301");
+  });
+});
+
+/**
  * The in-app-browser variant is a different layout, not different copy: no
  * arrow, because nothing in Instagram's toolbar performs the gesture.
  */

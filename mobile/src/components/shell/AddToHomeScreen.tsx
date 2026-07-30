@@ -14,8 +14,10 @@ import {
   INSTALL_STORAGE_KEY,
   afterDismiss,
   detectPlatform,
+  parseInstallIntent,
   parseInstallState,
   shouldPrompt,
+  urlWithoutInstallParams,
   type InstallPlatform,
   type InstallState,
 } from "@/lib/install";
@@ -27,8 +29,11 @@ import {
  */
 const APPEAR_AFTER_MS = 3_500;
 
-/** `?a2hs=show` forces it open for demos; `?a2hs=reset` clears the snooze. */
-const OVERRIDE_PARAM = "a2hs";
+/**
+ * A link opens the prompt sooner than an unprompted visit does: the member
+ * followed it on purpose, so the wait only delays what they came for.
+ */
+const APPEAR_AFTER_INVITE_MS = 1_200;
 
 function readStandalone(): boolean {
   const nav = window.navigator as Navigator & { standalone?: boolean };
@@ -69,6 +74,8 @@ export function AddToHomeScreen() {
    * open, and the only write happens inside the timer callback below.
    */
   const [prompt, setPrompt] = useState<InstallPlatform | null>(null);
+  /** Who shared the link, when the operator arrived through one. */
+  const [inviter, setInviter] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -83,14 +90,25 @@ export function AddToHomeScreen() {
 
   /* Decide once per mount, then wait out the delay. */
   useEffect(() => {
-    const override = new URLSearchParams(window.location.search).get(OVERRIDE_PARAM);
+    const intent = parseInstallIntent(window.location.search);
 
-    if (override === "reset") {
+    if (intent.mode === "reset") {
       try {
         window.localStorage.removeItem(INSTALL_STORAGE_KEY);
       } catch {
         /* nothing to clear */
       }
+    }
+
+    // Drop the params before anything else can act on them: the standalone
+    // branch below returns early, and an installed app must not keep an
+    // invitation in the URL it relaunches from.
+    if (intent.mode) {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        urlWithoutInstallParams(window.location.href),
+      );
     }
 
     const standalone = readStandalone();
@@ -109,8 +127,14 @@ export function AddToHomeScreen() {
       standalone,
     });
 
-    const forced = override === "show";
-    if (!forced && !shouldPrompt(detected, readState(), Date.now())) return;
+    // An invitation was sent to this member deliberately, so it outranks the
+    // snooze ladder — but not `installed`, which the standalone branch above
+    // has already returned on.
+    const invited = intent.mode === "invite";
+    const forced = intent.mode === "show";
+    const bypass = invited || forced;
+    if (!bypass && !shouldPrompt(detected, readState(), Date.now())) return;
+    if (invited && readState().installed) return;
 
     // `?a2hs=show` on a desktop browser still gets the Safari copy, so the
     // prompt can be reviewed and screenshotted away from a phone.
@@ -124,6 +148,7 @@ export function AddToHomeScreen() {
       // A prompt that lands on top of an open sheet interrupts real work. The
       // next route change re-arms this, so skipping costs nothing.
       if (focusDepthRef.current > 0) return;
+      setInviter(intent.from);
       setPrompt(target);
     };
 
@@ -145,7 +170,7 @@ export function AddToHomeScreen() {
         document.addEventListener("visibilitychange", onVisible);
         stopWaiting = () => document.removeEventListener("visibilitychange", onVisible);
       },
-      forced ? 400 : APPEAR_AFTER_MS,
+      forced ? 400 : invited ? APPEAR_AFTER_INVITE_MS : APPEAR_AFTER_MS,
     );
 
     return () => {
@@ -244,7 +269,15 @@ export function AddToHomeScreen() {
               {webview ? "Open in Safari" : "Add to Home Screen"}
             </span>
             <span className="a2hs__sub">
-              {webview ? "This browser cannot install apps" : "Full screen, no address bar"}
+              {/* The inviter's name is the one piece of this card that came
+                  from a URL. It is length-capped and shape-checked in
+                  `sanitizeInviter`, and only ever fills this slot — it can
+                  never become the title or an instruction. */}
+              {inviter
+                ? `${inviter} shared this with you`
+                : webview
+                  ? "This browser cannot install apps"
+                  : "Full screen, no address bar"}
             </span>
           </span>
           {/* "Close", not "Not now": the footer button already carries that

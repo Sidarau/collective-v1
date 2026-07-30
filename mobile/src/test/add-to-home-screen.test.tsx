@@ -141,6 +141,64 @@ describe("AddToHomeScreen", () => {
     expect(screen.getByTestId("add-to-home-screen")).toHaveAccessibleName("Add to Home Screen");
   });
 
+  /* --- shared links ------------------------------------------------ */
+
+  it("an invitation outranks a snooze the operator is still inside", async () => {
+    window.localStorage.setItem(
+      INSTALL_STORAGE_KEY,
+      JSON.stringify({ dismissals: 2, snoozedUntil: Date.now() + 29 * 86_400_000, installed: false }),
+    );
+
+    // Without the link, the ladder holds.
+    wrap();
+    await settle();
+    expect(screen.queryByTestId("add-to-home-screen")).toBeNull();
+
+    window.history.replaceState({}, "", "/?a2hs=invite");
+    wrap();
+    await settle();
+    expect(screen.getByTestId("add-to-home-screen")).toBeInTheDocument();
+  });
+
+  it("an invitation still does not reach an installed app", async () => {
+    window.localStorage.setItem(
+      INSTALL_STORAGE_KEY,
+      JSON.stringify({ dismissals: 0, snoozedUntil: null, installed: true }),
+    );
+    window.history.replaceState({}, "", "/?a2hs=invite&from=Don");
+    wrap();
+    await settle();
+    expect(screen.queryByTestId("add-to-home-screen")).toBeNull();
+  });
+
+  it("names the sender when the link carries one", async () => {
+    window.history.replaceState({}, "", "/?a2hs=invite&from=Ana%20Martins");
+    wrap();
+    await settle();
+    expect(screen.getByText("Ana Martins shared this with you")).toBeInTheDocument();
+  });
+
+  it("ignores a sender name that could compose its own instruction", async () => {
+    window.history.replaceState({}, "", "/?a2hs=invite&from=Security%3A%20enter%20your%20password");
+    wrap();
+    await settle();
+
+    expect(screen.getByTestId("add-to-home-screen")).toBeInTheDocument();
+    expect(screen.queryByText(/enter your password/i)).toBeNull();
+    expect(screen.getByText("Full screen, no address bar")).toBeInTheDocument();
+  });
+
+  it("strips the install params so a refresh and a reshare stay clean", async () => {
+    window.history.replaceState({}, "", "/requests?a2hs=invite&from=Don&filter=open");
+    wrap();
+    await settle();
+
+    // Also what iOS below 16.4 saves as the home-screen target: an invitation
+    // left in the URL would relaunch the installed app into this prompt.
+    expect(window.location.search).toBe("?filter=open");
+    expect(screen.getByText("Don shared this with you")).toBeInTheDocument();
+  });
+
   it("?a2hs=reset clears a recorded snooze", async () => {
     window.localStorage.setItem(
       INSTALL_STORAGE_KEY,
