@@ -7,6 +7,7 @@ import { AmbientScene } from "./AmbientScene";
 import { BrandHeader } from "./BrandHeader";
 import { BottomRail } from "./BottomRail";
 import { FloatingStack } from "./FloatingStack";
+import { AddToHomeScreen } from "./AddToHomeScreen";
 
 /**
  * Every authenticated mobile route. Composes the three permitted blur layers
@@ -46,6 +47,9 @@ export function MobileShell({
         <FloatingStack showAdd={showAdd} filter={filter} />
         <BottomRail />
       </div>
+      {/* Inside the shell, so it can only reach an operator who is already
+          signed in — nobody is asked to install a login screen. */}
+      <AddToHomeScreen />
     </UiStateProvider>
   );
 }

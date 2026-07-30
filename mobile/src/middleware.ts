@@ -46,5 +46,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|brand/|manifest.webmanifest).*)"],
+  // `icons/` is public for the same reason `manifest.webmanifest` is: iOS
+  // fetches the home-screen icon without the session, and a redirect to /login
+  // would be saved to the home screen as an HTML page instead of the mark.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|brand/|icons/|manifest.webmanifest).*)"],
 };
