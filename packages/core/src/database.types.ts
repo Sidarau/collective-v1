@@ -128,6 +128,8 @@ export interface UserRow {
   phone: string | null;
   phone_verified: boolean;
   labels: string[];
+  /** Bumped by a confirmed email change to invalidate every live session. */
+  token_version: number;
   created_at: string;
   updated_at: string;
 }
