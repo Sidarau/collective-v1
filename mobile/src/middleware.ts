@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { sessionCookieName } from "@core/auth-cookies";
 
 /**
  * Edge guard for the mobile operator surface.
@@ -9,16 +10,13 @@ import { getToken } from "next-auth/jwt";
  * itself bounces authenticated operators back to Today. Preview deploys
  * (guard unset) pass everything through so fixtures stay reviewable.
  *
- * Cookie name/options mirror `@core/auth-cookies` — duplicated here because
- * middleware runs in the edge bundle and vendor-core is synced at build time.
+ * The cookie name comes from `@core/auth-cookies`, the same module the handler
+ * that writes the cookie uses — see ZEUG-414, and the member app's middleware,
+ * which does the same. This file previously re-derived the name from
+ * `process.env` instead of importing it, which is precisely the drift that
+ * module exists to prevent.
  */
 const PUBLIC_PATHS = [/^\/login(?:\/|$)/, /^\/api\/auth(?:\/|$)/];
-
-const useSecureCookies =
-  process.env.NEXTAUTH_URL?.startsWith("https://") ?? Boolean(process.env.VERCEL);
-const sessionCookieName = useSecureCookies
-  ? "__Secure-next-auth.session-token"
-  : "next-auth.session-token";
 
 const OPERATOR_ROLES = new Set(["admin", "operator"]);
 
@@ -45,6 +43,8 @@ export async function middleware(request: NextRequest) {
   // `/?a2hs=invite&from=…`, and a member who is not signed in yet is exactly
   // who those links are sent to — dropping the search here landed them on a
   // bare Today after login, with nothing to show for having followed the link.
+  // Set before the redirect is built: NextResponse.redirect() snapshots the
+  // URL, so mutating `login` afterwards is silently lost.
   login.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
   return NextResponse.redirect(login);
 }
