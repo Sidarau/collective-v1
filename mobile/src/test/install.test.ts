@@ -213,6 +213,30 @@ describe("buildInstallLink", () => {
   });
 });
 
+/**
+ * The `next` round trip, which a shared link depends on: a member who is not
+ * signed in is bounced to /login and has to come back to the same URL, query
+ * intact, or the invitation is lost. Mirrors the guard in login/page.tsx.
+ */
+describe("post-login return path", () => {
+  const safeNext = (raw: string | undefined) =>
+    raw && /^\/(?![/\\])/.test(raw) ? raw : "/";
+
+  it("returns to the invitation, params and all", () => {
+    expect(safeNext("/?a2hs=invite&from=Don")).toBe("/?a2hs=invite&from=Don");
+    expect(safeNext("/requests/req-301?a2hs=invite")).toBe("/requests/req-301?a2hs=invite");
+  });
+
+  it("refuses to leave the origin", () => {
+    // Both are protocol-relative: startsWith("/") alone would have let these
+    // through into window.location.assign.
+    expect(safeNext("//evil.example")).toBe("/");
+    expect(safeNext("/\\evil.example")).toBe("/");
+    expect(safeNext("https://evil.example")).toBe("/");
+    expect(safeNext(undefined)).toBe("/");
+  });
+});
+
 describe("urlWithoutInstallParams", () => {
   it("strips the install params and keeps everything else", () => {
     expect(

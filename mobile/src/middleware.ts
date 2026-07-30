@@ -41,7 +41,11 @@ export async function middleware(request: NextRequest) {
   const login = request.nextUrl.clone();
   login.pathname = "/login";
   login.search = "";
-  login.searchParams.set("next", pathname);
+  // Carry the query, not just the path. A shared install link is
+  // `/?a2hs=invite&from=…`, and a member who is not signed in yet is exactly
+  // who those links are sent to — dropping the search here landed them on a
+  // bare Today after login, with nothing to show for having followed the link.
+  login.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
   return NextResponse.redirect(login);
 }
 
