@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireOperator } from "@/lib/guard";
+import Link from "next/link";
 import { MobileShell } from "@/components/shell/MobileShell";
 import { getProvider, parseScenario } from "@/data/provider";
 import type { DetailPageArgs } from "@/lib/page-params";
@@ -9,7 +10,8 @@ import {
   RecordDetailScreen,
   Section,
 } from "@/components/templates/templates";
-import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
+import { SecondaryButton } from "@/components/ui/primitives";
+import { AddFollowUpButton } from "@/components/sheets/RecordActionButtons";
 
 export const dynamic = "force-dynamic";
 
@@ -46,15 +48,17 @@ export default async function VendorDetailPage({ params, searchParams }: DetailP
           { icon: "person", label: "Type", value: vendor.category },
           { icon: "info", label: "State", value: vendor.state.label },
         ]}
-        primaryAction={
-          <PrimaryButton block data-testid="primary-action">
-            Assign work
-          </PrimaryButton>
-        }
+        primaryAction={<AddFollowUpButton refId={vendor.id} defaultTitle={`Work for ${vendor.name}`} label="Assign work" />}
         secondaryActions={
           <>
-            <SecondaryButton style={{ flex: 1 }}>Message</SecondaryButton>
-            <SecondaryButton style={{ flex: 1 }}>View invoices</SecondaryButton>
+            {vendor.contactLabel?.includes("@") ? (
+              <a href={`mailto:${vendor.contactLabel}`} style={{ flex: 1, display: "flex" }}>
+                <SecondaryButton style={{ flex: 1 }}>Message</SecondaryButton>
+              </a>
+            ) : null}
+            <Link href="/dues" style={{ flex: 1, display: "flex" }}>
+              <SecondaryButton style={{ flex: 1 }}>View invoices</SecondaryButton>
+            </Link>
           </>
         }
       >

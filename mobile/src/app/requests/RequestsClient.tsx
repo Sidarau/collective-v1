@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import type { AccessRequest, Result } from "@/data/contracts";
 import { formatMoney } from "@/lib/money";
@@ -10,6 +11,11 @@ import { ResultBoundary } from "@/components/templates/ResultBoundary";
 import { StatusText, PrimaryButton, SecondaryButton, Banner } from "@/components/ui/primitives";
 import { DetailSheet } from "@/components/sheets/DetailSheet";
 import { ConfirmSheet } from "@/components/sheets/ConfirmSheet";
+import {
+  completeFollowUpAction,
+  decideAccessRequestAction,
+  decideApplicationAction,
+} from "@/app/actions";
 
 type FilterKey = "all" | "applications" | "access" | "follow";
 
@@ -26,10 +32,17 @@ const KIND_LABEL: Record<AccessRequest["kind"], string> = {
   follow_up: "Follow-up",
 };
 
+type DecisionKind = "approve" | "decline" | "done";
+
+/** Prefixed list ids → the real row id the server re-verifies. */
+const rawId = (req: AccessRequest) => req.id.replace(/^req-(bk|app|fu)-/, "");
+
 export function RequestsClient({ requests }: { requests: Result<AccessRequest[]> }) {
+  const router = useRouter();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [preview, setPreview] = useState<AccessRequest | null>(null);
-  const [decision, setDecision] = useState<{ req: AccessRequest; approve: boolean } | null>(null);
+  const [decision, setDecision] = useState<{ req: AccessRequest; kind: DecisionKind } | null>(null);
+  const [busy, setBusy] = useState(false);
   const [resolved, setResolved] = useState<string | null>(null);
 
   const rows =
@@ -48,6 +61,39 @@ export function RequestsClient({ requests }: { requests: Result<AccessRequest[]>
   const actionable = rows.filter((r) => r.state.tone !== "neutral").length;
   // Exactly one luminous selection per viewport.
   const focusedId = rows.find((r) => r.state.tone === "critical")?.id;
+
+  /** Admissions and money always pass through a review sheet. */
+  const runDecision = async () => {
+    if (!decision || busy) return;
+    setBusy(true);
+    const id = rawId(decision.req);
+    const result =
+      decision.req.kind === "application"
+        ? await decideApplicationAction({
+            applicationId: id,
+            decision: decision.kind === "approve" ? "approve" : "deny",
+          })
+        : decision.req.kind === "access_request"
+          ? await decideAccessRequestAction({
+              bookingId: id,
+              decision: decision.kind === "approve" ? "approve" : "decline",
+            })
+          : await completeFollowUpAction({ followUpId: id });
+    setBusy(false);
+    setResolved(result.message);
+    setDecision(null);
+    setPreview(null);
+    if (result.ok) router.refresh();
+  };
+
+  const decisionLabel = (kind: DecisionKind, reqKind: AccessRequest["kind"]) =>
+    kind === "done"
+      ? "Mark done"
+      : kind === "approve"
+        ? "Approve"
+        : reqKind === "application"
+          ? "Deny"
+          : "Decline";
 
   return (
     <>
@@ -147,20 +193,29 @@ export function RequestsClient({ requests }: { requests: Result<AccessRequest[]>
         }
         actions={
           preview ? (
-            <>
-              <SecondaryButton
-                onClick={() => setDecision({ req: preview, approve: false })}
-                data-testid="decline-request"
-              >
-                Decline
-              </SecondaryButton>
+            preview.kind === "follow_up" ? (
               <PrimaryButton
-                onClick={() => setDecision({ req: preview, approve: true })}
+                onClick={() => setDecision({ req: preview, kind: "done" })}
                 data-testid="approve-request"
               >
-                Approve
+                Mark done
               </PrimaryButton>
-            </>
+            ) : (
+              <>
+                <SecondaryButton
+                  onClick={() => setDecision({ req: preview, kind: "decline" })}
+                  data-testid="decline-request"
+                >
+                  {preview.kind === "application" ? "Deny" : "Decline"}
+                </SecondaryButton>
+                <PrimaryButton
+                  onClick={() => setDecision({ req: preview, kind: "approve" })}
+                  data-testid="approve-request"
+                >
+                  Approve
+                </PrimaryButton>
+              </>
+            )
           ) : undefined
         }
       />
@@ -169,21 +224,16 @@ export function RequestsClient({ requests }: { requests: Result<AccessRequest[]>
       <ConfirmSheet
         open={Boolean(decision)}
         onClose={() => setDecision(null)}
-        onConfirm={() => {
-          if (!decision) return;
-          setResolved(
-            `${decision.approve ? "Approved" : "Declined"} ${decision.req.personName}. This is a local fixture change only.`,
-          );
-          setDecision(null);
-          setPreview(null);
-        }}
+        onConfirm={() => void runDecision()}
         title={
           decision
-            ? `${decision.approve ? "Approve" : "Decline"} access request?`
+            ? decision.kind === "done"
+              ? "Mark this follow-up done?"
+              : `${decisionLabel(decision.kind, decision.req.kind)} ${KIND_LABEL[decision.req.kind].toLowerCase()}?`
             : ""
         }
-        confirmLabel={decision?.approve ? "Approve" : "Decline"}
-        destructive={decision ? !decision.approve : false}
+        confirmLabel={decision ? decisionLabel(decision.kind, decision.req.kind) : ""}
+        destructive={decision ? decision.kind === "decline" : false}
         facts={
           decision
             ? [

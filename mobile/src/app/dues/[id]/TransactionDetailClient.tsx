@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Transaction } from "@/data/contracts";
 import { directionLabel, formatMoney } from "@/lib/money";
 import { formatDayShort } from "@/lib/time";
@@ -11,12 +12,41 @@ import {
 } from "@/components/templates/templates";
 import { Banner, PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
 import { ConfirmSheet } from "@/components/sheets/ConfirmSheet";
+import { AddNoteButton, AuditTrailButton } from "@/components/sheets/RecordActionButtons";
+import { settleContributionAction } from "@/app/actions";
+
+type Pending = "received" | "comp";
 
 export function TransactionDetailClient({ transaction }: { transaction: Transaction }) {
-  const [confirming, setConfirming] = useState(false);
+  const router = useRouter();
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
 
-  const settled = transaction.settlement === "confirmed";
+  const outstanding = transaction.settlement === "outstanding";
+  // Outstanding rows carry the booking id; recorded payments carry a payment id.
+  const bookingId = transaction.id.startsWith("tx-due-") ? transaction.id.slice("tx-due-".length) : null;
+
+  const run = async () => {
+    if (!pending || !bookingId || busy) return;
+    setBusy(true);
+    const result = await settleContributionAction({ bookingId, mode: pending });
+    setBusy(false);
+    setDone(result.message);
+    setPending(null);
+    if (result.ok) router.refresh();
+  };
+
+  const facts = [
+    {
+      icon: "euro",
+      label: "Amount",
+      value: formatMoney(transaction.amountMinor, transaction.currency),
+    },
+    { icon: "arrow-left", label: "Direction", value: directionLabel(transaction.direction) },
+    { icon: "calendar-range", label: "Date", value: formatDayShort(transaction.at) },
+    { icon: "info", label: "Settlement", value: transaction.state.label },
+  ];
 
   return (
     <>
@@ -31,27 +61,23 @@ export function TransactionDetailClient({ transaction }: { transaction: Transact
         subtitle={transaction.personName}
         backHref="/dues"
         state={transaction.state}
-        facts={[
-          {
-            icon: "euro",
-            label: "Amount",
-            value: formatMoney(transaction.amountMinor, transaction.currency),
-          },
-          { icon: "arrow-left", label: "Direction", value: directionLabel(transaction.direction) },
-          { icon: "calendar-range", label: "Date", value: formatDayShort(transaction.at) },
-          { icon: "info", label: "Settlement", value: transaction.state.label },
-        ]}
+        facts={facts}
         primaryAction={
-          settled ? undefined : (
-            <PrimaryButton block onClick={() => setConfirming(true)} data-testid="primary-action">
-              {transaction.direction === "incoming" ? "Record as received" : "Approve payment"}
+          outstanding && bookingId ? (
+            <PrimaryButton block onClick={() => setPending("received")} data-testid="primary-action">
+              Record as received
             </PrimaryButton>
-          )
+          ) : undefined
         }
         secondaryActions={
           <>
-            <SecondaryButton style={{ flex: 1 }}>Add note</SecondaryButton>
-            <SecondaryButton style={{ flex: 1 }}>View audit trail</SecondaryButton>
+            {outstanding && bookingId ? (
+              <SecondaryButton style={{ flex: 1 }} onClick={() => setPending("comp")} data-testid="comp-action">
+                Comp
+              </SecondaryButton>
+            ) : null}
+            <AddNoteButton refId={transaction.id} flex />
+            <AuditTrailButton refId={transaction.id} flex />
           </>
         }
       >
@@ -70,18 +96,15 @@ export function TransactionDetailClient({ transaction }: { transaction: Transact
       </RecordDetailScreen>
 
       <ConfirmSheet
-        open={confirming}
-        onClose={() => setConfirming(false)}
-        onConfirm={() => {
-          setDone("Recorded. Fixture change only — nothing was written.");
-          setConfirming(false);
-        }}
+        open={Boolean(pending)}
+        onClose={() => setPending(null)}
+        onConfirm={() => void run()}
         title={
-          transaction.direction === "incoming"
-            ? "Record this contribution as received?"
-            : "Approve this payment?"
+          pending === "comp"
+            ? `Comp ${formatMoney(transaction.amountMinor, transaction.currency)}?`
+            : "Record this contribution as received?"
         }
-        confirmLabel={transaction.direction === "incoming" ? "Record" : "Approve"}
+        confirmLabel={pending === "comp" ? "Comp it" : "Record"}
         facts={[
           {
             icon: "euro",
@@ -90,7 +113,11 @@ export function TransactionDetailClient({ transaction }: { transaction: Transact
           },
           { icon: "person", label: "Party", value: transaction.personName ?? "—" },
           { icon: "calendar-range", label: "Date", value: formatDayShort(transaction.at) },
-          { icon: "arrow-left", label: "Direction", value: directionLabel(transaction.direction) },
+          {
+            icon: "info",
+            label: "Effect",
+            value: pending === "comp" ? "Outstanding → comped, no money moves" : "Marked received",
+          },
         ]}
       />
     </>

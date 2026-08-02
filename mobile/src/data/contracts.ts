@@ -238,6 +238,10 @@ export type Person = {
   summary: string;
   state: RecordState;
   avatarUrl?: string;
+  /** Operator contact channel — powers the Message button (mailto). */
+  email?: string;
+  /** A submitted application awaiting a decision, when one exists. */
+  pendingApplicationId?: string;
   duesLabel?: string;
   duesTone?: RecordState["tone"];
   notes?: string;

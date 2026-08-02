@@ -1,7 +1,7 @@
 import { MobileShell, PageTitle } from "@/components/shell/MobileShell";
 import { requireOperator } from "@/lib/guard";
 import { getProvider, parseScenario } from "@/data/provider";
-import type { PageArgs } from "@/lib/page-params";
+import { isGuarded, type PageArgs } from "@/lib/page-params";
 import { ResultBoundary } from "@/components/templates/ResultBoundary";
 import { NavRow } from "@/components/ui/primitives";
 import { InstallLinkRow } from "@/components/shell/InstallLinkRow";
@@ -54,19 +54,23 @@ export default async function MorePage({ searchParams }: PageArgs) {
         </div>
       </section>
 
-      <section className="group">
-        <h2 className="group__label">Design</h2>
-        <div className="group__panel">
-          <ul className="list">
-            <NavRow
-              href="/design-system"
-              icon="sparkles"
-              label="Design system"
-              detail="Living component gallery — not a production surface"
-            />
-          </ul>
-        </div>
-      </section>
+      {/* The component gallery is a build tool, not a production surface —
+          preview deploys only. */}
+      {!isGuarded() ? (
+        <section className="group">
+          <h2 className="group__label">Design</h2>
+          <div className="group__panel">
+            <ul className="list">
+              <NavRow
+                href="/design-system"
+                icon="sparkles"
+                label="Design system"
+                detail="Living component gallery — not a production surface"
+              />
+            </ul>
+          </div>
+        </section>
+      ) : null}
     </MobileShell>
   );
 }

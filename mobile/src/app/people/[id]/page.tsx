@@ -9,7 +9,8 @@ import {
   RecordDetailScreen,
   Section,
 } from "@/components/templates/templates";
-import { PrimaryButton, SecondaryButton, StatusText } from "@/components/ui/primitives";
+import { StatusText } from "@/components/ui/primitives";
+import { PersonActions } from "./PersonActions";
 
 export const dynamic = "force-dynamic";
 
@@ -46,17 +47,8 @@ export default async function PersonDetailPage({ params, searchParams }: DetailP
             value: String(person.confirmedExperiences),
           },
         ]}
-        primaryAction={
-          <PrimaryButton block data-testid="primary-action">
-            Follow up
-          </PrimaryButton>
-        }
-        secondaryActions={
-          <>
-            <SecondaryButton style={{ flex: 1 }}>Message</SecondaryButton>
-            <SecondaryButton style={{ flex: 1 }}>Add note</SecondaryButton>
-          </>
-        }
+        primaryAction={undefined}
+        secondaryActions={<PersonActions person={person} />}
       >
         <Section title="Standing">
           <ul className="facts">

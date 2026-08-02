@@ -236,7 +236,8 @@ test.describe("sheets and confirmation", () => {
     await expect(confirm).toContainText("Approve access request?");
 
     await confirm.getByTestId("confirm-action").click();
-    await expect(page.getByRole("status").filter({ hasText: "local fixture change" })).toBeVisible();
+    // Preview mode: the real server action answers that nothing is written.
+    await expect(page.getByRole("status").filter({ hasText: "nothing is written" })).toBeVisible();
   });
 
   test("the composer opens with a type chooser and returns focus on close", async ({ page }) => {

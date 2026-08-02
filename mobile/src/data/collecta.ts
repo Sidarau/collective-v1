@@ -3,16 +3,23 @@ import "server-only";
 /**
  * Collecta — the operator assistant behind the orb.
  *
- * The client sends ids only (`CollectaContext`); this module re-fetches every
- * referenced record server-side and never trusts client-supplied content.
+ * The client sends ids and the current route only (`CollectaContext`); this
+ * module re-fetches every referenced record server-side and never trusts
+ * client-supplied content. The route tells Collecta what the operator is
+ * looking at — "it", "this", "that" resolve against that record.
+ *
  * Material changes return as drafts — approval, money, access and publishing
  * always need an explicit confirm, and the confirm writes an audit row.
+ * The rule layer owns material drafts (publish, complete, comp, settle,
+ * approve, decline) — those intents are matched first and never reach the
+ * model. Read intents go to Kimi with a compact pre-aggregated snapshot (no
+ * raw tables; emails/note bodies/payment references stay out). If no key is
+ * configured (preview deploys) or the call fails, the rule answers below are
+ * the fallback — the orb never goes silent.
  *
- * The rule layer owns material drafts (publish, complete) — those intents are
- * matched first and never reach the model. Read intents go to Kimi with a
- * compact snapshot of live records; the model answers, it never mutates.
- * If no API key is configured (preview deploys) or the call fails, the rule
- * answers below are the fallback — the orb never goes silent.
+ * Money: every amount in the schema is ALREADY minor units (cents). Never
+ * multiply by 100 here — the 2026-08-02 "€1.4M instead of €14k" bug was
+ * exactly that.
  */
 
 import { getSupabaseAdmin } from "@core/supabase";
@@ -24,7 +31,12 @@ import type {
   CollectaTurn,
 } from "./contracts";
 import * as live from "./live-data";
-import { dayOf } from "./mappers";
+import { dayOf, formatPeriod, personName, profileName } from "./mappers";
+import {
+  decideAccessRequest,
+  decideApplication,
+  settleContribution,
+} from "./record-actions";
 
 let turnCounter = 0;
 const nextTurnId = () => `live-${Date.now()}-${(turnCounter += 1)}`;
@@ -45,24 +57,157 @@ function kimiKey(): string | null {
   return key && key.length > 10 ? key : null;
 }
 
+const euroOf = (minor: number) => Math.round(minor / 100).toLocaleString("en-GB");
+
+type Core = Awaited<ReturnType<typeof live.fetchCoreData>>;
+
+/** Name for whoever a booking belongs to — profile name, lead name, or email. */
+function bookingPerson(b: Core["bookings"][number], core: Core): string {
+  const joins = live.joinsFor(b, core);
+  if (joins.lead) return personName(joins.lead, null);
+  if (joins.user) {
+    const profile = live.profileMap(core.profiles).get(joins.user.id);
+    return profileName(profile, joins.user.email);
+  }
+  return "Unknown";
+}
+
+/** Outstanding minor units per active booking (schema amounts are already cents). */
+function outstandingRows(core: Core) {
+  const paid = live.paidByBooking(core.payments);
+  const active = (s: string) => !["inquiry", "cancelled", "completed"].includes(s);
+  return core.bookings
+    .filter((b) => active(b.status))
+    .map((b) => ({
+      b,
+      owed: Math.max(0, Math.round(b.total_price ?? 0) - (paid.get(b.id) ?? 0)),
+    }))
+    .filter((r) => r.owed > 0);
+}
+
+/* ------------------------------------------------------------------ *
+ * Page focus — what the operator is looking at, resolved server-side.
+ * ------------------------------------------------------------------ */
+
+type Focus = {
+  /** One human line for the snapshot: "Contribution outstanding — Alex Sidarau · 8–16 Jul · €2,240". */
+  line: string;
+  /** Machine handles the intents below resolve against. */
+  due?: { bookingId: string; person: string; outstandingMinor: number; period: string };
+  accessRequest?: { bookingId: string; person: string; status: string; period: string };
+  application?: { applicationId: string; person: string; status: string };
+};
+
+function resolveFocus(context: CollectaContext, core: Core): Focus | null {
+  const route = context.route ?? "";
+  const villas = live.villaMap(core.villas);
+
+  const dueMatch = /^\/dues\/tx-due-([^/?]+)/.exec(route);
+  if (dueMatch) {
+    const booking = core.bookings.find((b) => b.id === dueMatch[1]);
+    if (!booking) return null;
+    const row = outstandingRows(core).find((r) => r.b.id === booking.id);
+    const person = bookingPerson(booking, core);
+    const period = formatPeriod(booking.check_in, booking.check_out);
+    const owed = row?.owed ?? 0;
+    return {
+      line: owed
+        ? `Contribution outstanding — ${person} · ${period} · €${euroOf(owed)}`
+        : `Contribution settled — ${person} · ${period}`,
+      due: owed ? { bookingId: booking.id, person, outstandingMinor: owed, period } : undefined,
+    };
+  }
+
+  const paymentMatch = /^\/dues\/tx-([^/?]+)/.exec(route);
+  if (paymentMatch) {
+    const payment = core.payments.find((p) => p.id === paymentMatch[1]);
+    if (!payment) return null;
+    const booking = live.bookingMap(core.bookings).get(payment.booking_id);
+    const person = booking ? bookingPerson(booking, core) : null;
+    return {
+      line: `Payment recorded — ${[person, booking ? formatPeriod(booking.check_in, booking.check_out) : null].filter(Boolean).join(" · ")} · €${euroOf(Math.round(payment.amount ?? 0))}`,
+    };
+  }
+
+  const reqBkMatch = /^\/requests\/req-bk-([^/?]+)/.exec(route);
+  if (reqBkMatch) {
+    const booking = core.bookings.find((b) => b.id === reqBkMatch[1]);
+    if (!booking) return null;
+    const person = bookingPerson(booking, core);
+    const period = formatPeriod(booking.check_in, booking.check_out);
+    const villa = villas.get(booking.villa_id)?.name ?? "?";
+    return {
+      line: `Access request — ${person} · ${villa} · ${period} · ${booking.guests} guests · status ${booking.status}`,
+      accessRequest: { bookingId: booking.id, person, status: booking.status, period },
+    };
+  }
+
+  const reqAppMatch = /^\/requests\/req-app-([^/?]+)/.exec(route);
+  if (reqAppMatch) {
+    const app = core.applications.find((a) => a.id === reqAppMatch[1]);
+    if (!app) return null;
+    const name = `${app.first_name ?? ""} ${app.last_name ?? ""}`.trim() || app.email;
+    return {
+      line: `Application — ${name} · status ${app.status}${app.preferred_window ? ` · ${app.preferred_window}` : ""}`,
+      application: { applicationId: app.id, person: name, status: app.status },
+    };
+  }
+
+  const reqFuMatch = /^\/requests\/req-fu-([^/?]+)/.exec(route);
+  if (reqFuMatch) {
+    const fu = core.followUps.find((f) => f.id === reqFuMatch[1]);
+    if (!fu) return null;
+    return { line: `Follow-up — ${fu.title} · status ${fu.status}` };
+  }
+
+  const personMatch = /^\/people\/person-([^/?]+)/.exec(route);
+  if (personMatch) {
+    const user = core.users.find((u) => u.id === personMatch[1]);
+    if (!user) return null;
+    const profile = live.profileMap(core.profiles).get(user.id);
+    const name = profileName(profile, user.email);
+    const app = core.applications.find(
+      (a) => a.email.toLowerCase() === user.email.toLowerCase() && a.status === "submitted",
+    );
+    return {
+      line: `Person — ${name} · role ${user.role}${app ? ` · application ${app.status}` : ""}`,
+      application: app ? { applicationId: app.id, person: name, status: app.status } : undefined,
+    };
+  }
+
+  const spaceMatch = /^\/spaces\/space-([^/?]+)/.exec(route);
+  if (spaceMatch) {
+    const villa = core.villas.find((v) => v.id === spaceMatch[1]);
+    if (!villa) return null;
+    const areas = core.rooms.filter((r) => r.villa_id === villa.id).length;
+    return { line: `Space — ${villa.name} · ${areas} areas` };
+  }
+
+  const expMatch = /^\/experiences\/exp-([^/?]+)/.exec(route);
+  if (expMatch) {
+    const event = core.events.find((e) => e.id === expMatch[1]);
+    if (!event) return null;
+    const villa = event.villa_id ? villas.get(event.villa_id)?.name : "Network";
+    return { line: `Experience — ${event.title} · ${dayOf(event.start_at)} · ${villa} · status ${event.status}` };
+  }
+
+  return null;
+}
+
 /**
  * The model sees a compact, pre-aggregated snapshot — never raw tables, and
  * nothing the operator couldn't read themselves. Emails, notes bodies and
- * payment references stay out of the prompt.
+ * payment references stay out of the prompt. All money is quoted in euros.
  */
-function buildSnapshot(core: Awaited<ReturnType<typeof live.fetchCoreData>>, now: string): string {
+function buildSnapshot(core: Core, now: string, focus: Focus | null): string {
   const today = dayOf(now);
   const active = (s: string) => !["inquiry", "cancelled", "completed"].includes(s);
   const arrivals = core.bookings.filter((b) => dayOf(b.check_in) === today && active(b.status)).length;
   const departures = core.bookings.filter((b) => dayOf(b.check_out) === today && active(b.status)).length;
   const openRequests = core.bookings.filter((b) => b.status === "requested");
   const newApplications = core.applications.filter((a) => a.status === "submitted").length;
-  const paid = live.paidByBooking(core.payments);
-  const outstandingRows = core.bookings
-    .filter((b) => active(b.status))
-    .map((b) => ({ b, owed: Math.max(0, Math.round((b.total_price ?? 0) * 100) - (paid.get(b.id) ?? 0)) }))
-    .filter((r) => r.owed > 0);
-  const outstandingTotal = outstandingRows.reduce((n, r) => n + r.owed, 0);
+  const owed = outstandingRows(core);
+  const outstandingTotal = owed.reduce((n, r) => n + r.owed, 0);
   const openFollowUps = core.followUps.filter((f) => f.status === "open");
   const draftEvents = core.events.filter((e) => e.status === "draft");
   const upcoming = core.events
@@ -82,28 +227,47 @@ function buildSnapshot(core: Awaited<ReturnType<typeof live.fetchCoreData>>, now
 
   const lines: string[] = [
     `Today: ${today}. Arrivals ${arrivals}, departures ${departures}.`,
+    focus ? `Operator is looking at: ${focus.line}` : null,
     `Open access requests (${openRequests.length}): ${openRequests
       .slice(0, 8)
-      .map((b) => `${userName(b.user_id) ?? b.lead_id} · ${villas.get(b.villa_id)?.name ?? "?"} · ${b.check_in}→${b.check_out} · ${b.guests} guests`)
+      .map((b) => `${userName(b.user_id) ?? bookingPerson(b, core)} · ${villas.get(b.villa_id)?.name ?? "?"} · ${b.check_in}→${b.check_out} · ${b.guests} guests`)
       .join(" | ") || "none"}`,
     `New applications: ${newApplications}.`,
-    `Outstanding: €${Math.round(outstandingTotal / 100)} across ${outstandingRows.length} stays.`,
+    `Outstanding: €${euroOf(outstandingTotal)} across ${owed.length} stays.`,
+    ...(owed.length
+      ? owed.slice(0, 6).map(
+          (r) => `  · ${bookingPerson(r.b, core)} · ${villas.get(r.b.villa_id)?.name ?? "?"} · ${r.b.check_in}→${r.b.check_out} · €${euroOf(r.owed)}`,
+        )
+      : []),
     `Open follow-ups (${openFollowUps.length}): ${openFollowUps.slice(0, 8).map((f) => f.title).join(" | ") || "none"}`,
     `Draft experiences (${draftEvents.length}): ${draftEvents.map((e) => e.title).join(" | ") || "none"}`,
     `Upcoming published: ${upcoming.map((e) => `${e.title} · ${dayOf(e.start_at)} · ${villas.get(e.villa_id ?? "")?.name ?? "Network"}`).join(" | ") || "none"}`,
     `Spaces: ${core.villas.map((v) => `${v.name} (${core.rooms.filter((r) => r.villa_id === v.id).length} areas)`).join(" | ")}`,
     `People on record: ${core.users.length} users, ${core.leads.length} leads, ${core.staff.length} partners.`,
-  ];
+  ].filter((l): l is string => Boolean(l));
   return lines.join("\n");
 }
 
 const SYSTEM_PROMPT = `You are Collecta, the operator assistant of a private members' collective.
-You answer from the live snapshot provided — never invent records, amounts or dates.
-Style: short, plain, warm. Lead with the answer. Euros as €X, no cents unless they matter.
-If the snapshot cannot answer, say what you can see instead of guessing.
-You cannot change anything — for requests to publish, complete, approve or pay, tell the operator to ask in those words and you will draft it for their confirmation.`;
 
-async function askKimi(snapshot: string, prompt: string, selectedLine: string | null): Promise<string | null> {
+Ground rules:
+- Answer from the live snapshot provided — never invent records, amounts or dates.
+- Every amount in the snapshot is already in euros. Quote amounts exactly as written; never rescale them (no "million" unless the snapshot literally says million).
+- The line "Operator is looking at:" names the record on the operator's screen. Pronouns like "it", "this", "that", "him", "her" refer to that record — answer about it directly.
+- Style: short, plain, warm. Lead with the answer. Euros as €X, no cents unless they matter.
+- If the snapshot cannot answer, say what you can see instead of guessing.
+
+What you can DO — always as a draft the operator confirms before anything changes:
+- Comp (waive) an outstanding contribution: "comp it", "comp Alex's July stay".
+- Record a contribution as received: "record it as received", "mark it paid".
+- Approve or decline an access request: "approve it", "decline that one".
+- Approve or deny an application: "approve her", "deny this one".
+- Publish a draft experience: "publish the dinner".
+- Mark a follow-up done: "close the follow-up".
+Anything else (sending messages, moving real money, editing records) is a console job — say so in one line.
+When the operator asks for one of these, confirm what you'll draft — the app shows the confirm sheet itself.`;
+
+async function askKimi(snapshot: string, prompt: string): Promise<string | null> {
   const key = kimiKey();
   if (!key) return null;
   const controller = new AbortController();
@@ -119,7 +283,7 @@ async function askKimi(snapshot: string, prompt: string, selectedLine: string | 
         max_tokens: 900,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: `Live snapshot:\n${snapshot}${selectedLine ? `\n\nSelected item: ${selectedLine}` : ""}\n\nOperator asks: ${prompt}` },
+          { role: "user", content: `Live snapshot:\n${snapshot}\n\nOperator asks: ${prompt}` },
         ],
       }),
     });
@@ -151,10 +315,28 @@ const msg = (turn: string, role: "operator" | "collecta", body: string, at: stri
  * and executes. `kind` is the audit verb.
  */
 export interface DraftAction {
-  kind: "publish_event" | "complete_follow_up";
+  kind:
+    | "publish_event"
+    | "complete_follow_up"
+    | "comp_due"
+    | "record_payment"
+    | "decide_request"
+    | "decide_application";
   eventId?: string;
   followUpId?: string;
+  bookingId?: string;
+  applicationId?: string;
+  decision?: "approve" | "decline" | "deny";
 }
+
+const DRAFT_KINDS = new Set<DraftAction["kind"]>([
+  "publish_event",
+  "complete_follow_up",
+  "comp_due",
+  "record_payment",
+  "decide_request",
+  "decide_application",
+]);
 
 export function encodeDraftAction(action: DraftAction): string {
   return Buffer.from(JSON.stringify(action), "utf8").toString("base64url");
@@ -163,7 +345,7 @@ export function encodeDraftAction(action: DraftAction): string {
 export function decodeDraftAction(encoded: string): DraftAction | null {
   try {
     const parsed = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
-    if (parsed && (parsed.kind === "publish_event" || parsed.kind === "complete_follow_up")) {
+    if (parsed && DRAFT_KINDS.has(parsed.kind)) {
       return parsed as DraftAction;
     }
     return null;
@@ -185,8 +367,9 @@ export async function answerCollecta(
   try {
     const core = await live.fetchCoreData();
     const text = prompt.toLowerCase();
+    const focus = resolveFocus(context, core);
 
-    // --- Material intents → drafts -------------------------------------
+    // --- Material intents → drafts (matched first, never reach the model) --
 
     if (/\bpublish\b/.test(text)) {
       const drafts = core.events.filter((e) => e.status === "draft");
@@ -251,52 +434,187 @@ export async function answerCollecta(
       };
     }
 
+    // Comp — waive an outstanding contribution. Focus first, then a named
+    // person, then the only outstanding stay.
+    if (/\bcomp(ed)?\b/.test(text)) {
+      const owed = outstandingRows(core);
+      const byName = owed.find((r) => {
+        const name = bookingPerson(r.b, core).toLowerCase();
+        return name !== "unknown" && name.split(" ").some((part) => part.length > 2 && text.includes(part));
+      });
+      const target = focus?.due
+        ? { bookingId: focus.due.bookingId, person: focus.due.person, owedMinor: focus.due.outstandingMinor, period: focus.due.period }
+        : byName
+          ? { bookingId: byName.b.id, person: bookingPerson(byName.b, core), owedMinor: byName.owed, period: formatPeriod(byName.b.check_in, byName.b.check_out) }
+          : owed.length === 1
+            ? { bookingId: owed[0].b.id, person: bookingPerson(owed[0].b, core), owedMinor: owed[0].owed, period: formatPeriod(owed[0].b.check_in, owed[0].b.check_out) }
+            : null;
+
+      if (target) {
+        const draft: CollectaDraft = {
+          id: encodeDraftAction({ kind: "comp_due", bookingId: target.bookingId }),
+          title: `Comp ${target.person} · €${euroOf(target.owedMinor)}?`,
+          detail: `${target.period} · the stay reads settled, no money moves`,
+          facts: [
+            { label: "Person", value: target.person },
+            { label: "Period", value: target.period },
+            { label: "Amount", value: `€${euroOf(target.owedMinor)}` },
+            { label: "Effect", value: "Outstanding → comped" },
+          ],
+          confirmLabel: "Comp it",
+          requiresConfirmation: true,
+        };
+        return {
+          state: "draft",
+          messages: [operator, msg(turn, "collecta", `I can comp ${target.person}'s €${euroOf(target.owedMinor)} for ${target.period}. Review before I do.`, now)],
+          draft,
+        };
+      }
+      return {
+        state: "answer",
+        messages: [operator, msg(turn, "collecta", owed.length ? "Which stay should I comp? Open it or name the person." : "Nothing is outstanding — nothing to comp.", now)],
+      };
+    }
+
+    // Record as received — money actually arrived.
+    if (/\b(record|received|mark(ed)? (as )?(paid|received)|settle)\b/.test(text)) {
+      const target = focus?.due ?? null;
+      if (target) {
+        const draft: CollectaDraft = {
+          id: encodeDraftAction({ kind: "record_payment", bookingId: target.bookingId }),
+          title: `Record €${euroOf(target.outstandingMinor)} received from ${target.person}?`,
+          detail: target.period,
+          facts: [
+            { label: "Person", value: target.person },
+            { label: "Period", value: target.period },
+            { label: "Amount", value: `€${euroOf(target.outstandingMinor)}` },
+          ],
+          confirmLabel: "Record",
+          requiresConfirmation: true,
+        };
+        return {
+          state: "draft",
+          messages: [operator, msg(turn, "collecta", `I'll record the full €${euroOf(target.outstandingMinor)} as received once you confirm.`, now)],
+          draft,
+        };
+      }
+    }
+
+    // Approve / decline — the focused access request or application first,
+    // then a named open request.
+    const wantsApprove = /\bapprov/.test(text);
+    const wantsDecline = /\b(declin|deny|denie|reject)/.test(text);
+    if (wantsApprove || wantsDecline) {
+      if (focus?.accessRequest && ["requested", "inquiry"].includes(focus.accessRequest.status)) {
+        const decision = wantsApprove ? "approve" : "decline";
+        const r = focus.accessRequest;
+        const draft: CollectaDraft = {
+          id: encodeDraftAction({ kind: "decide_request", bookingId: r.bookingId, decision }),
+          title: `${wantsApprove ? "Approve" : "Decline"} ${r.person} · ${r.period}?`,
+          detail: wantsApprove ? "The area is conflict-checked before it commits" : "The request is released",
+          facts: [
+            { label: "Person", value: r.person },
+            { label: "Period", value: r.period },
+            { label: "Current state", value: r.status },
+          ],
+          confirmLabel: wantsApprove ? "Approve" : "Decline",
+          requiresConfirmation: true,
+        };
+        return {
+          state: "draft",
+          messages: [operator, msg(turn, "collecta", `Review it — nothing changes until you confirm.`, now)],
+          draft,
+        };
+      }
+      if (focus?.application && ["submitted", "screening"].includes(focus.application.status)) {
+        const a = focus.application;
+        const draft: CollectaDraft = {
+          id: encodeDraftAction({ kind: "decide_application", applicationId: a.applicationId, decision: wantsApprove ? "approve" : "deny" }),
+          title: `${wantsApprove ? "Approve" : "Deny"} ${a.person}?`,
+          detail: wantsApprove ? "Member access + their entrance link" : "The application is declined",
+          facts: [
+            { label: "Person", value: a.person },
+            { label: "Current state", value: a.status },
+          ],
+          confirmLabel: wantsApprove ? "Approve" : "Deny",
+          requiresConfirmation: true,
+        };
+        return {
+          state: "draft",
+          messages: [operator, msg(turn, "collecta", `Review it — nothing changes until you confirm.`, now)],
+          draft,
+        };
+      }
+      // A named open access request.
+      const openReqs = core.bookings.filter((b) => b.status === "requested");
+      const named = openReqs.find((b) => {
+        const name = bookingPerson(b, core).toLowerCase();
+        return name !== "unknown" && name.split(" ").some((part) => part.length > 2 && text.includes(part));
+      });
+      if (named) {
+        const person = bookingPerson(named, core);
+        const period = formatPeriod(named.check_in, named.check_out);
+        const draft: CollectaDraft = {
+          id: encodeDraftAction({ kind: "decide_request", bookingId: named.id, decision: wantsApprove ? "approve" : "decline" }),
+          title: `${wantsApprove ? "Approve" : "Decline"} ${person} · ${period}?`,
+          detail: wantsApprove ? "The area is conflict-checked before it commits" : "The request is released",
+          facts: [
+            { label: "Person", value: person },
+            { label: "Period", value: period },
+          ],
+          confirmLabel: wantsApprove ? "Approve" : "Decline",
+          requiresConfirmation: true,
+        };
+        return {
+          state: "draft",
+          messages: [operator, msg(turn, "collecta", `Review it — nothing changes until you confirm.`, now)],
+          draft,
+        };
+      }
+      return {
+        state: "answer",
+        messages: [operator, msg(turn, "collecta", "Which one? Open the request or application, or name the person.", now)],
+      };
+    }
+
     // --- Read intents → Kimi first, rules as fallback --------------------
 
-    const selectedEvent = context.selectedEventId
-      ? live.buildTimelineEvents(core, now).find((e) => e.id === context.selectedEventId)
-      : undefined;
-    const selectedLine = selectedEvent
-      ? [selectedEvent.title, selectedEvent.detail, selectedEvent.status.replace("_", " ")].filter(Boolean).join(" — ")
-      : null;
-
-    const llmAnswer = await askKimi(buildSnapshot(core, now), prompt, selectedLine);
+    const snapshot = buildSnapshot(core, now, focus);
+    const llmAnswer = await askKimi(snapshot, prompt);
     if (llmAnswer) {
       return { state: "answer", messages: [operator, msg(turn, "collecta", llmAnswer, now)] };
     }
 
     // --- Read intents → rule answers (no key configured, or call failed) --
 
-    if (/selected|this item|this one/.test(text) && selectedEvent) {
-      return { state: "answer", messages: [operator, msg(turn, "collecta", selectedLine!, now)] };
+    if (/selected|this item|this one|this page|looking at/.test(text) && focus) {
+      return { state: "answer", messages: [operator, msg(turn, "collecta", focus.line, now)] };
     }
 
     if (/summary|today|what.*(need|decision)|briefing/.test(text)) {
       const today = dayOf(now);
-      const arrivals = core.bookings.filter((b) => dayOf(b.check_in) === today && !["inquiry", "cancelled"].includes(b.status)).length;
-      const departures = core.bookings.filter((b) => dayOf(b.check_out) === today && !["inquiry", "cancelled"].includes(b.status)).length;
+      const active = (s: string) => !["inquiry", "cancelled", "completed"].includes(s);
+      const arrivals = core.bookings.filter((b) => dayOf(b.check_in) === today && active(b.status)).length;
+      const departures = core.bookings.filter((b) => dayOf(b.check_out) === today && active(b.status)).length;
       const openRequests = core.bookings.filter((b) => b.status === "requested").length;
       const newApplications = core.applications.filter((a) => a.status === "submitted").length;
-      const paid = live.paidByBooking(core.payments);
-      const outstanding = core.bookings
-        .filter((b) => !["inquiry", "cancelled"].includes(b.status))
-        .reduce((n, b) => n + Math.max(0, Math.round((b.total_price ?? 0) * 100) - (paid.get(b.id) ?? 0)), 0);
+      const outstanding = outstandingRows(core).reduce((n, r) => n + r.owed, 0);
       const parts = [
         arrivals || departures ? `${arrivals} arrivals, ${departures} departures today` : "No movement today",
         openRequests ? `${openRequests} access ${openRequests === 1 ? "request" : "requests"} waiting` : null,
         newApplications ? `${newApplications} new ${newApplications === 1 ? "application" : "applications"}` : null,
-        outstanding ? `€${Math.round(outstanding / 100).toLocaleString("en-GB")} outstanding` : null,
+        outstanding ? `€${euroOf(outstanding)} outstanding` : null,
       ].filter(Boolean);
       return { state: "answer", messages: [operator, msg(turn, "collecta", parts.join(" · ") + ".", now)] };
     }
 
     if (/outstanding|owed|unpaid|due\b/.test(text)) {
-      const txs = live.buildTransactions(core).filter((t) => t.settlement === "outstanding");
-      if (!txs.length) {
+      const owed = outstandingRows(core);
+      if (!owed.length) {
         return { state: "answer", messages: [operator, msg(turn, "collecta", "Nothing is outstanding.", now)] };
       }
-      const top = txs.slice(0, 3).map((t) => `${t.personName ?? t.detail}: €${Math.round(t.amountMinor / 100).toLocaleString("en-GB")}`).join(" · ");
-      return { state: "answer", messages: [operator, msg(turn, "collecta", `${txs.length} outstanding. ${top}.`, now)] };
+      const top = owed.slice(0, 3).map((r) => `${bookingPerson(r.b, core)}: €${euroOf(r.owed)}`).join(" · ");
+      return { state: "answer", messages: [operator, msg(turn, "collecta", `${owed.length} outstanding. ${top}.`, now)] };
     }
 
     // Fallback — honest about scope.
@@ -304,7 +622,7 @@ export async function answerCollecta(
       state: "answer",
       messages: [
         operator,
-        msg(turn, "collecta", "I can brief you on today, list what is outstanding, and draft publishes or follow-up completions for your confirmation.", now),
+        msg(turn, "collecta", "I can brief you on today, list what is outstanding, and draft comps, approvals, publishes or follow-up completions for your confirmation. Open a record and say \"comp it\" or \"approve it\" — I'll know which one you mean.", now),
       ],
     };
   } catch (e) {
@@ -380,6 +698,30 @@ export async function confirmDraft(
       meta: { surface: "mobile", assistant: "collecta", follow_up_id: followUpRow.id },
     });
     return { ok: true, message: "Marked done. An audit entry was created." };
+  }
+
+  // The decision drafts execute through the shared record-actions layer —
+  // same code the detail-screen buttons call, same audit trail.
+  if (action.kind === "comp_due" && action.bookingId) {
+    return settleContribution({ bookingId: action.bookingId, mode: "comp" });
+  }
+
+  if (action.kind === "record_payment" && action.bookingId) {
+    return settleContribution({ bookingId: action.bookingId, mode: "received" });
+  }
+
+  if (action.kind === "decide_request" && action.bookingId) {
+    return decideAccessRequest({
+      bookingId: action.bookingId,
+      decision: action.decision === "decline" ? "decline" : "approve",
+    });
+  }
+
+  if (action.kind === "decide_application" && action.applicationId) {
+    return decideApplication({
+      applicationId: action.applicationId,
+      decision: action.decision === "deny" ? "deny" : "approve",
+    });
   }
 
   return { ok: false, message: "That action is not supported." };

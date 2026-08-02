@@ -13,6 +13,20 @@ import { isGuarded } from "@/lib/page-params";
 import { createLiveProvider } from "@/data/live-provider";
 import { confirmDraft } from "@/data/collecta";
 import { createFromComposer, type ComposerInput, type ComposerOutcome } from "@/data/composer-actions";
+import {
+  addEntityNote,
+  closeSpaceForDay,
+  completeFollowUp,
+  createEntityFollowUp,
+  decideAccessRequest,
+  decideApplication,
+  getAuditTrail,
+  publishExperience,
+  settleContribution,
+  type AccessDecision,
+  type ActionOutcome,
+  type AuditTrailEntry,
+} from "@/data/record-actions";
 import type {
   CollectaContext,
   CollectaTurn,
@@ -103,4 +117,122 @@ export async function signOutAction(): Promise<void> {
   const { sessionCookieName } = await import("@core/auth-cookies");
   const store = await cookies();
   store.set(sessionCookieName, "", { path: "/", maxAge: 0 });
+}
+
+/* ------------------------------------------------------------------ *
+ * Record decisions — thin validators over data/record-actions.ts.
+ * Every write re-checks the operator session inside the action itself.
+ * ------------------------------------------------------------------ */
+
+export async function decideAccessRequestAction(input: {
+  bookingId: string;
+  decision: AccessDecision;
+  note?: string;
+}): Promise<ActionOutcome> {
+  if (typeof input?.bookingId !== "string" || input.bookingId.length > 64) {
+    return { ok: false, message: "That record reference is not valid." };
+  }
+  if (!["approve", "decline", "confirm"].includes(input?.decision)) {
+    return { ok: false, message: "Unknown decision." };
+  }
+  return decideAccessRequest(input);
+}
+
+export async function decideApplicationAction(input: {
+  applicationId: string;
+  decision: "approve" | "deny";
+}): Promise<ActionOutcome> {
+  if (typeof input?.applicationId !== "string" || input.applicationId.length > 64) {
+    return { ok: false, message: "That record reference is not valid." };
+  }
+  if (!["approve", "deny"].includes(input?.decision)) {
+    return { ok: false, message: "Unknown decision." };
+  }
+  return decideApplication(input);
+}
+
+export async function settleContributionAction(input: {
+  bookingId: string;
+  mode: "received" | "comp";
+  amountMinor?: number;
+  note?: string;
+}): Promise<ActionOutcome> {
+  if (typeof input?.bookingId !== "string" || input.bookingId.length > 64) {
+    return { ok: false, message: "That record reference is not valid." };
+  }
+  if (!["received", "comp"].includes(input?.mode)) {
+    return { ok: false, message: "Unknown settlement mode." };
+  }
+  if (input.amountMinor !== undefined && (!Number.isFinite(input.amountMinor) || input.amountMinor < 0)) {
+    return { ok: false, message: "That amount is not valid." };
+  }
+  return settleContribution(input);
+}
+
+export async function addEntityNoteAction(input: {
+  ref: string;
+  body: string;
+}): Promise<ActionOutcome> {
+  if (typeof input?.ref !== "string" || input.ref.length > 80) {
+    return { ok: false, message: "That record reference is not valid." };
+  }
+  if (typeof input?.body !== "string" || !input.body.trim() || input.body.length > 500) {
+    return { ok: false, message: "Write the note first." };
+  }
+  return addEntityNote(input);
+}
+
+export async function createEntityFollowUpAction(input: {
+  ref: string;
+  title: string;
+  dueAt?: string;
+}): Promise<ActionOutcome> {
+  if (typeof input?.ref !== "string" || input.ref.length > 80) {
+    return { ok: false, message: "That record reference is not valid." };
+  }
+  if (typeof input?.title !== "string" || !input.title.trim() || input.title.length > 140) {
+    return { ok: false, message: "Give it a title first." };
+  }
+  return createEntityFollowUp(input);
+}
+
+export async function closeSpaceAction(input: {
+  villaId: string;
+  date: string;
+  reason: string;
+}): Promise<ActionOutcome> {
+  if (typeof input?.villaId !== "string" || input.villaId.length > 64) {
+    return { ok: false, message: "That record reference is not valid." };
+  }
+  if (typeof input?.date !== "string" || typeof input?.reason !== "string") {
+    return { ok: false, message: "Pick a date and a reason first." };
+  }
+  return closeSpaceForDay(input);
+}
+
+export async function completeFollowUpAction(input: {
+  followUpId: string;
+}): Promise<ActionOutcome> {
+  if (typeof input?.followUpId !== "string" || input.followUpId.length > 64) {
+    return { ok: false, message: "That record reference is not valid." };
+  }
+  return completeFollowUp(input);
+}
+
+export async function publishExperienceAction(input: {
+  eventId: string;
+}): Promise<ActionOutcome> {
+  if (typeof input?.eventId !== "string" || input.eventId.length > 64) {
+    return { ok: false, message: "That record reference is not valid." };
+  }
+  return publishExperience(input);
+}
+
+export async function getAuditTrailAction(input: {
+  ref: string;
+}): Promise<{ ok: boolean; entries: AuditTrailEntry[]; message?: string }> {
+  if (typeof input?.ref !== "string" || input.ref.length > 80) {
+    return { ok: false, entries: [], message: "That record reference is not valid." };
+  }
+  return getAuditTrail(input);
 }

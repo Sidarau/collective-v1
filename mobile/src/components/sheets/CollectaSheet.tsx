@@ -131,8 +131,8 @@ export function CollectaSheet({
 
           {!collectaThread.length && !thinking ? (
             <div className="collecta-msg collecta-msg--assistant" data-testid="collecta-open">
-              Three decisions need you today: one access request, one supplies list and
-              one overdue invoice.
+              Ask about today, requests, dues or the record on your screen — I can draft comps,
+              approvals and publishes for your confirm.
             </div>
           ) : null}
 

@@ -1,15 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Experience } from "@/data/contracts";
 import { formatMoney } from "@/lib/money";
 import { displayTime, formatDayShort } from "@/lib/time";
 import { RecordDetailScreen, Section } from "@/components/templates/templates";
-import { Banner, PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
+import { Banner, PrimaryButton } from "@/components/ui/primitives";
 import { ConfirmSheet } from "@/components/sheets/ConfirmSheet";
+import { AddNoteButton } from "@/components/sheets/RecordActionButtons";
+import { publishExperienceAction } from "@/app/actions";
 
 export function ExperienceDetailClient({ experience }: { experience: Experience }) {
+  const router = useRouter();
   const [publishing, setPublishing] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
 
   const time = displayTime(experience.startAt, experience.displayPrecision);
@@ -20,6 +25,19 @@ export function ExperienceDetailClient({ experience }: { experience: Experience 
   const capacityPct = experience.rsvpCapacity
     ? Math.round((experience.rsvpConfirmed / experience.rsvpCapacity) * 100)
     : 0;
+
+  /** Publishing is a material change and always requires confirmation. */
+  const publish = async () => {
+    if (busy) return;
+    setBusy(true);
+    const result = await publishExperienceAction({
+      eventId: experience.id.replace(/^exp-/, ""),
+    });
+    setBusy(false);
+    setDone(result.message);
+    setPublishing(false);
+    if (result.ok) router.refresh();
+  };
 
   return (
     <>
@@ -49,22 +67,13 @@ export function ExperienceDetailClient({ experience }: { experience: Experience 
           },
         ]}
         primaryAction={
-          experience.published ? (
-            <PrimaryButton block data-testid="primary-action">
-              Manage RSVPs
-            </PrimaryButton>
-          ) : (
+          experience.published ? undefined : (
             <PrimaryButton block onClick={() => setPublishing(true)} data-testid="primary-action">
               Publish
             </PrimaryButton>
           )
         }
-        secondaryActions={
-          <>
-            <SecondaryButton style={{ flex: 1 }}>Edit</SecondaryButton>
-            <SecondaryButton style={{ flex: 1 }}>Add note</SecondaryButton>
-          </>
-        }
+        secondaryActions={<AddNoteButton refId={experience.id} flex />}
       >
         <Section title="About">
           <p style={{ fontSize: "var(--text-body)", color: "var(--color-ink-dim)", margin: 0 }}>
@@ -123,10 +132,7 @@ export function ExperienceDetailClient({ experience }: { experience: Experience 
       <ConfirmSheet
         open={publishing}
         onClose={() => setPublishing(false)}
-        onConfirm={() => {
-          setDone("Published. Fixture change only — nothing was written.");
-          setPublishing(false);
-        }}
+        onConfirm={() => void publish()}
         title={`Publish ${experience.title}?`}
         confirmLabel="Publish"
         facts={[

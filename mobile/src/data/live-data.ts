@@ -477,8 +477,9 @@ export function buildPeople(core: CoreData): Person[] {
   }
 
   return core.users.map((u) => {
-    const relationship: PersonRelationship = relationshipOf(u, applicationsByEmail.get(u.email.toLowerCase()) ?? []);
-    return mapUserToPerson(
+    const applications = applicationsByEmail.get(u.email.toLowerCase()) ?? [];
+    const relationship: PersonRelationship = relationshipOf(u, applications);
+    const person = mapUserToPerson(
       u,
       profiles.get(u.id) ?? null,
       u.lead_id ? leads.get(u.lead_id) ?? null : null,
@@ -486,6 +487,10 @@ export function buildPeople(core: CoreData): Person[] {
       upcomingByUser.get(u.id) ?? 0,
       expByUser.get(u.id) ?? 0,
     );
+    person.email = u.email;
+    const pending = applications.find((a) => a.status === "submitted" || a.status === "screening");
+    if (pending) person.pendingApplicationId = pending.id;
+    return person;
   });
 }
 
