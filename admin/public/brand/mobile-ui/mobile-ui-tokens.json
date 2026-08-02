@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json.schemastore.org/design-tokens.json",
+  "meta": {
+    "name": "Open Collective Mobile Operator",
+    "version": "1.0.0",
+    "host": "mobile.opencollective.app"
+  },
+  "color": {
+    "void": "#060D0B",
+    "field": "#0A1310",
+    "fieldDeep": "#040807",
+    "raised": "#101C17",
+    "line": "#17251F",
+    "lineStrong": "#2A3A32",
+    "ink": "#F2F5F1",
+    "inkDim": "#8A9A93",
+    "inkFaint": "#5A6B64",
+    "champagne": "#E8C87A",
+    "champagneHighlight": "#F6E4B2",
+    "champagneShadow": "#C9A054",
+    "healthy": "#86C9A4",
+    "healthyDeep": "#5FB98A",
+    "critical": "#F0645A",
+    "navy": "#0A2140"
+  },
+  "font": {
+    "ui": "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"Segoe UI Variable\", \"Segoe UI\", Roboto, \"Helvetica Neue\", sans-serif",
+    "display": "\"Playfair Display\", Didot, \"Bodoni 72\", Georgia, serif",
+    "weight": {
+      "regular": 400,
+      "medium": 500,
+      "semibold": 600
+    },
+    "size": {
+      "caption": "11px",
+      "meta": "13px",
+      "body": "15px",
+      "row": "17px",
+      "sheetTitle": "22px",
+      "pageTitle": "28px",
+      "today": "33px"
+    },
+    "lineHeight": {
+      "caption": "14px",
+      "meta": "18px",
+      "body": "21px",
+      "row": "23px",
+      "sheetTitle": "29px",
+      "pageTitle": "32px",
+      "today": "35px"
+    }
+  },
+  "space": {
+    "1": "4px",
+    "2": "8px",
+    "3": "12px",
+    "4": "16px",
+    "5": "20px",
+    "6": "24px",
+    "8": "32px"
+  },
+  "radius": {
+    "control": "12px",
+    "field": "14px",
+    "sheet": "24px",
+    "glass": "26px",
+    "round": "999px"
+  },
+  "size": {
+    "minimumTarget": "44px",
+    "preferredRowMin": "58px",
+    "headerMarkHeight": "30px",
+    "userAvatar": "34px",
+    "addButton": "58px",
+    "collectaOrb": "84px",
+    "bottomRail": "71px",
+    "pageGutter": "20px",
+    "glassInset": "12px"
+  },
+  "motion": {
+    "pressIn": "90ms",
+    "pressOut": "140ms",
+    "filterTravel": "180ms",
+    "sheet": "350ms",
+    "returnPulse": "600ms",
+    "floatingReturnDelay": "420ms",
+    "easeStandard": "cubic-bezier(.22,1,.36,1)",
+    "easeSheet": "cubic-bezier(.32,.72,.24,1)"
+  },
+  "blur": {
+    "veil": "22px",
+    "bottomRail": "26px",
+    "sheet": "30px",
+    "rowEdgeMax": "2px"
+  },
+  "zIndex": {
+    "field": 0,
+    "timeline": 10,
+    "veil": 30,
+    "floating": 35,
+    "bottomRail": 40,
+    "sheet": 50,
+    "toast": 60
+  }
+}
+

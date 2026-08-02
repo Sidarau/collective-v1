@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 853,
+    "height": 1844,
+    "aspectRatio": "9:19.45",
+    "safeFallback": "#060D0B"
+  },
+  "assets": [
+    {
+      "id": "today",
+      "label": "Forest Light",
+      "png": "bg-today-forest-light.png",
+      "webp": "bg-today-forest-light.webp",
+      "routes": ["/", "/today"],
+      "objectPosition": "50% 50%",
+      "intent": "Daily briefing and continuous operational timeline"
+    },
+    {
+      "id": "access",
+      "label": "Glass Halo",
+      "png": "bg-access-glass-halo.png",
+      "webp": "bg-access-glass-halo.webp",
+      "routes": ["/requests", "/gates", "/gates/[id]", "/people", "/people/[id]"],
+      "objectPosition": "50% 50%",
+      "intent": "Requests, access pathways, Gates and People"
+    },
+    {
+      "id": "dues",
+      "label": "Champagne Satin",
+      "png": "bg-dues-champagne-satin.png",
+      "webp": "bg-dues-champagne-satin.webp",
+      "routes": ["/dues", "/expenses", "/contributions", "/budget", "/transactions"],
+      "objectPosition": "50% 50%",
+      "intent": "Money in, money out, balances, approvals and forecasts"
+    },
+    {
+      "id": "spaces",
+      "label": "Marine Refraction",
+      "png": "bg-spaces-marine-refraction.png",
+      "webp": "bg-spaces-marine-refraction.webp",
+      "routes": ["/spaces", "/spaces/[id]", "/experiences", "/experiences/[id]"],
+      "objectPosition": "50% 50%",
+      "intent": "Spaces of every type, including land, venues, boats and berths"
+    }
+  ],
+  "runtime": {
+    "baseScale": 1.08,
+    "scrollTravelPx": 24,
+    "pointerTravelPx": 6,
+    "scrollBlurMaxPx": 4,
+    "focusBlurPx": 12,
+    "routeTransitionMs": 700,
+    "focusTransitionMs": 420,
+    "overlay": "linear-gradient(180deg, rgba(4,8,7,.08) 0%, rgba(4,8,7,.24) 48%, rgba(4,8,7,.48) 100%)"
+  }
+}
