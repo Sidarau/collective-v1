@@ -35,7 +35,16 @@ export async function middleware(request: NextRequest) {
   });
 
   const role = typeof token?.role === "string" ? token.role : null;
-  if (token?.sub && role && OPERATOR_ROLES.has(role)) return NextResponse.next();
+  if (token?.sub && role && OPERATOR_ROLES.has(role)) {
+    // Strip the pass-through sentinel from the URL on the way in, so Today
+    // doesn't keep a stray `loop=1` in the address bar.
+    if (request.nextUrl.searchParams.has("loop")) {
+      const clean = new URL(request.nextUrl.toString());
+      clean.searchParams.delete("loop");
+      return NextResponse.redirect(clean);
+    }
+    return NextResponse.next();
+  }
 
   // Single login lives on the parent domain. Send the visitor there with the
   // absolute URL they wanted (path + query — a shared install link is
@@ -44,8 +53,19 @@ export async function middleware(request: NextRequest) {
   // console signs them in — or passes them straight through when they
   // already hold the shared *.opencollective.app session cookie — and hands
   // them back here.
+  //
+  // Loop breaker: if this request already came back once (admin tagged the
+  // pass-through with `loop=1`) and the cookie is STILL not valid here, the
+  // cookie is one mobile cannot ever accept (host-only, pre-role-claims) —
+  // bouncing again would ping-pong forever. Send them to the admin login
+  // with `force=1`, which renders the form instead of passing through, so
+  // one fresh sign-in replaces the bad cookie.
+  const target = new URL(request.nextUrl.toString());
+  const bounced = target.searchParams.has("loop");
+  target.searchParams.delete("loop");
   const login = new URL("/login", process.env.ADMIN_ORIGIN ?? "https://opencollective.app");
-  login.searchParams.set("next", request.nextUrl.toString());
+  login.searchParams.set("next", target.toString());
+  if (bounced) login.searchParams.set("force", "1");
   return NextResponse.redirect(login);
 }
 
