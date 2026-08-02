@@ -1,10 +1,18 @@
 # Mobile app audit log
 
-Recurring audit of mobile.opencollective.app. Cron job `collective-mobile-audit`
-(daily 08:00) runs `~/.hermes/scripts/collective-mobile-audit.sh` and appends
-here. When a run says CLEAN there is nothing to list.
+Recurring audit of mobile.opencollective.app. When a run says CLEAN there is
+nothing to list.
 
-## 2026-08-02 — initial hardening run (manual, Hermes)
+**Canonical auditor (since 2026-08-02):** cloud cron `collective-mobile-audit`
+(job `89aae9059ba9`) on the Collecta profile at collecta-agent.fly.dev, daily
+08:00 PT. Script `/opt/data/profiles/collecta/scripts/collective-audit.sh`,
+digests `/opt/data/audit/findings/YYYY-MM-DD.md`, repo mirror
+`/opt/data/audit/collective-v1` (read-only deploy key). Loop contract:
+read-only — classify and report, never fix/push/deploy. The original desktop
+cron (`0b04f9214866`) is paused; `~/.hermes/scripts/collective-mobile-audit.sh`
+remains for manual local runs.
+
+## 2026-08-02 — initial hardening run + cloud migration (internal reference state: "stable v1")
 
 **Scanned:** dead buttons, fixture no-ops, money rescale (100×), fake copy,
 design-system leak, Collecta capability/page-awareness, prod data drift.
