@@ -110,6 +110,7 @@ export function TodayClient({
       timer = 0;
       window.removeEventListener("wheel", release);
       window.removeEventListener("touchstart", release);
+      window.removeEventListener("pointerdown", release);
       window.removeEventListener("keydown", release);
     }
     function release() {
@@ -127,6 +128,9 @@ export function TodayClient({
 
     window.addEventListener("wheel", release, { passive: true });
     window.addEventListener("touchstart", release, { passive: true });
+    // Taps count as deliberate input too — without this the anchor fought the
+    // history-peek's own smooth scroll back to the present for ~1.7s.
+    window.addEventListener("pointerdown", release, { passive: true });
     window.addEventListener("keydown", release);
 
     landOnPresent(false);

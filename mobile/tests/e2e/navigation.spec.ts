@@ -138,8 +138,11 @@ test.describe("Today behaviour", () => {
     expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 
     await page.getByTestId("history-peek").click();
-    await page.waitForTimeout(500);
-    expect(await page.evaluate(() => window.scrollY)).toBeLessThan(20);
+    // Smooth-scroll duration grows with history length — poll instead of a
+    // fixed wait, or the test goes stale as fixture dates slide into the past.
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY), { timeout: 3000 })
+      .toBeLessThan(20);
     await expect(historyRows.first()).toBeInViewport();
   });
 
