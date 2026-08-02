@@ -134,6 +134,28 @@ export function buildAuthOptions(): AuthOptions {
         }
         return true;
       },
+      async redirect({ url, baseUrl }) {
+        // next-auth's default (relative paths + same-origin absolute URLs)
+        // plus one extension: https URLs on opencollective.app or any of its
+        // subdomains. Single-login flows hand operators from the admin
+        // console back to the mobile app, which shares the session cookie.
+        // Everything else falls back to baseUrl, exactly as the default does.
+        if (url.startsWith("/")) return `${baseUrl}${url}`;
+        try {
+          const parsed = new URL(url);
+          if (parsed.origin === baseUrl) return url;
+          if (
+            parsed.protocol === "https:" &&
+            (parsed.hostname === "opencollective.app" ||
+              parsed.hostname.endsWith(".opencollective.app"))
+          ) {
+            return url;
+          }
+        } catch {
+          // fall through to baseUrl
+        }
+        return baseUrl;
+      },
       async session({ session, token }) {
         if (token && session.user) {
           const u = session.user as SessionUser;

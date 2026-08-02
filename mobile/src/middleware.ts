@@ -6,8 +6,9 @@ import { sessionCookieName } from "@core/auth-cookies";
  * Edge guard for the mobile operator surface.
  *
  * MOBILE_AUTH_GUARD=enforced → every route except the public set requires an
- * admin/operator session JWT; anything else bounces to /login, and /login
- * itself bounces authenticated operators back to Today. Preview deploys
+ * admin/operator session JWT; anything else is sent to the single operator
+ * login on the parent domain (`opencollective.app/login?next=<absolute url>`,
+ * which passes an existing shared session straight through). Preview deploys
  * (guard unset) pass everything through so fixtures stay reviewable.
  *
  * The cookie name comes from `@core/auth-cookies`, the same module the handler
@@ -36,16 +37,15 @@ export async function middleware(request: NextRequest) {
   const role = typeof token?.role === "string" ? token.role : null;
   if (token?.sub && role && OPERATOR_ROLES.has(role)) return NextResponse.next();
 
-  const login = request.nextUrl.clone();
-  login.pathname = "/login";
-  login.search = "";
-  // Carry the query, not just the path. A shared install link is
-  // `/?a2hs=invite&from=…`, and a member who is not signed in yet is exactly
-  // who those links are sent to — dropping the search here landed them on a
-  // bare Today after login, with nothing to show for having followed the link.
-  // Set before the redirect is built: NextResponse.redirect() snapshots the
-  // URL, so mutating `login` afterwards is silently lost.
-  login.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+  // Single login lives on the parent domain. Send the visitor there with the
+  // absolute URL they wanted (path + query — a shared install link is
+  // `/?a2hs=invite&from=…`, and dropping the search landed members on a bare
+  // Today with nothing to show for having followed the link). The admin
+  // console signs them in — or passes them straight through when they
+  // already hold the shared *.opencollective.app session cookie — and hands
+  // them back here.
+  const login = new URL("/login", process.env.ADMIN_ORIGIN ?? "https://opencollective.app");
+  login.searchParams.set("next", request.nextUrl.toString());
   return NextResponse.redirect(login);
 }
 

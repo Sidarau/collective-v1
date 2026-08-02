@@ -1,0 +1,131 @@
+{
+  "version": "2026-08-01",
+  "bucket": "founder-review",
+  "deck": {
+    "source": "index.html",
+    "sourceSha256": "2b3f42b9c88ec2529772fda47410f90c0f4f9a050c80c4bd8c3e8cf1f4bb37ed",
+    "storagePath": "2026-08-01/deck/index.html",
+    "contentType": "text/html; charset=utf-8"
+  },
+  "files": {
+    "inner-standard.jpg": {
+      "source": "assets/inner-standard.jpg",
+      "sha256": "083b110b459daa0e00b3257b7e2a9f76efd53185f2f8c607745b5c2febb9bb97",
+      "storagePath": "2026-08-01/assets/inner-standard.jpg",
+      "contentType": "image/jpeg",
+      "download": false
+    },
+    "maison-exterior.jpg": {
+      "source": "assets/maison-exterior.jpg",
+      "sha256": "c3851cd9c8dbb1ce03a047e6484509d7f4aa1ef937803a25768b845f033b4a1e",
+      "storagePath": "2026-08-01/assets/maison-exterior.jpg",
+      "contentType": "image/jpeg",
+      "download": false
+    },
+    "maison-interior.jpg": {
+      "source": "assets/maison-interior.jpg",
+      "sha256": "824b3d7ee6f9fc526fb149aab7ad953555353cd26296ac2fca13bcc4270cbc9a",
+      "storagePath": "2026-08-01/assets/maison-interior.jpg",
+      "contentType": "image/jpeg",
+      "download": false
+    },
+    "member-home.png": {
+      "source": "assets/member-home.png",
+      "sha256": "a07aa16cb9c1e52197bc4ac194ab62d5c3e2affc7c60daf67d4d8339dc546e96",
+      "storagePath": "2026-08-01/assets/member-home.png",
+      "contentType": "image/png",
+      "download": false
+    },
+    "founder-context-01.png": {
+      "source": "files/founder-context-01.png",
+      "sha256": "bcb964ffc4c4159486caa46e18836a7f5c43825916dc056c9dacba53734ac635",
+      "storagePath": "2026-08-01/files/founder-context-01.png",
+      "contentType": "image/png",
+      "download": false
+    },
+    "founder-context-02.png": {
+      "source": "files/founder-context-02.png",
+      "sha256": "3d426e0ea9b8e23d35c1dd63fd679e1d5ecc4b74f90d29dc840c596b13554fa1",
+      "storagePath": "2026-08-01/files/founder-context-02.png",
+      "contentType": "image/png",
+      "download": false
+    },
+    "founder-context-03.png": {
+      "source": "files/founder-context-03.png",
+      "sha256": "da3b151f135b9941e2301e8a6daa2b42039d80d4b9ae87af8df773dac388d2a7",
+      "storagePath": "2026-08-01/files/founder-context-03.png",
+      "contentType": "image/png",
+      "download": false
+    },
+    "founder-context-04.png": {
+      "source": "files/founder-context-04.png",
+      "sha256": "20bb39e55bc4c2e27cd41aa49563f4a9f75c53defd646367a6eded4b862568fc",
+      "storagePath": "2026-08-01/files/founder-context-04.png",
+      "contentType": "image/png",
+      "download": false
+    },
+    "founder-context-05.jpeg": {
+      "source": "files/founder-context-05.jpeg",
+      "sha256": "afde41cd001b8bce949098c437f6bb4809cc390b38613152ce82c6a93e023f9a",
+      "storagePath": "2026-08-01/files/founder-context-05.jpeg",
+      "contentType": "image/jpeg",
+      "download": false
+    },
+    "founder-context-06.jpeg": {
+      "source": "files/founder-context-06.jpeg",
+      "sha256": "1c0af925f7c656059132e5382b8dee136780d32d53e13b7407133bb1bed70d82",
+      "storagePath": "2026-08-01/files/founder-context-06.jpeg",
+      "contentType": "image/jpeg",
+      "download": false
+    },
+    "maison-san-mateo.pdf": {
+      "source": "files/maison-san-mateo.pdf",
+      "sha256": "bae7d45e92e390dbf103ee7bfa533e99e7521d10b4dbf3ff42e4a7598f559d57",
+      "storagePath": "2026-08-01/files/maison-san-mateo.pdf",
+      "contentType": "application/pdf",
+      "download": false
+    },
+    "open-collective-business-plan-blueprint.md": {
+      "source": "files/open-collective-business-plan-blueprint.md",
+      "sha256": "aeee24d1cc71a8dbb01424108228ce831684ffd00e1485d8e809f2185a4d7165",
+      "storagePath": "2026-08-01/files/open-collective-business-plan-blueprint.md",
+      "contentType": "text/markdown",
+      "download": true
+    },
+    "open-collective-business-plan-model.xlsx": {
+      "source": "files/open-collective-business-plan-model.xlsx",
+      "sha256": "4c4473824b385efbb59c389e28cf6ec99a67e5335750c1e5fc7a4e547214f6d7",
+      "storagePath": "2026-08-01/files/open-collective-business-plan-model.xlsx",
+      "contentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "download": true
+    },
+    "open-collective-founder-review-pack.zip": {
+      "source": "files/open-collective-founder-review-pack.zip",
+      "sha256": "c467b3e7b1293503fc4679a364b0b10b313b3d631ed75501272be727065b829f",
+      "storagePath": "2026-08-01/files/open-collective-founder-review-pack.zip",
+      "contentType": "application/zip",
+      "download": true
+    },
+    "open-collective-manifesto.pdf": {
+      "source": "files/open-collective-manifesto.pdf",
+      "sha256": "c69539d48565f6ff09149df51dd4d06cf2ae22473f012f2d385f928557f9658d",
+      "storagePath": "2026-08-01/files/open-collective-manifesto.pdf",
+      "contentType": "application/pdf",
+      "download": false
+    },
+    "the-new-inner-standard-workbook.pdf": {
+      "source": "files/the-new-inner-standard-workbook.pdf",
+      "sha256": "88ebd4502a2b34e5dc6be6e6271d0c5a97601a6e9500f18ddf379613ce8b4f07",
+      "storagePath": "2026-08-01/files/the-new-inner-standard-workbook.pdf",
+      "contentType": "application/pdf",
+      "download": false
+    },
+    "villa-madera.pdf": {
+      "source": "files/villa-madera.pdf",
+      "sha256": "9e98c82ea3bff068049f8c7e30ba94c38824c69f82743b9140cc04c21a0d77d9",
+      "storagePath": "2026-08-01/files/villa-madera.pdf",
+      "contentType": "application/pdf",
+      "download": false
+    }
+  }
+}
