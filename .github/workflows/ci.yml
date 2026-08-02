@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Builds evaluate env at compile time; placeholders keep `next build`
+# hermetic — no real credentials ever reach CI.
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  NEXT_PUBLIC_BRAND_NAME: Open Collective
+  NEXT_PUBLIC_BRAND_TAGLINE: CI
+  NEXT_PUBLIC_SUPPORT_EMAIL: ci@example.com
+  NEXT_PUBLIC_VILLA_NAME: CI Gate
+  NEXT_PUBLIC_VILLA_LOCATION: CI
+  NEXT_PUBLIC_VILLA_DESCRIPTION: CI
+  NEXT_PUBLIC_BASE_URL: http://localhost:3000
+  NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon
+  SUPABASE_URL: https://ci-placeholder.supabase.co
+  SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service
+  SUPABASE_SECRET_KEY: ci-placeholder-secret
+  NEXTAUTH_SECRET: ci-placeholder-nextauth-secret-0123456789abcdef0123456789abcdef
+
+jobs:
+  mobile:
+    name: mobile (typecheck · lint · unit · build · e2e)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - name: Vendor packages/core
+        run: node ../scripts/sync-vendor-core.mjs mobile
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run verify:no-v2
+      - run: npm run build
+      - name: Install Playwright (chromium)
+        run: npx playwright install --with-deps chromium
+      - name: E2E (fixtures, guard off)
+        run: npm run test:e2e
+        env:
+          CI: "true"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: mobile-playwright-report
+          path: mobile/playwright-report
+          retention-days: 7
+
+  admin:
+    name: admin (typecheck · lint · build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+      - run: npm ci
+      - name: Install root deps (admin lint resolves the root flat config)
+        run: npm ci
+        working-directory: .
+      - name: Vendor packages/core
+        run: node ../scripts/sync-vendor-core.mjs
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+
+  member:
+    name: member portal (lint · build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
