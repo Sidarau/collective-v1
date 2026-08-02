@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { FilterTabs } from "@/components/intel/FilterTabs";
@@ -151,6 +151,40 @@ describe("Sheet", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("does not steal focus from sheet inputs when the parent re-renders", async () => {
+    // Regression: parents pass inline `onClose` closures, so a parent
+    // re-render (e.g. the shell's isScrolling flip when the iOS keyboard
+    // fires a scroll event) used to re-run the focus effect and rip focus
+    // out of the input — killing the software keyboard as it opened.
+    function RerenderHarness() {
+      const [open, setOpen] = useState(false);
+      const [, setTick] = useState(0);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open sheet
+          </button>
+          <button type="button" onClick={() => setTick((t) => t + 1)}>
+            Rerender
+          </button>
+          <Sheet open={open} onClose={() => setOpen(false)} title="Ask Collecta">
+            <input aria-label="Message" />
+          </Sheet>
+        </>
+      );
+    }
+    wrap(<RerenderHarness />);
+    await userEvent.click(screen.getByRole("button", { name: "Open sheet" }));
+    const input = screen.getByRole("textbox", { name: "Message" });
+    await userEvent.click(input);
+    expect(input).toHaveFocus();
+
+    // fireEvent (not userEvent) so the click itself doesn't move focus —
+    // the assertion isolates the sheet's own focus behaviour.
+    fireEvent.click(screen.getByRole("button", { name: "Rerender" }));
+    expect(input).toHaveFocus();
   });
 });
 

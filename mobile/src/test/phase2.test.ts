@@ -79,7 +79,7 @@ const booking: BookingRow = {
   companion_name: null,
   event_id: null,
   status: "confirmed",
-  total_price: 2400,
+  total_price: 240000, // schema stores minor units (cents): €2,400
   currency: "EUR",
   special_requests: null,
   operator_notes: null,
@@ -90,9 +90,9 @@ const booking: BookingRow = {
 };
 
 describe("money mapping", () => {
-  it("converts whole units to minor units exactly", () => {
-    expect(toMinor(2400)).toBe(240000);
-    expect(toMinor(19.99)).toBe(1999);
+  it("passes schema minor units through, rounding only", () => {
+    expect(toMinor(240000)).toBe(240000);
+    expect(toMinor(1999.4)).toBe(1999);
     expect(toMinor(null)).toBe(0);
   });
 
@@ -101,7 +101,7 @@ describe("money mapping", () => {
       id: "pay-1",
       booking_id: "bk-1",
       kind: "deposit",
-      amount: 600,
+      amount: 60000, // cents: €600 deposit
       currency: "EUR",
       method: null,
       reference: null,
@@ -124,7 +124,7 @@ describe("money mapping", () => {
       id: "pay-2",
       booking_id: "bk-1",
       kind: "refund",
-      amount: 100,
+      amount: 10000, // cents: €100 refund
       currency: "EUR",
       method: null,
       reference: null,

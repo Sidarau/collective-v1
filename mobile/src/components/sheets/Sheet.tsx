@@ -43,6 +43,17 @@ export function Sheet({
   const openerRef = useRef<HTMLElement | null>(null);
   const { pushFocus, popFocus } = useUiState();
 
+  /* Callers pass inline `onClose` closures, so the prop changes identity on
+     every parent render. Keep it in a ref: the focus effect below must run
+     only when `open` flips — re-running it on a parent re-render re-focuses
+     the panel and rips focus out of the sheet's inputs, which on iOS kills
+     the software keyboard the moment it opens (a scroll event fires as the
+     keyboard appears → shell re-renders → effect re-runs → input blurs). */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
     pushFocus();
@@ -60,7 +71,7 @@ export function Sheet({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== "Tab" || !panel) return;
@@ -92,7 +103,7 @@ export function Sheet({
       // Restore focus to whatever opened the sheet.
       openerRef.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   if (typeof document === "undefined") return null;

@@ -50,9 +50,14 @@ import type {
 
 export const CURRENCY = "EUR";
 
-/** Whole units in the schema → minor units in the contracts. */
+/**
+ * Money columns in the schema (`bookings.total_price`, `payment_records.amount`,
+ * `villas.base_price_per_night`) are already minor units — the admin console
+ * writes cents (`amount * 100`) and renders with `cents / 100`. Multiplying
+ * here inflates every displayed amount 100× (€1,800 → €180,000). Just round.
+ */
 export const toMinor = (amount: number | null | undefined): number =>
-  Math.round((amount ?? 0) * 100);
+  Math.round(amount ?? 0);
 
 export function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
