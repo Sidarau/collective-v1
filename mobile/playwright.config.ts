@@ -27,6 +27,27 @@ export default defineConfig({
     // Fixtures are deterministic, so screenshots are comparable run to run.
     timezoneId: "Europe/Madrid",
     locale: "en-GB",
+    /**
+     * The iPhone descriptor below hands the app a real Safari user agent, so
+     * the Add to Home Screen coach mark would otherwise rise over whichever
+     * page a test happened to be on 3.5s in — silently, and only sometimes.
+     * Every context starts already installed; `install-prompt.spec.ts` clears
+     * this for itself to exercise the real thing.
+     */
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: baseURL,
+          localStorage: [
+            {
+              name: "oc.a2hs.v1",
+              value: JSON.stringify({ dismissals: 0, snoozedUntil: null, installed: true }),
+            },
+          ],
+        },
+      ],
+    },
   },
 
   projects: [

@@ -9,3 +9,5 @@ vendor-core
 test-results
 playwright-report
 .playwright
+.vercel
+.env*

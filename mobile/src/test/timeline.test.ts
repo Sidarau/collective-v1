@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { orderTimeline, presentIndex, createFixtureProvider } from "@/data/provider";
+import { orderTimeline, presentIndex } from "@/data/timeline";
+import { createFixtureProvider } from "@/data/fixture-provider";
 import { FIXTURE_NOW, TIMELINE_EVENTS } from "@/data/fixtures";
 import { displayTime, rowTimeLabel } from "@/lib/time";
 import { trailingFor } from "@/lib/presentation";

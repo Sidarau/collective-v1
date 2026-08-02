@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireOperator } from "@/lib/guard";
 import { MobileShell, PageTitle } from "@/components/shell/MobileShell";
 import { getProvider, parseScenario } from "@/data/provider";
 import type { PageArgs } from "@/lib/page-params";
@@ -9,6 +10,7 @@ import { Section } from "@/components/templates/templates";
 export const dynamic = "force-dynamic";
 
 export default async function GatesPage({ searchParams }: PageArgs) {
+  await requireOperator();
   const sp = await searchParams;
   const provider = getProvider(parseScenario(sp.scenario));
   const [gates, spaces] = await Promise.all([provider.listGates(), provider.listSpaces()]);

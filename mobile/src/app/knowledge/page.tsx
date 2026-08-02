@@ -1,4 +1,5 @@
 import { MobileShell, PageTitle } from "@/components/shell/MobileShell";
+import { requireOperator } from "@/lib/guard";
 import { getProvider, parseScenario } from "@/data/provider";
 import type { PageArgs } from "@/lib/page-params";
 import { formatDayShort } from "@/lib/time";
@@ -9,6 +10,7 @@ import { SearchField } from "@/components/ui/forms";
 export const dynamic = "force-dynamic";
 
 export default async function KnowledgePage({ searchParams }: PageArgs) {
+  await requireOperator();
   const sp = await searchParams;
   const nodes = await getProvider(parseScenario(sp.scenario)).listKnowledge();
 

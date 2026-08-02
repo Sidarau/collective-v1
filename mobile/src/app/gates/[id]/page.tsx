@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireOperator } from "@/lib/guard";
 import { notFound } from "next/navigation";
 import { Check } from "lucide-react";
 import { MobileShell } from "@/components/shell/MobileShell";
@@ -9,6 +10,7 @@ import { RecordDetailScreen, Section } from "@/components/templates/templates";
 export const dynamic = "force-dynamic";
 
 export default async function GateDetailPage({ params, searchParams }: DetailPageArgs) {
+  await requireOperator();
   const [{ id }, sp] = await Promise.all([params, searchParams]);
   const provider = getProvider(parseScenario(sp.scenario));
   const [result, spacesResult] = await Promise.all([

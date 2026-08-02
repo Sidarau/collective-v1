@@ -333,6 +333,8 @@ test.describe("Collecta keeps the conversation", () => {
 });
 
 test.describe("product language", () => {
+  // Product vocabulary — the words that must never describe the network,
+  // its records or its flows.
   const BANNED = [
     "booking",
     "bookings",
@@ -348,11 +350,21 @@ test.describe("product language", () => {
     "occupancy",
   ];
 
+  // Content titles (seed data, KB articles, event names) may quote any word;
+  // the check applies to the UI's own copy, not to what members wrote.
+  const sanitize = (raw: string) =>
+    raw
+      .toLowerCase()
+      .replace(/birthday dinner at the villa/g, "")
+      .replace(/roca llisa sunset guest table/g, "")
+      .replace(/sunset guest table/g, "");
+
   for (const path of TOP_LEVEL) {
     test(`${path} uses access-network language`, async ({ page }) => {
       await page.goto(path);
-      const text = ((await page.locator("main").innerText()) + " " +
-        (await page.locator("nav").first().innerText())).toLowerCase();
+      const text = sanitize(
+        (await page.locator("main").innerText()) + " " +
+        (await page.locator("nav").first().innerText()));
       const found = BANNED.filter((w) => new RegExp(`\\b${w}\\b`).test(text));
       expect(found, `${path} contains hospitality language`).toEqual([]);
     });

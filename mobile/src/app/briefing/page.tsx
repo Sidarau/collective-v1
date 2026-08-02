@@ -1,4 +1,5 @@
 import { MobileShell } from "@/components/shell/MobileShell";
+import { requireOperator } from "@/lib/guard";
 import { getProvider, parseScenario } from "@/data/provider";
 import type { PageArgs } from "@/lib/page-params";
 import { BriefingClient } from "./BriefingClient";
@@ -6,6 +7,7 @@ import { BriefingClient } from "./BriefingClient";
 export const dynamic = "force-dynamic";
 
 export default async function BriefingPage({ searchParams }: PageArgs) {
+  await requireOperator();
   const sp = await searchParams;
   const provider = getProvider(parseScenario(sp.scenario));
 

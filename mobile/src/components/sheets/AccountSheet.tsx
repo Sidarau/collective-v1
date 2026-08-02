@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, LogOut } from "lucide-react";
 import type { OperatorAccount, Result } from "@/data/contracts";
-import { getProvider } from "@/data/provider";
+import { getOperatorAction, signOutAction } from "@/app/actions";
 import { Icon } from "@/lib/icons";
 import { Banner, StatusText } from "@/components/ui/primitives";
 import { Sheet } from "./Sheet";
@@ -31,11 +31,9 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    void getProvider()
-      .getOperator()
-      .then((r) => {
-        if (!cancelled) setResult(r);
-      });
+    void getOperatorAction().then((r) => {
+      if (!cancelled) setResult(r);
+    });
     return () => {
       cancelled = true;
     };
@@ -170,8 +168,8 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
 
             <div style={{ marginTop: 16 }}>
               <Banner tone="info">
-                Phase 1 shows fixtures. Profile sync, email verification and sign-out
-                arrive with the backend.
+                Your picture syncs from the member portal profile. Changing your
+                email needs a verification round trip — not available yet.
               </Banner>
             </div>
           </>
@@ -182,8 +180,13 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
         open={signingOut}
         onClose={() => setSigningOut(false)}
         onConfirm={() => {
-          setSigningOut(false);
-          onClose();
+          // Server-side session clear, then land on the login route. The
+          // sheet never just clears local state.
+          void signOutAction().finally(() => {
+            setSigningOut(false);
+            onClose();
+            window.location.assign("/login");
+          });
         }}
         title="Sign out of Open Collective?"
         confirmLabel="Sign out"

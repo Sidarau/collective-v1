@@ -45,9 +45,14 @@ When a generated board disagrees with the written spec, the written spec wins.
 ### Data — the only seam
 
 ```
-src/data/contracts.ts   types + MobileDataProvider  ← the interface
-src/data/fixtures.ts    typed fixture data          ← Phase 1 only
-src/data/provider.ts    fixture implementation      ← swap in Phase 2
+src/data/contracts.ts        types + MobileDataProvider     ← the interface
+src/data/fixtures.ts         typed fixture data             ← Phase 1 content
+src/data/fixture-provider.ts fixture implementation        ← preview/demo
+src/data/live-data.ts        Supabase reads + aggregations  ← Phase 2
+src/data/live-provider.ts    live implementation            ← Phase 2
+src/data/mappers.ts          Supabase → contract mappers    ← pure, tested
+src/data/provider.ts         the seam: getProvider()        ← server-only
+src/data/collecta.ts         Collecta drafts + audit        ← Phase 2
 ```
 
 **Pages and components never import `fixtures.ts`.** They call
@@ -55,9 +60,27 @@ src/data/provider.ts    fixture implementation      ← swap in Phase 2
 error / offline`. `ResultBoundary` renders those five states, so no screen
 special-cases loading or failure.
 
+Client components (sheets) never import `provider.ts` either — their reads and
+writes go through the server actions in `src/app/actions.ts`, which re-check
+the session on every call.
+
 Append `?scenario=empty|loading|error|offline|busy` to any route to see it in
-that state. This is how the edge-state screenshots and tests are produced, and
-it should survive Phase 2.
+that state — preview deploys only. On a guarded deploy (`MOBILE_AUTH_GUARD`)
+the flag is ignored so an edge-state can never mask real data.
+
+### Deployment shapes
+
+| Shape | Env | Behaviour |
+|---|---|---|
+| **Preview** (investor demo, `collective-mobile.vercel.app`) | no guard env | Public, fixtures only, `?scenario=` works. Hermetic — no Supabase, no sessions. |
+| **Guarded** (`mobile.opencollective.app`) | `MOBILE_AUTH_GUARD=enforced` + Supabase + `NEXTAUTH_SECRET` | Every private route requires an admin/operator session (middleware + per-page check); live data; scenarios disabled. |
+| **Dogfood** (local) | preview + `MOBILE_DOGFOOD=1` + Supabase creds | Fixtures chrome with live data for spot checks. |
+
+Guarded env vars: `MOBILE_AUTH_GUARD`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`,
+`NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `RESEND_API_KEY`, `EMAIL_FROM` (names match
+`admin/.env.local`), plus `KIMI_SELENE_API_KEY` for Collecta answers (optional —
+without it, Collecta falls back to rule-based answers and still drafts
+publishes/completions for confirmation).
 
 ### Components
 

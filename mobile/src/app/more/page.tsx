@@ -1,13 +1,16 @@
 import { MobileShell, PageTitle } from "@/components/shell/MobileShell";
+import { requireOperator } from "@/lib/guard";
 import { getProvider, parseScenario } from "@/data/provider";
 import type { PageArgs } from "@/lib/page-params";
 import { ResultBoundary } from "@/components/templates/ResultBoundary";
 import { NavRow } from "@/components/ui/primitives";
+import { InstallLinkRow } from "@/components/shell/InstallLinkRow";
 
 export const dynamic = "force-dynamic";
 
 /** Every remaining operator module. No module is reachable only from desktop. */
 export default async function MorePage({ searchParams }: PageArgs) {
+  await requireOperator();
   const sp = await searchParams;
   const groups = await getProvider(parseScenario(sp.scenario)).getMoreGroups();
 
@@ -41,6 +44,15 @@ export default async function MorePage({ searchParams }: PageArgs) {
           ))
         }
       </ResultBoundary>
+
+      <section className="group">
+        <h2 className="group__label">The app</h2>
+        <div className="group__panel">
+          <ul className="list">
+            <InstallLinkRow />
+          </ul>
+        </div>
+      </section>
 
       <section className="group">
         <h2 className="group__label">Design</h2>

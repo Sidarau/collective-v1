@@ -1,4 +1,5 @@
 import { MobileShell, PageTitle } from "@/components/shell/MobileShell";
+import { requireOperator } from "@/lib/guard";
 import { getProvider, parseScenario } from "@/data/provider";
 import type { PageArgs } from "@/lib/page-params";
 import { ResultBoundary } from "@/components/templates/ResultBoundary";
@@ -7,6 +8,7 @@ import { EventRow } from "@/components/rows/rows";
 export const dynamic = "force-dynamic";
 
 export default async function ExperiencesPage({ searchParams }: PageArgs) {
+  await requireOperator();
   const sp = await searchParams;
   const experiences = await getProvider(parseScenario(sp.scenario)).listExperiences();
 

@@ -7,7 +7,7 @@ import {
   type LinkTarget,
   type LinkTargetKind,
 } from "@/data/contracts";
-import { getProvider } from "@/data/provider";
+import { searchLinkTargetsAction } from "@/app/actions";
 import { Icon } from "@/lib/icons";
 import { SearchField } from "@/components/ui/forms";
 import { EmptyState, SkeletonList } from "@/components/ui/primitives";
@@ -57,12 +57,10 @@ export function LinkPickerSheet({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    void getProvider()
-      .searchLinkTargets(debounced)
-      .then((res) => {
-        if (cancelled) return;
-        setResult({ key: debounced, rows: res.status === "ok" ? res.data : [] });
-      });
+    void searchLinkTargetsAction(debounced).then((res) => {
+      if (cancelled) return;
+      setResult({ key: debounced, rows: res.status === "ok" ? res.data : [] });
+    });
     return () => {
       cancelled = true;
     };

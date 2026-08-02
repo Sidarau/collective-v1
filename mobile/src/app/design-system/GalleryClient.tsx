@@ -60,7 +60,7 @@ import { ConfirmSheet } from "@/components/sheets/ConfirmSheet";
 import { ComposerSheet } from "@/components/sheets/ComposerSheet";
 import { CollectaSheet } from "@/components/sheets/CollectaSheet";
 import { DetailSheet, PickerSheet } from "@/components/sheets/DetailSheet";
-import { getProvider } from "@/data/provider";
+import { COMPOSER_OPTIONS } from "@/data/composer-options";
 import { ChecklistTimeline } from "@/components/templates/templates";
 
 const TOKENS = {
@@ -476,7 +476,7 @@ export function GalleryClient({
       <ComposerSheet
         open={sheet === "composer"}
         onClose={() => setSheet(null)}
-        options={getProvider().getComposerOptions()}
+        options={COMPOSER_OPTIONS}
         defaultDate="2026-07-29"
       />
       <CollectaSheet open={sheet === "collecta"} onClose={() => setSheet(null)} />

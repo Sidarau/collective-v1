@@ -25,6 +25,13 @@ export interface AppUser extends NextAuthUser {
   email: string;
   role: UserRole;
   leadId: string | null;
+  /**
+   * The row's live `users.token_version`. Required, not optional: the jwt
+   * callback re-validates every token against this column, so an authorize
+   * path that forgets to carry it mints a token that fails its own check on
+   * the very next line. Making it non-optional is what stops that recurring.
+   */
+  tokenVersion: number;
 }
 
 /**
@@ -79,6 +86,7 @@ export function buildAuthOptions(): AuthOptions {
                   name: email.split("@")[0],
                   role: user.role,
                   leadId: user.lead_id,
+                  tokenVersion: user.token_version ?? 1,
                   magicTokenId: magicToken.id,
                 } as AppUser & { magicTokenId: string };
               }
@@ -102,6 +110,7 @@ export function buildAuthOptions(): AuthOptions {
                   name: email.split("@")[0],
                   role: user.role,
                   leadId: user.lead_id,
+                  tokenVersion: user.token_version ?? 1,
                 };
               }
             }
@@ -142,6 +151,25 @@ export function buildAuthOptions(): AuthOptions {
           token.name = appUser.name;
           token.role = appUser.role;
           token.leadId = appUser.leadId;
+          token.tokenVersion = appUser.tokenVersion;
+        }
+        // Session re-validation: a confirmed email change (or any future
+        // forced sign-out) bumps users.token_version, and every JWT minted
+        // before that dies here instead of living out its 30 days.
+        if (token.id && typeof token.tokenVersion === "number") {
+          const { data: row, error } = await getSupabaseAdmin()
+            .from("users")
+            .select("token_version")
+            .eq("id", token.id as string)
+            .maybeSingle();
+
+          // Only a row that actually disagrees may end the session. A failed
+          // lookup is not a revocation: treating "could not read" as "version
+          // 1" signed out every operator past version 1 whenever the query
+          // hiccuped, and they could not sign back in — the replacement token
+          // was re-checked against the same failing read.
+          const live = (row as { token_version?: number } | null)?.token_version;
+          if (!error && typeof live === "number" && live !== token.tokenVersion) return {};
         }
         return token;
       },

@@ -9,6 +9,7 @@ import {
   type ComposerOption,
   type LinkTarget,
 } from "@/data/contracts";
+import { createFromComposerAction } from "@/app/actions";
 import { Icon } from "@/lib/icons";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
 import {
@@ -51,6 +52,8 @@ export function ComposerSheet({
   const [reviewing, setReviewing] = useState(false);
   const [link, setLink] = useState<LinkTarget | null>(null);
   const [picking, setPicking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   /* Re-seed the date each time the sheet opens so it tracks the timeline.
      Adjusted during render on the open transition — an effect would show the
@@ -70,6 +73,8 @@ export function ComposerSheet({
     setReviewing(false);
     setLink(null);
     setPicking(false);
+    setBusy(false);
+    setError(null);
   };
 
   const close = () => {
@@ -82,13 +87,35 @@ export function ComposerSheet({
   // Money, access and experience creation is material — it must be reviewed.
   const needsReview = kind === "due" || kind === "access" || kind === "experience";
 
+  const create = async () => {
+    if (!kind || busy) return;
+    setBusy(true);
+    setError(null);
+    const result = await createFromComposerAction({
+      kind,
+      title: title || chosen!.label,
+      date,
+      people,
+      amount,
+      note,
+      link: link ? { id: link.id, kind: link.kind } : undefined,
+    });
+    setBusy(false);
+    if (!result.ok) {
+      setReviewing(false);
+      setError(result.message);
+      return;
+    }
+    onCreated?.(kind, title || chosen!.label);
+    close();
+  };
+
   const submit = () => {
     if (needsReview) {
       setReviewing(true);
       return;
     }
-    onCreated?.(kind!, title || chosen!.label);
-    close();
+    void create();
   };
 
   if (!kind) {
@@ -131,8 +158,8 @@ export function ComposerSheet({
         footer={
           <>
             <SecondaryButton onClick={() => setKind(null)}>Back</SecondaryButton>
-            <PrimaryButton onClick={submit} data-testid="composer-submit">
-              {needsReview ? "Review" : "Create"}
+            <PrimaryButton onClick={submit} disabled={busy} data-testid="composer-submit">
+              {busy ? "Creating…" : needsReview ? "Review" : "Create"}
             </PrimaryButton>
           </>
         }
@@ -195,6 +222,11 @@ export function ComposerSheet({
             onChange={(e) => setNote(e.target.value)}
             maxLength={280}
           />
+          {error ? (
+            <p className="banner banner--error" role="alert" data-testid="composer-error">
+              {error}
+            </p>
+          ) : null}
         </div>
       </Sheet>
 
@@ -209,10 +241,7 @@ export function ComposerSheet({
       <ConfirmSheet
         open={reviewing}
         onClose={() => setReviewing(false)}
-        onConfirm={() => {
-          onCreated?.(kind, title || chosen!.label);
-          close();
-        }}
+        onConfirm={() => void create()}
         title={`Create ${chosen!.label.toLowerCase()}?`}
         confirmLabel="Create"
         facts={[

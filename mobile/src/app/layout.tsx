@@ -24,6 +24,25 @@ export const metadata: Metadata = {
     title: "Open Collective",
     statusBarStyle: "black-translucent",
   },
+  /**
+   * `apple` is what iOS saves to the home screen. It has to be an opaque 180px
+   * PNG served without an auth redirect — see `scripts/build-app-icons.py` and
+   * the `icons/` exemption in `middleware.ts`. Everything else about the
+   * installed app comes from `manifest.ts`, which iOS 16.4+ also reads.
+   */
+  icons: {
+    icon: [{ url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" }],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  other: {
+    /**
+     * `appleWebApp.capable` now emits only the standard `mobile-web-app-capable`.
+     * iOS 16.4+ gets standalone from the manifest's `display` instead, but
+     * anything older reads this tag and nothing else — without it those phones
+     * install a bookmark that reopens in Safari with the address bar showing.
+     */
+    "apple-mobile-web-app-capable": "yes",
+  },
   robots: { index: false, follow: false },
 };
 
