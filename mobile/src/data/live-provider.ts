@@ -81,12 +81,13 @@ export function createLiveProvider(): MobileDataProvider {
         let dueMinor = 0;
         for (const b of core.bookings) {
           if (["inquiry", "cancelled"].includes(b.status)) continue;
-          dueMinor += Math.max(0, Math.round((b.total_price ?? 0) * 100) - (paid.get(b.id) ?? 0));
+          // Amounts are already minor units — never rescale (the 100x bug).
+          dueMinor += Math.max(0, Math.round(b.total_price ?? 0) - (paid.get(b.id) ?? 0));
         }
         const startOfDay = `${today}T00:00:00.000Z`;
         const incomingMinor = core.payments
           .filter((p) => p.received_at >= startOfDay && p.kind !== "refund")
-          .reduce((n, p) => n + Math.round(p.amount * 100), 0);
+          .reduce((n, p) => n + Math.round(p.amount ?? 0), 0);
 
         return ok({
           isoDate: today,
