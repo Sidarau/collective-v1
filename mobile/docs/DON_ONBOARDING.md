@@ -10,8 +10,12 @@
   numbers), requests, experiences, dues, people, spaces, and Collecta
   (Kimi-backed answers; rule-based fallback so it never goes silent).
 - One tap install: shareable install link + Add to Home Screen coach mark.
-- Sign-in: magic link to his email (7-day, one-time), then optional password
-  for steady state. No Google OAuth, no unverified-app screen.
+- Sign-in (single login, 2026-08-01+): the only login form lives on
+  `opencollective.app`. The mobile app never shows a form — an
+  unauthenticated visitor bounces `mobile → opencollective.app/login?next=…`
+  and lands back on the mobile Today screen after sign-in; anyone already
+  signed in on the parent domain passes through without seeing any form.
+  Magic link (7-day, one-time) is the primary path; password is secondary.
 
 ## Verified working (2026-08-01, production)
 
