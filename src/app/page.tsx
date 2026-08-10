@@ -88,14 +88,19 @@ export default async function Landing() {
 
         <div className="hero-stage relative z-10 flex min-h-dvh flex-col items-center px-6 pb-10 pt-28 sm:px-10 sm:pb-12 sm:pt-32">
           <div className="hero-lockup stagger my-auto flex flex-col items-center text-center">
-            <Image
-              src="/brand/logo-horizontal.png"
-              alt="Open Collective"
-              width={1400}
-              height={700}
-              priority
-              className="hero-brand h-auto w-[235px] sm:w-[330px]"
-            />
+            <div className="flex items-center justify-center gap-3 sm:gap-4">
+              <Image
+                src="/brand/OpenCollective transparent gold keyhole emblem.png"
+                alt=""
+                width={1188}
+                height={1324}
+                priority
+                className="hero-brand h-[88px] w-auto sm:h-[128px]"
+              />
+              <span className="display text-[30px] leading-none text-ink sm:text-[40px]">
+                Open Collective
+              </span>
+            </div>
             <h1 className="sr-only">Open Collective</h1>
             <p className="hero-copy mt-5 max-w-sm text-[17px] leading-relaxed sm:mt-7 sm:max-w-xl sm:text-[24px]">
               {hero || "A private circle around the world's quiet places."}
