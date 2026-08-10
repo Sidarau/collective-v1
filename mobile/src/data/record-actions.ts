@@ -301,7 +301,29 @@ export async function decideApplication(input: {
     if (appError) return fail("The approval did not go through.");
 
     // Referral credit — best effort, only when the referrer resolves cleanly.
-    if (application.lead_id) {
+    // Personal doors first (precise): the door's created_by IS the referrer.
+    // Falls back to the legacy member_referral:<name> lead-source name match.
+    let referrerUserId: string | null = null;
+    let creditNote = `Auto-opened on approval of ${name}`;
+    if (application.referral_link_id) {
+      const { data: door } = await db
+        .from("referral_links")
+        .select("created_by, label")
+        .eq("id", application.referral_link_id)
+        .maybeSingle();
+      if (door?.created_by && door.created_by !== userId) {
+        const { data: owner } = await db
+          .from("users")
+          .select("id, role")
+          .eq("id", door.created_by)
+          .maybeSingle();
+        if (owner?.role === "member") {
+          referrerUserId = owner.id;
+          creditNote = `Auto-opened on approval of ${name} — through ${door.label}'s door`;
+        }
+      }
+    }
+    if (!referrerUserId && application.lead_id) {
       const { data: lead } = await db
         .from("leads")
         .select("source")
@@ -317,16 +339,17 @@ export async function decideApplication(input: {
           .select("user_id")
           .ilike("first_name", first || "")
           .ilike("last_name", rest.join(" ") || "%");
-        if (matches?.length === 1) {
-          await db.from("referral_credits").insert({
-            referrer_user_id: matches[0].user_id,
-            referred_user_id: userId,
-            referred_email: email,
-            status: "pending",
-            note: `Auto-opened on approval of ${name}`,
-          });
-        }
+        if (matches?.length === 1) referrerUserId = matches[0].user_id;
       }
+    }
+    if (referrerUserId) {
+      await db.from("referral_credits").insert({
+        referrer_user_id: referrerUserId,
+        referred_user_id: userId,
+        referred_email: email,
+        status: "pending",
+        note: creditNote,
+      });
     }
 
     // Onboarding entrance link (logged in outbox; sent only in EMAIL_MODE=send).
