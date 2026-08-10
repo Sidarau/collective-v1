@@ -87,14 +87,17 @@ export default async function HomePage() {
           </>
         )}
         <div className="relative px-5">
-          <Image
-            src="/brand/logo-horizontal.png"
-            alt="Open Collective"
-            width={1400}
-            height={700}
-            priority
-            className="reveal mx-auto h-auto w-[184px]"
-          />
+          <div className="reveal mx-auto flex w-fit items-center justify-center gap-2">
+            <Image
+              src="/brand/OpenCollective transparent gold keyhole emblem.png"
+              alt=""
+              width={1188}
+              height={1324}
+              priority
+              className="h-[72px] w-auto"
+            />
+            <span className="display text-[26px] leading-none text-ink">Open Collective</span>
+          </div>
           <h1 className="display reveal mt-9 text-[34px] leading-tight text-ink" style={{ animationDelay: "0.06s" }}>
             {greeting()}, {firstName}
           </h1>
