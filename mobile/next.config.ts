@@ -5,11 +5,13 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
-  // Phase 1 is a fixture-only UI template: no remote image hosts are reachable
-  // and no production data is fetched. Kimi adds remotePatterns in Phase 2
-  // alongside the real Space/experience media provider.
+  // Avatar images live in Supabase Storage (member portal profile uploads →
+  // media bucket public URLs), so next/image must allow the host. Convention
+  // matches the root app's next.config.ts (`*.supabase.co`); the concrete
+  // project host is https://evviegqieqdmlxixwwxt.supabase.co
+  // (DEFAULT_SUPABASE_URL in vendor-core/supabase.ts and packages/core).
   images: {
-    remotePatterns: [],
+    remotePatterns: [{ protocol: "https", hostname: "*.supabase.co" }],
   },
 };
 

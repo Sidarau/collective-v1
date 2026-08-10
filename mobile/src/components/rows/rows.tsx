@@ -90,7 +90,21 @@ export function PersonRow({
       href={`/people/${person.id}`}
       selected={selected}
       testId="person-row"
-      leading={<Initials text={person.initials} />}
+      leading={
+        person.avatarUrl ? (
+          <span className="row__avatar" aria-hidden="true">
+            <img
+              src={person.avatarUrl}
+              alt=""
+              width={38}
+              height={38}
+              decoding="async"
+            />
+          </span>
+        ) : (
+          <Initials text={person.initials} />
+        )
+      }
       title={person.name}
       detail={`${person.relationshipLabel}${person.summary ? ` · ${person.summary.replace(`${person.relationshipLabel} · `, "")}` : ""}`}
       trailing={<StatusText label={person.state.label} tone={person.state.tone} />}
