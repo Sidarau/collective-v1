@@ -1,4 +1,7 @@
+"use client";
+
 import Image from "next/image";
+import { useState } from "react";
 
 const SIZES = {
   sm: { box: "h-10 w-10", text: "text-[15px]", px: 40 },
@@ -22,12 +25,23 @@ export default function Avatar({
   className?: string;
 }) {
   const s = SIZES[size];
-  if (url) {
+  const [failed, setFailed] = useState(false);
+
+  // Initials only when there is no photo or the photo fails to load — never
+  // a broken-image icon. (onError needs a client component to serialize.)
+  if (url && !failed) {
     return (
       <span
         className={`relative block ${s.box} shrink-0 overflow-hidden rounded-full border border-white/15 ${className}`}
       >
-        <Image src={url} alt="" fill sizes={`${s.px}px`} className="object-cover" />
+        <Image
+          src={url}
+          alt=""
+          fill
+          sizes={`${s.px}px`}
+          className="object-cover"
+          onError={() => setFailed(true)}
+        />
       </span>
     );
   }
