@@ -1,5 +1,9 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- Person avatars are 38px discs
+   synced from the member portal; routing them through /_next/image would add
+   an optimizer round trip per row for a small avatar. */
+
 import Link from "next/link";
 import { ArrowDown, ArrowUp, ChevronRight } from "lucide-react";
 import type {
