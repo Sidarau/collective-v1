@@ -118,12 +118,21 @@ export async function getCampaign(id: string): Promise<EmailCampaignRow | null> 
 export interface CampaignAudience {
   roles?: string[];
   statuses?: string[];
+  /** T6: keep only members missing photo OR headline OR location. */
+  profileIncomplete?: boolean;
+}
+
+export interface CampaignRecipient {
+  email: string;
+  firstName: string;
+  /** Which of photo/headline/location are missing (profileIncomplete audiences). */
+  missing?: string[];
 }
 
 /** Distinct target emails for a campaign audience (suppression runs at send). */
 export async function resolveCampaignRecipients(
   audience: CampaignAudience
-): Promise<{ email: string; firstName: string }[]> {
+): Promise<CampaignRecipient[]> {
   const roles = (audience.roles?.length ? audience.roles : ["member"]) as UserRole[];
   const { data: users } = await db().from("users").select("id, email, role").in("role", roles);
   const rows = (users as { id: string; email: string; role: string }[]) || [];
@@ -131,25 +140,38 @@ export async function resolveCampaignRecipients(
 
   const { data: profiles } = await db()
     .from("profiles")
-    .select("user_id, first_name")
+    .select("user_id, first_name, avatar_url, headline, location")
     .in(
       "user_id",
       rows.map((u) => u.id)
     );
-  const nameMap = new Map(
-    ((profiles as { user_id: string; first_name: string }[]) || []).map((p) => [
-      p.user_id,
-      p.first_name,
-    ])
-  );
+  type ProfileBits = {
+    user_id: string;
+    first_name: string;
+    avatar_url: string | null;
+    headline: string | null;
+    location: string | null;
+  };
+  const profileMap = new Map((((profiles as ProfileBits[]) || [])).map((p) => [p.user_id, p]));
 
   const seen = new Set<string>();
-  const out: { email: string; firstName: string }[] = [];
+  const out: CampaignRecipient[] = [];
   for (const user of rows) {
     const email = user.email.toLowerCase();
     if (seen.has(email)) continue;
     seen.add(email);
-    out.push({ email, firstName: nameMap.get(user.id) || email.split("@")[0] });
+    const profile = profileMap.get(user.id);
+    if (audience.profileIncomplete) {
+      // Missing profile row = missing everything.
+      const missing: string[] = [];
+      if (!profile?.avatar_url?.trim()) missing.push("photo");
+      if (!profile?.headline?.trim()) missing.push("headline");
+      if (!profile?.location?.trim()) missing.push("location");
+      if (!missing.length) continue; // complete profiles are never nudged
+      out.push({ email, firstName: profile?.first_name || email.split("@")[0], missing });
+      continue;
+    }
+    out.push({ email, firstName: profile?.first_name || email.split("@")[0] });
   }
   return out;
 }

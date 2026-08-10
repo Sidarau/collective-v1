@@ -108,6 +108,16 @@ export default async function CampaignPage({
                   </label>
                 ))}
               </div>
+              <label className="mt-2 flex cursor-pointer items-center gap-1.5 text-[12px] text-muted">
+                <input
+                  type="checkbox"
+                  name="profileIncomplete"
+                  defaultChecked={Boolean(audience.profileIncomplete)}
+                  className="accent-[#e0bd73]"
+                  disabled={!editable}
+                />
+                Incomplete profiles only — members missing photo, headline, or location
+              </label>
             </div>
             {editable && (
               <button type="submit" className="btn btn-gold">
@@ -119,11 +129,24 @@ export default async function CampaignPage({
 
         <aside className="space-y-4 self-start">
           <section className="panel p-4">
-            <p className="label">Audience preview</p>
+            <p className="label">Audience preview — dry run, nothing sent</p>
             <p className="text-2xl font-semibold text-ink">{recipients.length}</p>
             <p className="text-[12px] text-muted">
               distinct recipients · suppressed addresses are skipped at send time
             </p>
+            {recipients.length > 0 && (
+              <ul className="mt-3 max-h-72 space-y-1.5 overflow-y-auto border-t border-line pt-3">
+                {recipients.map((r) => (
+                  <li key={r.email} className="text-[12px] leading-snug">
+                    <span className="text-ink">{r.firstName}</span>{" "}
+                    <span className="text-faint">{r.email}</span>
+                    {r.missing?.length ? (
+                      <span className="text-gold/80"> · missing {r.missing.join(", ")}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           {campaign.status === "sent" ? (
