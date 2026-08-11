@@ -250,7 +250,7 @@ export default function ProfileForm({
         <div className="mt-4">
           <label className="tag">Birthday</label>
           <input
-            className="field"
+            className="field safari-date-field"
             type="date"
             max={new Date().toISOString().slice(0, 10)}
             value={form.birthday}

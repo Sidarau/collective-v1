@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import Avatar from "@/components/Avatar";
 import { getAuthUser } from "@/lib/auth";
 import {
   fetchGates,
@@ -229,9 +230,12 @@ export default async function HomePage() {
         {/* Profile shortcut */}
         <Link href="/app/profile" className="glass-flat tap flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-champagne/20 text-[15px] font-semibold text-champagne">
-              {firstName[0]?.toUpperCase()}
-            </span>
+            <Avatar
+              url={profile?.avatar_url}
+              first={profile?.first_name ?? firstName}
+              last={profile?.last_name}
+              size="sm"
+            />
             <div>
               <p className="text-[14px] font-semibold text-ink">
                 {profile ? fullName(profile.first_name, profile.last_name) : firstName}
