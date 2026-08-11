@@ -40,10 +40,10 @@ export default async function CommunicationsPage({
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <h3 className="text-sm font-semibold text-ink">Campaigns</h3>
           <div className="flex items-center gap-2">
-            <form action={createProfileNudgeCampaignAction}>
+            <form action={createProfileNudgeCampaignAction} className="flex items-center">
               <button
                 type="submit"
-                className="btn border border-gold/40 text-gold"
+                className="btn h-[38px] text-gold"
                 title="Drafts a one-shot nudge to members missing photo, headline, or location — review recipients before sending"
               >
                 Profile-completion nudge
@@ -51,7 +51,7 @@ export default async function CommunicationsPage({
             </form>
             <form action={saveCampaignAction} className="flex items-center gap-2">
               <input name="name" required className="input w-64" placeholder="New campaign name" />
-              <button type="submit" className="btn btn-gold">
+              <button type="submit" className="btn btn-gold h-[38px]">
                 Draft campaign
               </button>
             </form>
