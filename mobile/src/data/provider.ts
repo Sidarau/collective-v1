@@ -27,6 +27,16 @@ export function getFixtureProvider(scenario: Scenario = "healthy"): MobileDataPr
   return createFixtureProvider(scenario);
 }
 
+/** True when getProvider(scenario) would serve fixtures. Pages must anchor
+ *  their "now" to FIXTURE_NOW in that case — anchoring fixture data to the
+ *  real clock is the date-slide bug: a few weeks after the anchor the whole
+ *  fixture stream lies in the past and the Today tests/e2e rot. */
+export function usingFixtures(scenario: Scenario = "healthy"): boolean {
+  if (!scenarioAllowed()) return false;
+  if (scenario !== "healthy") return true;
+  return !(process.env.MOBILE_DOGFOOD === "1" && process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY);
+}
+
 /** Resolves the active provider. This is the seam.
  *
  * Two deploy shapes:
@@ -37,19 +47,10 @@ export function getFixtureProvider(scenario: Scenario = "healthy"): MobileDataPr
  *    demo is hermetic; an explicit ?scenario= switches edge states; real data
  *    only with an explicit MOBILE_DOGFOOD=1 plus Supabase credentials. */
 export function getProvider(scenario: Scenario = "healthy"): MobileDataProvider {
-  if (!scenarioAllowed()) {
+  if (!usingFixtures(scenario)) {
     return createLiveProvider();
   }
-  if (scenario !== "healthy") {
-    return createFixtureProvider(scenario);
-  }
-  // Preview mode: live only for an explicit local dogfood opt-in with creds
-  // configured (MOBILE_DOGFOOD=1) — the public investor demo and the visual
-  // test suite must always render the hermetic fixture set.
-  if (process.env.MOBILE_DOGFOOD === "1" && process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY) {
-    return createLiveProvider();
-  }
-  return createFixtureProvider("healthy");
+  return createFixtureProvider(scenario);
 }
 
 /** Narrows an unknown search param to a Scenario. */
