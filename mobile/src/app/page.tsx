@@ -1,5 +1,5 @@
 import { MobileShell } from "@/components/shell/MobileShell";
-import { getProvider, parseScenario } from "@/data/provider";
+import { getProvider, parseScenario, usingFixtures } from "@/data/provider";
 import { requireOperator } from "@/lib/guard";
 import { scenarioAllowed } from "@/lib/page-params";
 import { parseTodayFilter } from "@/lib/routes";
@@ -18,11 +18,12 @@ export default async function TodayPage({ searchParams }: { searchParams: Search
   const provider = getProvider(scenario);
 
   // The fixture timeline is anchored to a fixed instant so screenshots are
-  // deterministic; the live stream anchors to the actual present.
-  const nowIso =
-    scenarioAllowed() && scenario !== "healthy"
-      ? (await import("@/data/fixtures")).FIXTURE_NOW
-      : new Date().toISOString();
+  // deterministic; the live stream anchors to the actual present. Fixture
+  // mode must use the fixture clock in EVERY scenario (including the default
+  // healthy one) or the suite rots as real time slides past the anchor.
+  const nowIso = usingFixtures(scenario)
+    ? (await import("@/data/fixtures")).FIXTURE_NOW
+    : new Date().toISOString();
 
   const [summary, timeline, today, sevenDay, thirtyDay] = await Promise.all([
     provider.getDaySummary(),
