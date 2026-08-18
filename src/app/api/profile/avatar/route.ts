@@ -1,19 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
+import sharp from "sharp";
 import { authOptions, type SessionUser } from "@/lib/auth";
 import { getSupabaseAdmin } from "@core/supabase";
 
 export const runtime = "nodejs";
 
 const MAX_BYTES = 6 * 1024 * 1024;
-const TYPES: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/heic": "heic",
-};
+/** Accepted source formats; every upload is transcoded to JPEG on the way in. */
+const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic"]);
 
-/** POST multipart {file} → media bucket avatars/<user>/<ts>.<ext> → profiles.avatar_url */
+/** POST multipart {file} → sharp JPEG → media bucket avatars/<user>/<ts>.jpg → profiles.avatar_url */
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -27,21 +24,30 @@ export async function POST(req: NextRequest) {
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "No file" }, { status: 400 });
     }
-    const ext = TYPES[file.type];
-    if (!ext) {
+    if (!ALLOWED_TYPES.has(file.type)) {
       return NextResponse.json({ error: "Use a JPEG, PNG, WebP, or HEIC photo" }, { status: 400 });
     }
     if (file.size > MAX_BYTES) {
       return NextResponse.json({ error: "Photos are limited to 6 MB" }, { status: 400 });
     }
 
+    // Transcode to JPEG on the way in: HEIC (iPhone default) is unrenderable
+    // by next/image and browsers, so storing the original byte-for-byte was
+    // the silent-failure root cause for avatar uploads. A sharp failure must
+    // abort here — never fall through to a raw store of the source.
+    const source = Buffer.from(await file.arrayBuffer());
+    const jpeg = await sharp(source)
+      .rotate()
+      .resize(1024, 1024, { fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+
     const supabase = getSupabaseAdmin();
-    const path = `avatars/${user.id}/${Date.now()}.${ext}`;
-    const bytes = Buffer.from(await file.arrayBuffer());
+    const path = `avatars/${user.id}/${Date.now()}.jpg`;
 
     const { error: uploadError } = await supabase.storage
       .from("media")
-      .upload(path, bytes, { contentType: file.type, upsert: false });
+      .upload(path, jpeg, { contentType: "image/jpeg", upsert: false });
     if (uploadError) throw new Error(uploadError.message);
 
     const { data: pub } = supabase.storage.from("media").getPublicUrl(path);

@@ -22,10 +22,12 @@ export default function ProfileForm({
   initial,
   initialAvatarUrl,
   canInvite,
+  personalLinkUrl,
 }: {
   initial: ProfileFields;
   initialAvatarUrl?: string | null;
   canInvite: boolean;
+  personalLinkUrl?: string | null;
 }) {
   const [form, setForm] = useState(initial);
   const [saving, setSaving] = useState(false);
@@ -67,6 +69,43 @@ export default function ProfileForm({
   const [inviteOpen, setInviteOpen] = useState(false);
   const [invite, setInvite] = useState({ email: "", firstName: "", lastName: "" });
   const [inviteState, setInviteState] = useState<{ loading?: boolean; message?: string; error?: string }>({});
+  const [copied, setCopied] = useState(false);
+
+  async function copyPersonalLink() {
+    if (!personalLinkUrl) return;
+    try {
+      await navigator.clipboard.writeText(personalLinkUrl);
+    } catch {
+      // Older WebViews: execCommand fallback.
+      const ta = document.createElement("textarea");
+      ta.value = personalLinkUrl;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2500);
+  }
+
+  async function sharePersonalLink() {
+    if (!personalLinkUrl) return;
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          title: "An introduction to the Circle",
+          text: "A door has been opened for you — this is my personal introduction link.",
+          url: personalLinkUrl,
+        });
+      } catch {
+        // User dismissed the share sheet — nothing to do.
+      }
+      return;
+    }
+    await copyPersonalLink();
+  }
 
   const set = (key: keyof ProfileFields) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setSaved(false);
@@ -211,7 +250,7 @@ export default function ProfileForm({
         <div className="mt-4">
           <label className="tag">Birthday</label>
           <input
-            className="field"
+            className="field safari-date-field"
             type="date"
             max={new Date().toISOString().slice(0, 10)}
             value={form.birthday}
@@ -232,9 +271,41 @@ export default function ProfileForm({
         <div className="glass p-6">
           <p className="eyebrow">Extend an invitation</p>
           <p className="muted mt-2 text-[13px] leading-relaxed">
-            Open the door for someone who belongs here. They&apos;ll receive a private
-            entrance link and introduce themselves to the Circle.
+            Open the door for someone who belongs here. Share your personal link —
+            they&apos;ll introduce themselves to the Circle, and the introduction
+            is credited to you.
           </p>
+
+          {personalLinkUrl && (
+            <div className="mt-5">
+              <ol className="muted mb-3 list-decimal space-y-1 pl-5 text-[13px] leading-relaxed">
+                <li>Copy your link — it is yours alone.</li>
+                <li>Send it to one person who belongs here.</li>
+              </ol>
+              <div className="field select-all break-all text-[13px] leading-relaxed text-ink">
+                {personalLinkUrl}
+              </div>
+              <button
+                type="button"
+                onClick={copyPersonalLink}
+                className="btn-champagne tap mt-3 h-14 w-full text-[15px]"
+              >
+                {copied ? "Copied — ready to paste ✓" : "Copy my link"}
+              </button>
+              <button
+                type="button"
+                onClick={sharePersonalLink}
+                className="btn-glass tap mt-2 h-14 w-full text-[15px]"
+              >
+                Share my link…
+              </button>
+            </div>
+          )}
+
+          <div className="mt-6 border-t border-white/10 pt-5">
+            <p className="muted text-[12px] leading-relaxed">
+              Rather we email them directly? Send a private entrance link instead:
+            </p>
           {inviteOpen ? (
             <form onSubmit={sendInvite} className="mt-4 space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -276,9 +347,10 @@ export default function ProfileForm({
             </p>
           ) : (
             <button onClick={() => setInviteOpen(true)} className="btn-glass tap mt-4 h-12 w-full text-[14px]">
-              Refer someone
+              Refer someone by email
             </button>
           )}
+          </div>
         </div>
       )}
 

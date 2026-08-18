@@ -108,7 +108,29 @@ export async function approveApplicationAction(formData: FormData) {
       .eq("id", id);
 
     // 4. Referral credit — best effort, only when the referrer resolves cleanly.
-    if (application.lead_id) {
+    // Personal doors first (precise): the door's created_by IS the referrer.
+    // Falls back to the legacy member_referral:<name> lead-source name match.
+    let referrerUserId: string | null = null;
+    let creditNote = `Auto-opened on approval of ${application.first_name} ${application.last_name}`;
+    if (application.referral_link_id) {
+      const { data: door } = await supabase
+        .from("referral_links")
+        .select("created_by, label")
+        .eq("id", application.referral_link_id)
+        .maybeSingle();
+      if (door?.created_by && door.created_by !== userId) {
+        const { data: owner } = await supabase
+          .from("users")
+          .select("id, role")
+          .eq("id", door.created_by)
+          .maybeSingle();
+        if (owner?.role === "member") {
+          referrerUserId = owner.id;
+          creditNote = `Auto-opened on approval of ${application.first_name} ${application.last_name} — through ${door.label}'s door`;
+        }
+      }
+    }
+    if (!referrerUserId && application.lead_id) {
       const { data: lead } = await supabase
         .from("leads")
         .select("source")
@@ -124,16 +146,17 @@ export async function approveApplicationAction(formData: FormData) {
           .select("user_id")
           .ilike("first_name", first || "")
           .ilike("last_name", rest.join(" ") || "%");
-        if (matches?.length === 1) {
-          await supabase.from("referral_credits").insert({
-            referrer_user_id: matches[0].user_id,
-            referred_user_id: userId,
-            referred_email: email,
-            status: "pending",
-            note: `Auto-opened on approval of ${application.first_name} ${application.last_name}`,
-          });
-        }
+        if (matches?.length === 1) referrerUserId = matches[0].user_id;
       }
+    }
+    if (referrerUserId) {
+      await supabase.from("referral_credits").insert({
+        referrer_user_id: referrerUserId,
+        referred_user_id: userId,
+        referred_email: email,
+        status: "pending",
+        note: creditNote,
+      });
     }
 
     // 5. Onboarding entrance link (logged in outbox; sent only when enabled).

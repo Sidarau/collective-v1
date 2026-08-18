@@ -1,5 +1,9 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- Person avatars are 38px discs
+   synced from the member portal; routing them through /_next/image would add
+   an optimizer round trip per row for a small avatar. */
+
 import Link from "next/link";
 import { ArrowDown, ArrowUp, ChevronRight } from "lucide-react";
 import type {
@@ -90,7 +94,21 @@ export function PersonRow({
       href={`/people/${person.id}`}
       selected={selected}
       testId="person-row"
-      leading={<Initials text={person.initials} />}
+      leading={
+        person.avatarUrl ? (
+          <span className="row__avatar" aria-hidden="true">
+            <img
+              src={person.avatarUrl}
+              alt=""
+              width={38}
+              height={38}
+              decoding="async"
+            />
+          </span>
+        ) : (
+          <Initials text={person.initials} />
+        )
+      }
       title={person.name}
       detail={`${person.relationshipLabel}${person.summary ? ` · ${person.summary.replace(`${person.relationshipLabel} · `, "")}` : ""}`}
       trailing={<StatusText label={person.state.label} tone={person.state.tone} />}

@@ -8,6 +8,7 @@ import { sendTrackedEmail } from "@core/email";
 import type { EmailCampaignRow, Json } from "@core/database.types";
 import { resolveCampaignRecipients, type CampaignAudience } from "./funnel-data";
 import { getAdminUser } from "./auth";
+import { config } from "@core/config";
 
 const db = getSupabaseAdmin;
 
@@ -38,6 +39,7 @@ export async function saveCampaignAction(formData: FormData) {
 
   const audience: CampaignAudience = {
     roles: formData.getAll("roles").map(String).filter(Boolean),
+    profileIncomplete: formData.get("profileIncomplete") === "on",
   };
 
   const payload = {
@@ -138,4 +140,64 @@ export async function sendCampaignAction(formData: FormData) {
   revalidatePath(path);
   revalidatePath("/communications");
   backTo(path);
+}
+
+/**
+ * T6 — profile-completion nudge (Don: push members to complete their accounts).
+ * One-shot preset: drafts a campaign aimed ONLY at members missing photo,
+ * headline, or location, deep-linking to profile edit. The admin reviews the
+ * resolved recipient list on the draft page (dry run) before confirming send;
+ * delivery still goes through the suppression-checked outbox and is gated by
+ * EMAIL_MODE (log = outbox rows only, send = real email). Re-running the
+ * preset re-opens today's existing draft instead of duplicating it.
+ */
+export async function createProfileNudgeCampaignAction() {
+  const admin = await requireAdmin();
+  const today = new Date().toISOString().slice(0, 10);
+  const name = `Profile completion nudge — ${today}`;
+  const audience: CampaignAudience = { roles: ["member"], profileIncomplete: true };
+
+  const { data: existing } = await db()
+    .from("email_campaigns")
+    .select("id, status")
+    .eq("name", name)
+    .maybeSingle();
+  if (existing) {
+    if (existing.status !== "draft") backTo("/communications", "Today's nudge was already sent — campaigns are one-shot");
+    backTo(`/communications/campaigns/${existing.id}`);
+  }
+
+  const payload = {
+    name,
+    subject: "Your portrait is missing from the Circle",
+    heading: "Dear {firstName},",
+    body_md:
+      "The Circle reads best when every member is fully present — a portrait, a line about what you do, and where you're based. Your profile is missing at least one of these.\n\nTwo minutes, from your phone: open your profile, add your photo and details, and the directory becomes what it should be.",
+    cta_href: `${config.baseUrl.replace(/\/$/, "")}/app/profile`,
+    cta_label: "Complete your profile",
+    audience: audience as unknown as Json,
+  };
+
+  let campaignId = "";
+  try {
+    const { data, error } = await db()
+      .from("email_campaigns")
+      .insert({ ...payload, status: "draft", created_by: admin.id })
+      .select("id")
+      .single();
+    if (error || !data) throw new Error(error?.message || "Create failed");
+    campaignId = data.id;
+    await writeAudit({
+      actorId: admin.id,
+      actorEmail: admin.email,
+      action: "campaign.profile_nudge_draft",
+      entityType: "campaign",
+      entityId: campaignId,
+      summary: `Profile-completion nudge drafted (${today})`,
+    });
+  } catch (err) {
+    backTo("/communications", err instanceof Error ? err.message : "Create failed");
+  }
+  revalidatePath("/communications");
+  backTo(`/communications/campaigns/${campaignId}`);
 }

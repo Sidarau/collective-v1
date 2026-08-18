@@ -8,6 +8,7 @@ import { config } from "@core/config";
 import { mergeLabels } from "@core/labels";
 import { mintSession } from "@core/session";
 import { loadActiveReferralLink } from "@/lib/screening";
+import { rateLimit } from "@/lib/rate-limit";
 import type { ApplicationRow, ReferralLinkRow } from "@core/database.types";
 
 export const runtime = "nodejs";
@@ -43,6 +44,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ code: stri
 
     // Honeypot: bots fill everything. Pretend success, write nothing.
     if (clean(body.website)) return NextResponse.json({ success: true });
+
+    // Best-effort per-IP throttle (per warm instance — see lib/rate-limit).
+    // 10 submissions per 10 minutes is far above any human sharing flow.
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    if (!rateLimit(`referral:${ip}`, 10, 10 * 60 * 1000)) {
+      return NextResponse.json(
+        { error: "Too many attempts — take a breath and try again a little later." },
+        { status: 429 }
+      );
+    }
 
     const link = await loadActiveReferralLink(code, ["member", "instant_member"]);
     if (!link) {

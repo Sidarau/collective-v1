@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import Avatar from "@/components/Avatar";
 import { getAuthUser } from "@/lib/auth";
 import {
   fetchGates,
@@ -87,14 +88,22 @@ export default async function HomePage() {
           </>
         )}
         <div className="relative px-5">
-          <Image
-            src="/brand/logo-horizontal.png"
-            alt="Open Collective"
-            width={1400}
-            height={700}
-            priority
-            className="reveal mx-auto h-auto w-[184px]"
-          />
+          <div className="reveal mx-auto flex w-[184px] items-center justify-center gap-2.5">
+            <Image
+              src="/brand/OpenCollective%20transparent%20gold%20keyhole%20emblem.png"
+              alt=""
+              width={1188}
+              height={1324}
+              priority
+              className="h-[40px] w-auto"
+              aria-hidden="true"
+            />
+            <span className="display text-[22px] leading-[1.02] text-champagne">
+              Open
+              <br />
+              Collective
+            </span>
+          </div>
           <h1 className="display reveal mt-9 text-[34px] leading-tight text-ink" style={{ animationDelay: "0.06s" }}>
             {greeting()}, {firstName}
           </h1>
@@ -221,9 +230,12 @@ export default async function HomePage() {
         {/* Profile shortcut */}
         <Link href="/app/profile" className="glass-flat tap flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-champagne/20 text-[15px] font-semibold text-champagne">
-              {firstName[0]?.toUpperCase()}
-            </span>
+            <Avatar
+              url={profile?.avatar_url}
+              first={profile?.first_name ?? firstName}
+              last={profile?.last_name}
+              size="sm"
+            />
             <div>
               <p className="text-[14px] font-semibold text-ink">
                 {profile ? fullName(profile.first_name, profile.last_name) : firstName}
