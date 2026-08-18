@@ -20,6 +20,9 @@ const ERROR_COPY: Record<string, string> = {
 function LoginForm() {
   const searchParams = useSearchParams();
   const urlError = searchParams.get("error");
+  // SSO bridge return path: only ever /api/sso/bridge (open-redirect guard).
+  const rawNext = searchParams.get("next") || "";
+  const callbackUrl = rawNext.startsWith("/api/sso/bridge") ? rawNext : "/enter";
   const [email, setEmail] = useState(searchParams.get("email") || "");
   const [token] = useState(searchParams.get("token") || "");
   const [password, setPassword] = useState("");
@@ -44,7 +47,7 @@ function LoginForm() {
         const body: Record<string, string> = {
           email: loginEmail,
           csrfToken: csrfData.csrfToken || "",
-          callbackUrl: "/enter",
+          callbackUrl,
           json: "true",
           ...creds,
         };
