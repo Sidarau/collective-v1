@@ -765,6 +765,6 @@ label.tag {
 /* Blurred coming-soon gates — a tease, not a smudge: enough blur to read as
    "not yet bookable" while the property stays recognizable at phone width. */
 .veiled {
-  filter: blur(4px) saturate(85%) brightness(0.78);
+  filter: blur(2px) saturate(90%) brightness(0.82);
   transform: scale(1.06);
 }

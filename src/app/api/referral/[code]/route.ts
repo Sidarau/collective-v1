@@ -60,8 +60,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ code: stri
       return NextResponse.json({ error: "This door is no longer open." }, { status: 404 });
     }
 
-    if (link.kind === "instant_member") return instantEntrance(link, body);
-    return memberApplication(link, body);
+    // await is load-bearing: an un-awaited return lets a rejection escape
+    // this try/catch, and the platform answers with an empty 500 that the
+    // client can only render as "Connection issue — try again."
+    if (link.kind === "instant_member") return await instantEntrance(link, body);
+    return await memberApplication(link, body);
   } catch (error) {
     console.error("Referral entrance error:", error);
     return NextResponse.json(
@@ -265,6 +268,9 @@ async function instantEntrance(link: ReferralLinkRow, body: Record<string, unkno
     );
   }
 
+  // Phone is unique across users (idx_users_phone). Checked after the lead
+  // upsert below so the attempt still lands in the CRM.
+
   const { data: lead, error: leadError } = await supabase
     .from("leads")
     .upsert(
@@ -283,6 +289,23 @@ async function instantEntrance(link: ReferralLinkRow, body: Record<string, unkno
     .select("id")
     .single();
   if (leadError || !lead) throw new Error(leadError?.message || "Failed to create lead");
+
+  // Phone is unique across users (idx_users_phone). A returning guest with a
+  // NEW email but the SAME phone would otherwise crash the user write with a
+  // 23505 and see a generic failure. Treat the phone as prior identity: send
+  // them to sign in (magic link works without a password) instead of creating
+  // a second, conflicting account. Never reveal which email holds the account.
+  const { data: phoneOwner } = await supabase
+    .from("users")
+    .select("id, role")
+    .eq("phone", phone)
+    .maybeSingle();
+  if (phoneOwner && phoneOwner.id !== existingUser?.id) {
+    return NextResponse.json(
+      { error: "An account with this phone number already exists — sign in instead.", redirect: "/login" },
+      { status: 409 }
+    );
+  }
 
   let user = existingUser;
   if (existingUser) {
