@@ -24,32 +24,98 @@ function getResend(): Resend | null {
 const LOGO_URL = `${config.baseUrl.replace(/\/$/, "")}/brand/logo-horizontal.png`;
 
 /**
- * The house email shell — the members' app design language in an inbox:
- * near-black ground, a champagne hairline card, the Open Collective lockup,
- * serif voice. Table-based + inline styles for client compatibility.
+ * The house email shell — the landing page's language in an inbox: the deep
+ * green ground, a champagne hairline card, the lockup, serif voice.
+ *
+ * Three things here are not decoration.
+ *
+ * 1. **`<meta charset="utf-8">` and a real document wrapper.** Without them a
+ *    mail client is free to decode the body as Latin-1, and every em-dash in
+ *    our copy arrives as `â€"`. That is what "the email wasn't formatted
+ *    correctly" turned out to mean, and it affected every template.
+ * 2. **`color-scheme` / `supported-color-schemes`.** Apple Mail and Gmail
+ *    invert dark emails on a dark phone otherwise, which turns a considered
+ *    dark design into a muddy light one.
+ * 3. **Tables, not flex.** Outlook renders on Word's engine; a nested table
+ *    with inline styles is the only layout that survives it.
+ *
+ * The preheader is the grey line the inbox shows next to the subject. Left
+ * empty it fills with whatever text comes first — usually the logo's alt.
  */
-const shell = (inner: string) => `
-  <div style="background:#07100e;margin:0;padding:40px 16px;font-family:Georgia,'Times New Roman',serif;">
-    <div style="max-width:480px;margin:0 auto;">
-      <div style="text-align:center;margin:0 0 30px;">
-        <img src="${LOGO_URL}" alt="${config.brandName}" width="184" style="width:184px;max-width:62%;height:auto;border:0;display:inline-block;" />
-      </div>
-      <div style="background:rgba(255,255,255,0.055);border:1px solid rgba(228,190,109,0.22);border-radius:22px;padding:34px 30px;color:#f7fbf8;">
-        ${inner}
-      </div>
-      <p style="text-align:center;font-size:12px;color:rgba(247,251,248,0.42);margin:26px 0 0;font-family:-apple-system,system-ui,sans-serif;letter-spacing:0.03em;">
-        ${config.brandName} · <a href="mailto:${config.supportEmail}" style="color:rgba(247,251,248,0.6);text-decoration:none;">${config.supportEmail}</a>
-      </p>
-      <p style="text-align:center;font-size:11px;color:rgba(247,251,248,0.28);margin:9px 0 0;font-family:-apple-system,system-ui,sans-serif;letter-spacing:0.16em;text-transform:uppercase;">
-        Ibiza · By referral only
-      </p>
+const shell = (inner: string, preheader: string) => `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="supported-color-schemes" content="dark" />
+    <title>${config.brandName}</title>
+  </head>
+  <body style="margin:0;padding:0;background:#07100e;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;height:0;width:0;">
+      ${preheader}
     </div>
-  </div>`;
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+           style="background:#07100e;margin:0;padding:0;">
+      <tr>
+        <td align="center" style="padding:40px 16px;">
+          <!-- width="100%" + max-width, never width="480": the HTML attribute
+               beats the stylesheet in several engines, and a fixed 480 table
+               overflows a phone, which is where these get opened. -->
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                 style="max-width:480px;">
+            <tr>
+              <td align="center" style="padding:0 0 30px;">
+                <img src="${LOGO_URL}" alt="${config.brandName}" width="184"
+                     style="width:184px;max-width:62%;height:auto;border:0;display:block;" />
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#0b1714;border:1px solid rgba(228,190,109,0.22);border-radius:22px;
+                         padding:34px 30px;color:#f7fbf8;
+                         font-family:Georgia,'Times New Roman',serif;">
+                ${inner}
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:26px 0 0;">
+                <p style="margin:0;font-size:12px;line-height:1.5;color:rgba(247,251,248,0.42);
+                          font-family:-apple-system,'Segoe UI',system-ui,sans-serif;letter-spacing:0.03em;">
+                  ${config.brandName} ·
+                  <a href="mailto:${config.supportEmail}"
+                     style="color:rgba(247,251,248,0.6);text-decoration:none;">${config.supportEmail}</a>
+                </p>
+                <p style="margin:9px 0 0;font-size:11px;color:rgba(247,251,248,0.28);
+                          font-family:-apple-system,'Segoe UI',system-ui,sans-serif;
+                          letter-spacing:0.16em;text-transform:uppercase;">
+                  Ibiza · By referral only
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
 
+/**
+ * A button that survives Outlook, which ignores padding on an anchor. The
+ * table cell carries the shape; the anchor only carries the text.
+ */
 const button = (href: string, label: string) => `
-  <a href="${href}" style="display:inline-block;background:#e4be6d;color:#07100e;text-decoration:none;padding:14px 30px;border-radius:999px;font-weight:600;font-family:-apple-system,system-ui,sans-serif;font-size:15px;letter-spacing:0.01em;">
-    ${label}
-  </a>`;
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0;">
+    <tr>
+      <td align="center" bgcolor="#e4be6d" style="border-radius:999px;">
+        <a href="${href}"
+           style="display:inline-block;padding:14px 30px;color:#07100e;text-decoration:none;
+                  font-family:-apple-system,'Segoe UI',system-ui,sans-serif;font-size:15px;
+                  font-weight:600;letter-spacing:0.01em;border-radius:999px;">
+          ${label}
+        </a>
+      </td>
+    </tr>
+  </table>`;
 
 export interface TrackedEmailParams {
   to: string;
@@ -131,14 +197,26 @@ export async function sendTrackedEmail(params: TrackedEmailParams): Promise<Trac
     return { id: messageId, status: "failed", suppressed: false, mode };
   }
 
-  const html = shell(`
-    <h1 style="font-size:22px;font-weight:400;margin:0 0 16px;">${params.heading}</h1>
-    <p style="font-size:15px;line-height:1.7;color:rgba(247,251,248,0.75);font-family:system-ui,sans-serif;margin:0 0 28px;">
+  const html = shell(
+    `
+    <h1 style="font-size:24px;line-height:1.25;font-weight:400;margin:0 0 16px;color:#f7fbf8;
+               font-family:Georgia,'Times New Roman',serif;">${params.heading}</h1>
+    <p style="font-size:15px;line-height:1.7;color:rgba(247,251,248,0.75);margin:0 0 28px;
+              font-family:-apple-system,'Segoe UI',system-ui,sans-serif;">
       ${params.body}
     </p>
     ${params.ctaHref ? button(params.ctaHref, params.ctaLabel || "Open") : ""}
-    ${params.footnote ? `<p style="font-size:13px;color:rgba(247,251,248,0.45);margin-top:28px;font-family:system-ui,sans-serif;">${params.footnote}</p>` : ""}
-  `);
+    ${
+      params.footnote
+        ? `<p style="font-size:13px;line-height:1.6;color:rgba(247,251,248,0.45);margin:28px 0 0;
+                     font-family:-apple-system,'Segoe UI',system-ui,sans-serif;">${params.footnote}</p>`
+        : ""
+    }
+  `,
+    // The inbox preview line: the first sentence of the message, not the logo's
+    // alt text and not the footer.
+    params.body.replace(/<[^>]*>/g, "").slice(0, 140),
+  );
   const text = `${params.heading}\n\n${params.body}${params.ctaHref ? `\n\n${params.ctaHref}` : ""}`;
 
   try {
