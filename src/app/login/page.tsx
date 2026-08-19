@@ -20,9 +20,9 @@ const ERROR_COPY: Record<string, string> = {
 function LoginForm() {
   const searchParams = useSearchParams();
   const urlError = searchParams.get("error");
-  // SSO bridge return path: only ever /api/sso/bridge (open-redirect guard).
+  // SSO handoff return path: only /api/sso/* routes (open-redirect guard).
   const rawNext = searchParams.get("next") || "";
-  const callbackUrl = rawNext.startsWith("/api/sso/bridge") ? rawNext : "/enter";
+  const callbackUrl = rawNext.startsWith("/api/sso/") ? rawNext : "/enter";
   const [email, setEmail] = useState(searchParams.get("email") || "");
   const [token] = useState(searchParams.get("token") || "");
   const [password, setPassword] = useState("");
